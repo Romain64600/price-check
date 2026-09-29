@@ -1,0 +1,1738 @@
+{
+ "more": "Show More",
+ "less": "Show Less",
+ "tba": "--",
+ "free": "Free",
+ "locale": "en-GB",
+ "topclickElementTitle": {
+  "game": {
+   "pc": "Key Prices",
+   "xboxseriesx": "Key Prices",
+   "xboxone": "Key Prices",
+   "playstation5": "Key Prices",
+   "switch": "Key Prices"
+  },
+  "software": "Key Prices",
+  "dlc": "digital code best prices",
+  "subscription": "Subscription code best prices",
+  "gift-card": "Prices",
+  "giftcard": "Prices",
+  "gamecard": "Prices",
+  "unknown": "Prices"
+ },
+ "apiRootUrl": "https://api.allkeyshop.com/videogame/api/",
+ "loading": "Loading...",
+ "preloadData": {
+  "mostAnticipated": {
+   "default": {
+    "items": [
+     {
+      "index": 1,
+      "name": "GTA 6 PS5",
+      "platform": "playstation-5",
+      "productType": "game",
+      "merchant": "Wyrel",
+      "price": 63.34,
+      "currency": "eur",
+      "url": "https://www.allkeyshop.com/blog/buy-gta-6-ps5-compare-prices/",
+      "releaseDate": "2026-11-19"
+     },
+     {
+      "index": 2,
+      "name": "GTA 6 Xbox Series",
+      "platform": "xbox-series-x",
+      "productType": "game",
+      "merchant": "Eneba",
+      "price": 63.14,
+      "currency": "eur",
+      "url": "https://www.allkeyshop.com/blog/buy-gta-6-xbox-series-compare-prices/",
+      "releaseDate": "2026-11-19"
+     },
+     {
+      "index": 3,
+      "name": "Call of Duty Modern Warfare 4",
+      "platform": "pc",
+      "productType": "game",
+      "merchant": "Royal CD Keys",
+      "price": 50.6,
+      "currency": "eur",
+      "url": "https://www.allkeyshop.com/blog/buy-call-of-duty-modern-warfare-4-key-compare-prices/",
+      "releaseDate": "2026-10-23"
+     },
+     {
+      "index": 4,
+      "name": "EA SPORTS FC 27",
+      "platform": "pc",
+      "productType": "game",
+      "merchant": "Mmoga",
+      "price": 54.99,
+      "currency": "eur",
+      "url": "https://www.allkeyshop.com/blog/buy-ea-sports-fc-27-key-compare-prices/",
+      "releaseDate": "2026-09-25"
+     },
+     {
+      "index": 5,
+      "name": "Warhammer 40000 Dawn of War IV",
+      "platform": "pc",
+      "productType": "game",
+      "merchant": "Wyrel",
+      "price": 23.78,
+      "currency": "eur",
+      "url": "https://www.allkeyshop.com/blog/buy-warhammer-40000-dawn-of-war-iv-cd-key-compare-prices/",
+      "releaseDate": "2026-12-03"
+     },
+     {
+      "index": 6,
+      "name": "STAR WARS Galactic Racer",
+      "platform": "pc",
+      "productType": "game",
+      "merchant": "GAMESEAL",
+      "price": 36,
+      "currency": "eur",
+      "url": "https://www.allkeyshop.com/blog/buy-star-wars-galactic-racer-cd-key-compare-prices/",
+      "releaseDate": "2026-10-06"
+     },
+     {
+      "index": 7,
+      "name": "Phantom Blade Zero",
+      "platform": "pc",
+      "productType": "game",
+      "merchant": "Lootbar",
+      "price": 41.12,
+      "currency": "eur",
+      "url": "https://www.allkeyshop.com/blog/buy-phantom-blade-zero-cd-key-compare-prices/",
+      "releaseDate": "2026-10-29"
+     },
+     {
+      "index": 8,
+      "name": "CONTROL Resonant",
+      "platform": "pc",
+      "productType": "game",
+      "merchant": "Driffle",
+      "price": 38.47,
+      "currency": "eur",
+      "url": "https://www.allkeyshop.com/blog/buy-control-resonant-cd-key-compare-prices/",
+      "releaseDate": "2026-09-24"
+     }
+    ],
+    "data": {
+     "listId": 58,
+     "showMore": "https://www.allkeyshop.com/blog/games/preorders/",
+     "spriteVersion": 977
+    }
+   }
+  },
+  "recentlyReleased": {
+   "default": {
+    "items": [
+     {
+      "index": 1,
+      "name": "EA SPORTS FC 27",
+      "platform": "pc",
+      "productType": "game",
+      "merchant": "Mmoga",
+      "price": 54.99,
+      "currency": "eur",
+      "url": "https://www.allkeyshop.com/blog/buy-ea-sports-fc-27-key-compare-prices/"
+     },
+     {
+      "index": 2,
+      "name": "Wild West Pioneers",
+      "platform": "pc",
+      "productType": "game",
+      "merchant": "Driffle",
+      "price": 13.12,
+      "currency": "eur",
+      "url": "https://www.allkeyshop.com/blog/buy-wild-west-pioneers-key-compare-prices/"
+     },
+     {
+      "index": 3,
+      "name": "CONTROL Resonant",
+      "platform": "pc",
+      "productType": "game",
+      "merchant": "Driffle",
+      "price": 38.47,
+      "currency": "eur",
+      "url": "https://www.allkeyshop.com/blog/buy-control-resonant-cd-key-compare-prices/"
+     },
+     {
+      "index": 4,
+      "name": "Dragon Shelter",
+      "platform": "pc",
+      "productType": "game",
+      "merchant": "Instant Gaming",
+      "price": 6.59,
+      "currency": "eur",
+      "url": "https://www.allkeyshop.com/blog/buy-dragon-shelter-cd-key-compare-prices/"
+     },
+     {
+      "index": 5,
+      "name": "Silent Hill Townfall",
+      "platform": "pc",
+      "productType": "game",
+      "merchant": "Driffle",
+      "price": 30.86,
+      "currency": "eur",
+      "url": "https://www.allkeyshop.com/blog/buy-silent-hill-townfall-cd-key-compare-prices/"
+     },
+     {
+      "index": 6,
+      "name": "Total War: WARHAMMER III - Lords of the End Times",
+      "platform": "pc",
+      "productType": "dlc",
+      "merchant": "Gamesplanet US",
+      "price": 25.48,
+      "currency": "eur",
+      "url": "https://www.allkeyshop.com/blog/buy-total-war-warhammer-iii-lords-of-the-end-times-key-compare-prices/"
+     },
+     {
+      "index": 7,
+      "name": "Qliphah in Providence's Shadow",
+      "platform": "pc",
+      "productType": "game",
+      "merchant": "Instant Gaming",
+      "price": 18.99,
+      "currency": "eur",
+      "url": "https://www.allkeyshop.com/blog/buy-qliphah-in-providences-shadow-key-compare-prices/"
+     },
+     {
+      "index": 8,
+      "name": "Graveyard Keeper 2",
+      "platform": "pc",
+      "productType": "game",
+      "merchant": "GameBoost",
+      "price": 14.95,
+      "currency": "eur",
+      "url": "https://www.allkeyshop.com/blog/buy-graveyard-keeper-2-cd-key-compare-prices/"
+     }
+    ],
+    "data": {
+     "listId": 59,
+     "showMore": "https://www.allkeyshop.com/blog/games/new-releases/",
+     "spriteVersion": 1494
+    }
+   }
+  },
+  "subscription": {
+   "default": {
+    "items": [
+     {
+      "index": 1,
+      "name": "Xbox Game Pass Ultimate",
+      "platform": "xbox-series-x",
+      "productType": "gift-card",
+      "merchant": "Loaded",
+      "price": 6.99,
+      "currency": "eur",
+      "url": "https://www.allkeyshop.com/blog/buy-xbox-game-pass-ultimate-cd-key-compare-prices/"
+     },
+     {
+      "index": 2,
+      "name": "Xbox Game Pass PC",
+      "platform": "pc",
+      "productType": "gift-card",
+      "merchant": "Eneba",
+      "price": 4.55,
+      "currency": "eur",
+      "url": "https://www.allkeyshop.com/blog/buy-xbox-game-pass-pc-cd-key-compare-prices/"
+     },
+     {
+      "index": 3,
+      "name": "Xbox Game Pass Console",
+      "platform": "xbox-series-x",
+      "productType": "gift-card",
+      "merchant": "Wyrel",
+      "price": 9.54,
+      "currency": "eur",
+      "url": "https://www.allkeyshop.com/blog/buy-xbox-game-pass-xbox-one-cd-key-compare-prices/"
+     },
+     {
+      "index": 4,
+      "name": "Xbox Game Pass Core",
+      "platform": "pc",
+      "productType": "gift-card",
+      "merchant": "Kinguin",
+      "price": 4.66,
+      "currency": "eur",
+      "url": "https://www.allkeyshop.com/blog/buy-xbox-game-pass-core-cd-key-compare-prices/"
+     },
+     {
+      "index": 5,
+      "name": "PS Plus Essential",
+      "platform": "pc",
+      "productType": "gift-card",
+      "merchant": "G2A",
+      "price": 7.95,
+      "currency": "eur",
+      "url": "https://www.allkeyshop.com/blog/buy-ps-plus-essential-compare-prices/"
+     },
+     {
+      "index": 6,
+      "name": "PS Plus Extra",
+      "platform": "pc",
+      "productType": "gift-card",
+      "merchant": "Vidaplayer",
+      "price": 37.95,
+      "currency": "eur",
+      "url": "https://www.allkeyshop.com/blog/buy-ps-plus-extra-compare-prices/"
+     },
+     {
+      "index": 7,
+      "name": "PS Plus Premium",
+      "platform": "pc",
+      "productType": "gift-card",
+      "merchant": "CJS CDKeys",
+      "price": 45.74,
+      "currency": "eur",
+      "url": "https://www.allkeyshop.com/blog/buy-ps-plus-premium-compare-prices/"
+     },
+     {
+      "index": 8,
+      "name": "PS Plus 12 Months",
+      "platform": "playstation-5",
+      "productType": "gift-card",
+      "merchant": "Kinguin",
+      "price": 57.44,
+      "currency": "eur",
+      "url": "https://www.allkeyshop.com/blog/playstation-plus-12-month-compare-prices/"
+     }
+    ],
+    "data": {
+     "listId": 60,
+     "showMore": "https://www.allkeyshop.com/blog/subscriptions/",
+     "spriteVersion": 884
+    }
+   }
+  },
+  "giftCard": {
+   "default": {
+    "items": [
+     {
+      "index": 1,
+      "name": "Steam Gift Card",
+      "platform": "pc",
+      "productType": "gift-card",
+      "merchant": "Vidaplayer",
+      "price": 0.49,
+      "currency": "eur",
+      "url": "https://www.allkeyshop.com/blog/buy-steam-gift-card-cd-key-compare-prices/"
+     },
+     {
+      "index": 2,
+      "name": "Spotify Premium Subscription",
+      "platform": "pc",
+      "productType": "gift-card",
+      "merchant": "Driffle",
+      "price": 1.46,
+      "currency": "eur",
+      "url": "https://www.allkeyshop.com/blog/spotify-premium-gift-card/"
+     },
+     {
+      "index": 3,
+      "name": "Playstation Gift Cards",
+      "platform": "playstation-5",
+      "productType": "gift-card",
+      "merchant": "Wyrel",
+      "price": 0.93,
+      "currency": "eur",
+      "url": "https://www.allkeyshop.com/blog/buy-psn-card-playstation-network-gift-card-playstation-network-compare-prices/"
+     },
+     {
+      "index": 4,
+      "name": "Xbox Gift Card",
+      "platform": "xbox-series-x",
+      "productType": "gift-card",
+      "merchant": "GameBoost",
+      "price": 0.65,
+      "currency": "eur",
+      "url": "https://www.allkeyshop.com/blog/xbox-gift-card/"
+     },
+     {
+      "index": 5,
+      "name": "Battlenet Gift Card",
+      "platform": "pc",
+      "productType": "gift-card",
+      "merchant": "GameBoost",
+      "price": 4.24,
+      "currency": "eur",
+      "url": "https://www.allkeyshop.com/blog/buy-battle-net-gift-cards-cd-key-compare-prices/"
+     },
+     {
+      "index": 6,
+      "name": "Netflix Gift Cards",
+      "platform": "pc",
+      "productType": "gift-card",
+      "merchant": "G2A",
+      "price": 2.89,
+      "currency": "eur",
+      "url": "https://www.allkeyshop.com/blog/buy-netflix-gift-card-cd-key-compare-prices/"
+     },
+     {
+      "index": 7,
+      "name": "EA SPORTS FC 26 Points",
+      "platform": "pc",
+      "productType": "in-game-currency",
+      "merchant": "Loaded",
+      "price": 6.99,
+      "currency": "eur",
+      "url": "https://www.allkeyshop.com/blog/buy-ea-sports-fc-26-points-cd-key-compare-prices/"
+     },
+     {
+      "index": 8,
+      "name": "World of Warcraft 60 days",
+      "platform": "pc",
+      "productType": "gift-card",
+      "merchant": "GAMESEAL",
+      "price": 23.74,
+      "currency": "eur",
+      "url": "https://www.allkeyshop.com/blog/compare-and-buy-gamecard-world-of-warcraft-60-days-prepaid-time-card-europe/"
+     }
+    ],
+    "data": {
+     "listId": 61,
+     "showMore": "https://www.allkeyshop.com/blog/gift-cards",
+     "spriteVersion": 886
+    }
+   }
+  },
+  "fps": {
+   "default": {
+    "items": [
+     {
+      "index": 1,
+      "name": "ARC Raiders",
+      "platform": "pc",
+      "productType": "game",
+      "merchant": "GameBoost",
+      "price": 19.51,
+      "currency": "eur",
+      "url": "https://www.allkeyshop.com/blog/buy-arc-raiders-cd-key-compare-prices/"
+     },
+     {
+      "index": 2,
+      "name": "Bodycam",
+      "platform": "pc",
+      "productType": "game",
+      "merchant": "GAMESEAL",
+      "price": 25,
+      "currency": "eur",
+      "url": "https://www.allkeyshop.com/blog/buy-bodycam-cd-key-compare-prices/"
+     },
+     {
+      "index": 3,
+      "name": "Battlefield 6",
+      "platform": "pc",
+      "productType": "game",
+      "merchant": "Driffle",
+      "price": 37.93,
+      "currency": "eur",
+      "url": "https://www.allkeyshop.com/blog/buy-battlefield-6-cd-key-compare-prices/"
+     },
+     {
+      "index": 4,
+      "name": "Ready Or Not",
+      "platform": "pc",
+      "productType": "game",
+      "merchant": "K4G",
+      "price": 15.15,
+      "currency": "eur",
+      "url": "https://www.allkeyshop.com/blog/buy-ready-or-not-cd-key-compare-prices/"
+     },
+     {
+      "index": 5,
+      "name": "Escape from Tarkov",
+      "platform": "pc",
+      "productType": "game",
+      "merchant": "Driffle",
+      "price": 34.42,
+      "currency": "eur",
+      "url": "https://www.allkeyshop.com/blog/buy-escape-from-tarkov-cd-key-compare-prices/"
+     },
+     {
+      "index": 6,
+      "name": "DOOM The Dark Ages",
+      "platform": "pc",
+      "productType": "game",
+      "merchant": "HRK",
+      "price": 14.57,
+      "currency": "eur",
+      "url": "https://www.allkeyshop.com/blog/buy-doom-the-dark-ages-cd-key-compare-prices/"
+     },
+     {
+      "index": 7,
+      "name": "Call of Duty Black Ops 6",
+      "platform": "pc",
+      "productType": "game",
+      "merchant": "Eneba",
+      "price": 25.19,
+      "currency": "eur",
+      "url": "https://www.allkeyshop.com/blog/buy-call-of-duty-black-ops-6-cd-key-compare-prices/"
+     },
+     {
+      "index": 8,
+      "name": "Hunt Showdown",
+      "platform": "pc",
+      "productType": "game",
+      "merchant": "Eneba",
+      "price": 8.28,
+      "currency": "eur",
+      "url": "https://www.allkeyshop.com/blog/buy-hunt-showdown-cd-key-compare-prices/"
+     }
+    ],
+    "data": {
+     "listId": 62,
+     "showMore": "https://www.allkeyshop.com/blog/catalogue/category-fps/",
+     "spriteVersion": 889
+    }
+   }
+  },
+  "rpg": {
+   "default": {
+    "items": [
+     {
+      "index": 1,
+      "name": "Crimson Desert",
+      "platform": "pc",
+      "productType": "game",
+      "merchant": "Driffle",
+      "price": 37.44,
+      "currency": "eur",
+      "url": "https://www.allkeyshop.com/blog/buy-crimson-desert-cd-key-compare-prices/"
+     },
+     {
+      "index": 2,
+      "name": "Clair Obscur Expedition 33",
+      "platform": "pc",
+      "productType": "game",
+      "merchant": "Driffle",
+      "price": 18.23,
+      "currency": "eur",
+      "url": "https://www.allkeyshop.com/blog/buy-clair-obscur-expedition-33-cd-key-compare-prices/"
+     },
+     {
+      "index": 3,
+      "name": "Baldur's Gate 3",
+      "platform": "pc",
+      "productType": "game",
+      "merchant": "Gog.com",
+      "price": 41.99,
+      "currency": "eur",
+      "url": "https://www.allkeyshop.com/blog/buy-baldurs-gate-3-cd-key-compare-prices/"
+     },
+     {
+      "index": 4,
+      "name": "Cyberpunk 2077",
+      "platform": "pc",
+      "productType": "game",
+      "merchant": "Gog.com",
+      "price": 17.99,
+      "currency": "eur",
+      "url": "https://www.allkeyshop.com/blog/buy-cyberpunk-2077-cd-key-compare-prices/"
+     },
+     {
+      "index": 5,
+      "name": "Kingdom Come Deliverance 2",
+      "platform": "pc",
+      "productType": "game",
+      "merchant": "Driffle",
+      "price": 17.09,
+      "currency": "eur",
+      "url": "https://www.allkeyshop.com/blog/buy-kingdom-come-deliverance-2-cd-key-compare-prices/"
+     },
+     {
+      "index": 6,
+      "name": "Elden Ring",
+      "platform": "pc",
+      "productType": "game",
+      "merchant": "Loaded",
+      "price": 42.09,
+      "currency": "eur",
+      "url": "https://www.allkeyshop.com/blog/buy-elden-ring-cd-key-compare-prices/"
+     },
+     {
+      "index": 7,
+      "name": "Assassin’s Creed Shadows",
+      "platform": "pc",
+      "productType": "game",
+      "merchant": "K4G",
+      "price": 16.53,
+      "currency": "eur",
+      "url": "https://www.allkeyshop.com/blog/buy-assassins-creed-shadows-cd-key-compare-prices/"
+     },
+     {
+      "index": 8,
+      "name": "Monster Hunter Wilds",
+      "platform": "pc",
+      "productType": "game",
+      "merchant": "YUPLAY",
+      "price": 20.56,
+      "currency": "eur",
+      "url": "https://www.allkeyshop.com/blog/buy-monster-hunter-wilds-cd-key-compare-prices/"
+     }
+    ],
+    "data": {
+     "listId": 63,
+     "showMore": "https://www.allkeyshop.com/blog/catalogue/category-role-playing/",
+     "spriteVersion": 900
+    }
+   }
+  },
+  "strategy": {
+   "default": {
+    "items": [
+     {
+      "index": 1,
+      "name": "Manor Lords",
+      "platform": "pc",
+      "productType": "game",
+      "merchant": "GameBoost",
+      "price": 15.09,
+      "currency": "eur",
+      "url": "https://www.allkeyshop.com/blog/buy-manor-lords-cd-key-compare-prices/"
+     },
+     {
+      "index": 2,
+      "name": "Civilization 7",
+      "platform": "pc",
+      "productType": "game",
+      "merchant": "K4G",
+      "price": 22.27,
+      "currency": "eur",
+      "url": "https://www.allkeyshop.com/blog/buy-civilization-7-cd-key-compare-prices/"
+     },
+     {
+      "index": 3,
+      "name": "Crusader Kings 3",
+      "platform": "pc",
+      "productType": "game",
+      "merchant": "G2A",
+      "price": 11.19,
+      "currency": "eur",
+      "url": "https://www.allkeyshop.com/blog/buy-crusader-kings-3-cd-key-compare-prices/"
+     },
+     {
+      "index": 4,
+      "name": "Darfall",
+      "platform": "pc",
+      "productType": "game",
+      "merchant": "Steam",
+      "price": 24.5,
+      "currency": "eur",
+      "url": "https://www.allkeyshop.com/blog/buy-darfall-cd-key-compare-prices/"
+     },
+     {
+      "index": 5,
+      "name": "Hearts of Iron 4",
+      "platform": "pc",
+      "productType": "game",
+      "merchant": "Eneba",
+      "price": 8.1,
+      "currency": "eur",
+      "url": "https://www.allkeyshop.com/blog/buy-hearts-of-iron-4-cd-key-compare-prices/"
+     },
+     {
+      "index": 6,
+      "name": "Age of Wonders 4",
+      "platform": "pc",
+      "productType": "game",
+      "merchant": "Driffle",
+      "price": 15.54,
+      "currency": "eur",
+      "url": "https://www.allkeyshop.com/blog/buy-age-of-wonders-4-cd-key-compare-prices/"
+     },
+     {
+      "index": 7,
+      "name": "Age Of Mythology Retold",
+      "platform": "pc",
+      "productType": "game",
+      "merchant": "GameBoost",
+      "price": 10.03,
+      "currency": "eur",
+      "url": "https://www.allkeyshop.com/blog/buy-age-of-mythology-retold-cd-key-compare-prices/"
+     },
+     {
+      "index": 8,
+      "name": "Stellaris",
+      "platform": "pc",
+      "productType": "game",
+      "merchant": "GameBoost",
+      "price": 9.8,
+      "currency": "eur",
+      "url": "https://www.allkeyshop.com/blog/buy-stellaris-cd-key-compare-prices/"
+     }
+    ],
+    "data": {
+     "listId": 64,
+     "showMore": "https://www.allkeyshop.com/blog/catalogue/category-strategy/",
+     "spriteVersion": 850
+    }
+   }
+  },
+  "action": {
+   "default": {
+    "items": [
+     {
+      "index": 1,
+      "name": "GTA 5",
+      "platform": "pc",
+      "productType": "game",
+      "merchant": "K4G",
+      "price": 8.46,
+      "currency": "eur",
+      "url": "https://www.allkeyshop.com/blog/buy-gta-5-cd-key-compare-prices/"
+     },
+     {
+      "index": 2,
+      "name": "DOOM The Dark Ages",
+      "platform": "pc",
+      "productType": "game",
+      "merchant": "HRK",
+      "price": 14.57,
+      "currency": "eur",
+      "url": "https://www.allkeyshop.com/blog/buy-doom-the-dark-ages-cd-key-compare-prices/"
+     },
+     {
+      "index": 3,
+      "name": "Red Dead Redemption 2",
+      "platform": "pc",
+      "productType": "game",
+      "merchant": "GAMESEAL",
+      "price": 9.92,
+      "currency": "eur",
+      "url": "https://www.allkeyshop.com/blog/buy-red-dead-redemption-2-cd-key-compare-prices/"
+     },
+     {
+      "index": 4,
+      "name": "Monster Hunter Wilds",
+      "platform": "pc",
+      "productType": "game",
+      "merchant": "YUPLAY",
+      "price": 20.56,
+      "currency": "eur",
+      "url": "https://www.allkeyshop.com/blog/buy-monster-hunter-wilds-cd-key-compare-prices/"
+     },
+     {
+      "index": 5,
+      "name": "Assassin’s Creed Shadows",
+      "platform": "pc",
+      "productType": "game",
+      "merchant": "K4G",
+      "price": 16.53,
+      "currency": "eur",
+      "url": "https://www.allkeyshop.com/blog/buy-assassins-creed-shadows-cd-key-compare-prices/"
+     },
+     {
+      "index": 6,
+      "name": "The First Berserker Khazan",
+      "platform": "pc",
+      "productType": "game",
+      "merchant": "GAMIVO",
+      "price": 23.27,
+      "currency": "eur",
+      "url": "https://www.allkeyshop.com/blog/buy-the-first-berserker-khazan-cd-key-compare-prices/"
+     },
+     {
+      "index": 7,
+      "name": "Marvel's Spider-Man Remastered",
+      "platform": "pc",
+      "productType": "game",
+      "merchant": "GameBoost",
+      "price": 15.93,
+      "currency": "eur",
+      "url": "https://www.allkeyshop.com/blog/buy-marvels-spider-man-remastered-cd-key-compare-prices/"
+     },
+     {
+      "index": 8,
+      "name": "Star Wars Jedi Survivor",
+      "platform": "pc",
+      "productType": "game",
+      "merchant": "GAMIVO",
+      "price": 10.26,
+      "currency": "eur",
+      "url": "https://www.allkeyshop.com/blog/buy-star-wars-jedi-survivor-cd-key-compare-prices/"
+     }
+    ],
+    "data": {
+     "listId": 65,
+     "showMore": "https://www.allkeyshop.com/blog/catalogue/category-action/",
+     "spriteVersion": 853
+    }
+   }
+  },
+  "adventure": {
+   "default": {
+    "items": [
+     {
+      "index": 1,
+      "name": "Stray",
+      "platform": "pc",
+      "productType": "game",
+      "merchant": "GAMIVO",
+      "price": 8.86,
+      "currency": "eur",
+      "url": "https://www.allkeyshop.com/blog/buy-stray-cd-key-compare-prices/"
+     },
+     {
+      "index": 2,
+      "name": "Tunic",
+      "platform": "pc",
+      "productType": "game",
+      "merchant": "K4G",
+      "price": 3.66,
+      "currency": "eur",
+      "url": "https://www.allkeyshop.com/blog/buy-tunic-cd-key-compare-prices/"
+     },
+     {
+      "index": 3,
+      "name": "Revenge of the Savage Planet",
+      "platform": "pc",
+      "productType": "game",
+      "merchant": "GameBoost",
+      "price": 8.06,
+      "currency": "eur",
+      "url": "https://www.allkeyshop.com/blog/buy-revenge-of-the-savage-planet-cd-key-compare-prices/"
+     },
+     {
+      "index": 4,
+      "name": "A Plague Tale Requiem",
+      "platform": "pc",
+      "productType": "game",
+      "merchant": "Driffle",
+      "price": 12.12,
+      "currency": "eur",
+      "url": "https://www.allkeyshop.com/blog/buy-a-plague-tale-requiem-cd-key-compare-prices/"
+     },
+     {
+      "index": 5,
+      "name": "The Last of Us Part II Remastered",
+      "platform": "pc",
+      "productType": "game",
+      "merchant": "Driffle",
+      "price": 23.22,
+      "currency": "eur",
+      "url": "https://www.allkeyshop.com/blog/buy-the-last-of-us-part-ii-remastered-cd-key-compare-prices/"
+     },
+     {
+      "index": 6,
+      "name": "Forspoken",
+      "platform": "pc",
+      "productType": "game",
+      "merchant": "Driffle",
+      "price": 18.12,
+      "currency": "eur",
+      "url": "https://www.allkeyshop.com/blog/buy-forspoken-cd-key-compare-prices/"
+     },
+     {
+      "index": 7,
+      "name": "The Legend of Zelda Tears of the Kingdom Nintendo Switch",
+      "platform": "switch",
+      "productType": "game",
+      "merchant": "Amazon.fr",
+      "price": 51.49,
+      "currency": "eur",
+      "url": "https://www.allkeyshop.com/blog/buy-the-legend-of-zelda-tears-of-the-kingdom-nintendo-switch-compare-prices/"
+     },
+     {
+      "index": 8,
+      "name": "DREDGE",
+      "platform": "pc",
+      "productType": "game",
+      "merchant": "GameBoost",
+      "price": 4.89,
+      "currency": "eur",
+      "url": "https://www.allkeyshop.com/blog/buy-dredge-cd-key-compare-prices/"
+     }
+    ],
+    "data": {
+     "listId": 66,
+     "showMore": "https://www.allkeyshop.com/blog/catalogue/category-adventure",
+     "spriteVersion": 848
+    }
+   }
+  },
+  "management": {
+   "default": {
+    "items": [
+     {
+      "index": 1,
+      "name": "Football Manager 26",
+      "platform": "pc",
+      "productType": "game",
+      "merchant": "K4G",
+      "price": 13.49,
+      "currency": "eur",
+      "url": "https://www.allkeyshop.com/blog/buy-football-manager-26-cd-key-compare-prices/"
+     },
+     {
+      "index": 2,
+      "name": "Civilization 7",
+      "platform": "pc",
+      "productType": "game",
+      "merchant": "K4G",
+      "price": 22.27,
+      "currency": "eur",
+      "url": "https://www.allkeyshop.com/blog/buy-civilization-7-cd-key-compare-prices/"
+     },
+     {
+      "index": 3,
+      "name": "RimWorld",
+      "platform": "pc",
+      "productType": "game",
+      "merchant": "GameBoost",
+      "price": 18.43,
+      "currency": "eur",
+      "url": "https://www.allkeyshop.com/blog/buy-rimworld-cd-key-compare-prices/"
+     },
+     {
+      "index": 4,
+      "name": "Euro Truck Simulator 2",
+      "platform": "pc",
+      "productType": "game",
+      "merchant": "GAMIVO",
+      "price": 4.97,
+      "currency": "eur",
+      "url": "https://www.allkeyshop.com/blog/buy-euro-truck-simulator-2-cd-key-compare-prices/"
+     },
+     {
+      "index": 5,
+      "name": "Farming Simulator 25",
+      "platform": "pc",
+      "productType": "game",
+      "merchant": "K4G",
+      "price": 9.73,
+      "currency": "eur",
+      "url": "https://www.allkeyshop.com/blog/buy-farming-simulator-25-cd-key-compare-prices/"
+     },
+     {
+      "index": 6,
+      "name": "Factorio",
+      "platform": "pc",
+      "productType": "game",
+      "merchant": "Driffle",
+      "price": 25.54,
+      "currency": "eur",
+      "url": "https://www.allkeyshop.com/blog/buy-factorio-cd-key-compare-prices/"
+     },
+     {
+      "index": 7,
+      "name": "Oxygen Not Included",
+      "platform": "pc",
+      "productType": "game",
+      "merchant": "GAMIVO",
+      "price": 21.08,
+      "currency": "eur",
+      "url": "https://www.allkeyshop.com/blog/buy-oxygen-not-included-cd-key-compare-prices/"
+     },
+     {
+      "index": 8,
+      "name": "Schedule I",
+      "platform": "pc",
+      "productType": "game",
+      "merchant": "GAMIVO",
+      "price": 18.05,
+      "currency": "eur",
+      "url": "https://www.allkeyshop.com/blog/buy-schedule-i-cd-key-compare-prices/"
+     }
+    ],
+    "data": {
+     "listId": 67,
+     "showMore": "https://www.allkeyshop.com/blog/catalogue/category-management",
+     "spriteVersion": 853
+    }
+   }
+  },
+  "racing": {
+   "default": {
+    "items": [
+     {
+      "index": 1,
+      "name": "Forza Horizon 6",
+      "platform": "pc",
+      "productType": "game",
+      "merchant": "Lootbar",
+      "price": 41.61,
+      "currency": "eur",
+      "url": "https://www.allkeyshop.com/blog/buy-forza-horizon-6-cd-key-compare-prices/"
+     },
+     {
+      "index": 2,
+      "name": "Assetto Corsa EVO",
+      "platform": "pc",
+      "productType": "game",
+      "merchant": "GameBoost",
+      "price": 16.97,
+      "currency": "eur",
+      "url": "https://www.allkeyshop.com/blog/buy-assetto-corsa-evo-cd-key-compare-prices/"
+     },
+     {
+      "index": 3,
+      "name": "Screamer 2026",
+      "platform": "pc",
+      "productType": "game",
+      "merchant": "Steam",
+      "price": 23.99,
+      "currency": "eur",
+      "url": "https://www.allkeyshop.com/blog/buy-screamer-2026-cd-key-compare-prices/"
+     },
+     {
+      "index": 4,
+      "name": "F1 25",
+      "platform": "pc",
+      "productType": "game",
+      "merchant": "G2A",
+      "price": 40.49,
+      "currency": "eur",
+      "url": "https://www.allkeyshop.com/blog/buy-f1-25-cd-key-compare-prices/"
+     },
+     {
+      "index": 5,
+      "name": "EA Sports WRC 2023",
+      "platform": "pc",
+      "productType": "game",
+      "merchant": "Steam",
+      "price": 24.99,
+      "currency": "eur",
+      "url": "https://www.allkeyshop.com/blog/buy-ea-sports-wrc-2023-cd-key-compare-prices/"
+     },
+     {
+      "index": 6,
+      "name": "Assetto Corsa Competizione",
+      "platform": "pc",
+      "productType": "game",
+      "merchant": "GameBoost",
+      "price": 3.87,
+      "currency": "eur",
+      "url": "https://www.allkeyshop.com/blog/buy-assetto-corsa-competizione-cd-key-compare-prices/"
+     },
+     {
+      "index": 7,
+      "name": "Drive Beyond Horizons",
+      "platform": "pc",
+      "productType": "game",
+      "merchant": "GAMIVO",
+      "price": 22.38,
+      "currency": "eur",
+      "url": "https://www.allkeyshop.com/blog/buy-drive-beyond-horizons-cd-key-compare-prices/"
+     },
+     {
+      "index": 8,
+      "name": "MotoGP 25",
+      "platform": "pc",
+      "productType": "game",
+      "merchant": "GameBoost",
+      "price": 31.06,
+      "currency": "eur",
+      "url": "https://www.allkeyshop.com/blog/buy-motogp-25-cd-key-compare-prices/"
+     }
+    ],
+    "data": {
+     "listId": 68,
+     "showMore": "https://www.allkeyshop.com/blog/catalogue/category-racing/",
+     "spriteVersion": 853
+    }
+   }
+  },
+  "vr": {
+   "default": {
+    "items": [
+     {
+      "index": 1,
+      "name": "Half-Life Alyx",
+      "platform": "pc",
+      "productType": "game",
+      "merchant": "GAMIVO",
+      "price": 52.21,
+      "currency": "eur",
+      "url": "https://www.allkeyshop.com/blog/buy-half-life-alyx-cd-key-compare-prices/"
+     },
+     {
+      "index": 2,
+      "name": "Ragnarock VR",
+      "platform": "pc",
+      "productType": "game",
+      "merchant": "Kinguin",
+      "price": 0.92,
+      "currency": "eur",
+      "url": "https://www.allkeyshop.com/blog/buy-ragnarock-vr-cd-key-compare-prices/"
+     },
+     {
+      "index": 3,
+      "name": "Among Us VR",
+      "platform": "pc",
+      "productType": "game",
+      "merchant": "Loaded",
+      "price": 1.69,
+      "currency": "eur",
+      "url": "https://www.allkeyshop.com/blog/buy-among-us-vr-cd-key-compare-prices/"
+     },
+     {
+      "index": 4,
+      "name": "Beat Saber",
+      "platform": "pc",
+      "productType": "game",
+      "merchant": "GAMIVO",
+      "price": 14.17,
+      "currency": "eur",
+      "url": "https://www.allkeyshop.com/blog/buy-beat-saber-cd-key-compare-prices/"
+     },
+     {
+      "index": 5,
+      "name": "Five Nights at Freddy's VR Help Wanted",
+      "platform": "pc",
+      "productType": "game",
+      "merchant": "GAMIVO",
+      "price": 22.81,
+      "currency": "eur",
+      "url": "https://www.allkeyshop.com/blog/buy-five-nights-at-freddys-vr-help-wanted-cd-key-compare-prices/"
+     },
+     {
+      "index": 6,
+      "name": "Into the Radius VR",
+      "platform": "pc",
+      "productType": "game",
+      "merchant": "GameBoost",
+      "price": 7.63,
+      "currency": "eur",
+      "url": "https://www.allkeyshop.com/blog/buy-into-the-radius-vr-cd-key-compare-prices/"
+     },
+     {
+      "index": 7,
+      "name": "The Walking Dead Saints & Sinners",
+      "platform": "pc",
+      "productType": "game",
+      "merchant": "GameBoost",
+      "price": 6.13,
+      "currency": "eur",
+      "url": "https://www.allkeyshop.com/blog/buy-the-walking-dead-saints-sinners-cd-key-compare-prices/"
+     },
+     {
+      "index": 8,
+      "name": "Metro Awakening VR",
+      "platform": "pc",
+      "productType": "game",
+      "merchant": "GameBoost",
+      "price": 5.35,
+      "currency": "eur",
+      "url": "https://www.allkeyshop.com/blog/buy-metro-awakening-vr-cd-key-compare-prices/"
+     }
+    ],
+    "data": {
+     "listId": 69,
+     "showMore": "https://www.allkeyshop.com/blog/catalogue/category-vr/",
+     "spriteVersion": 849
+    }
+   }
+  },
+  "sidebar": {
+   "all.popular": {
+    "items": [
+     {
+      "index": 1,
+      "name": "EA SPORTS FC 27",
+      "platform": "pc",
+      "productType": "game",
+      "merchant": "Mmoga",
+      "price": 54.99,
+      "currency": "eur",
+      "url": "https://www.allkeyshop.com/blog/buy-ea-sports-fc-27-key-compare-prices/"
+     },
+     {
+      "index": 2,
+      "name": "CONTROL Resonant",
+      "platform": "pc",
+      "productType": "game",
+      "merchant": "Driffle",
+      "price": 38.47,
+      "currency": "eur",
+      "url": "https://www.allkeyshop.com/blog/buy-control-resonant-cd-key-compare-prices/"
+     },
+     {
+      "index": 3,
+      "name": "WARDOGS",
+      "platform": "pc",
+      "productType": "game",
+      "merchant": "GAMIVO",
+      "price": 32.37,
+      "currency": "eur",
+      "url": "https://www.allkeyshop.com/blog/buy-wardogs-cd-key-compare-prices/"
+     },
+     {
+      "index": 4,
+      "name": "Valheim",
+      "platform": "pc",
+      "productType": "game",
+      "merchant": "Driffle",
+      "price": 17.48,
+      "currency": "eur",
+      "url": "https://www.allkeyshop.com/blog/buy-valheim-cd-key-compare-prices/"
+     },
+     {
+      "index": 5,
+      "name": "Bodycam",
+      "platform": "pc",
+      "productType": "game",
+      "merchant": "GAMESEAL",
+      "price": 25,
+      "currency": "eur",
+      "url": "https://www.allkeyshop.com/blog/buy-bodycam-cd-key-compare-prices/"
+     },
+     {
+      "index": 6,
+      "name": "The Blood Of Dawnwalker",
+      "platform": "pc",
+      "productType": "game",
+      "merchant": "Driffle",
+      "price": 44.93,
+      "currency": "eur",
+      "url": "https://www.allkeyshop.com/blog/buy-the-blood-of-dawnwalker-cd-key-compare-prices/"
+     },
+     {
+      "index": 7,
+      "name": "Onimusha Way of the Sword",
+      "platform": "pc",
+      "productType": "game",
+      "merchant": "Driffle",
+      "price": 40.96,
+      "currency": "eur",
+      "url": "https://www.allkeyshop.com/blog/buy-onimusha-way-of-the-sword-cd-key-compare-prices/"
+     },
+     {
+      "index": 8,
+      "name": "GTA 6 PS5",
+      "platform": "playstation-5",
+      "productType": "game",
+      "merchant": "Wyrel",
+      "price": 63.34,
+      "currency": "eur",
+      "url": "https://www.allkeyshop.com/blog/buy-gta-6-ps5-compare-prices/"
+     },
+     {
+      "index": 9,
+      "name": "Windows 11 Pro",
+      "platform": "pc",
+      "productType": "software",
+      "merchant": "Keywrld",
+      "price": 1.03,
+      "currency": "eur",
+      "url": "https://www.allkeyshop.com/blog/buy-windows-11-pro-cd-key-compare-prices/"
+     },
+     {
+      "index": 10,
+      "name": "Office 2024 Professional Plus",
+      "platform": "pc",
+      "productType": "software",
+      "merchant": "Keys4us",
+      "price": 0.56,
+      "currency": "eur",
+      "url": "https://www.allkeyshop.com/blog/buy-microsoft-office-2024-professional-plus-cd-key-compare-prices/"
+     },
+     {
+      "index": 11,
+      "name": "How to Fish",
+      "platform": "pc",
+      "productType": "game",
+      "merchant": "Kinguin",
+      "price": 5.6,
+      "currency": "eur",
+      "url": "https://www.allkeyshop.com/blog/buy-how-to-fish-key-compare-prices/"
+     },
+     {
+      "index": 12,
+      "name": "Crimson Desert",
+      "platform": "pc",
+      "productType": "game",
+      "merchant": "Driffle",
+      "price": 37.44,
+      "currency": "eur",
+      "url": "https://www.allkeyshop.com/blog/buy-crimson-desert-cd-key-compare-prices/"
+     },
+     {
+      "index": 13,
+      "name": "STAR WARS Zero Company",
+      "platform": "pc",
+      "productType": "game",
+      "merchant": "Driffle",
+      "price": 36.89,
+      "currency": "eur",
+      "url": "https://www.allkeyshop.com/blog/buy-star-wars-zero-company-cd-key-compare-prices/"
+     },
+     {
+      "index": 14,
+      "name": "NBA 2K27",
+      "platform": "pc",
+      "productType": "game",
+      "merchant": "GameBoost",
+      "price": 36.67,
+      "currency": "eur",
+      "url": "https://www.allkeyshop.com/blog/buy-nba-2k27-key-compare-prices/"
+     },
+     {
+      "index": 15,
+      "name": "Project Zomboid",
+      "platform": "pc",
+      "productType": "game",
+      "merchant": "K4G",
+      "price": 5.74,
+      "currency": "eur",
+      "url": "https://www.allkeyshop.com/blog/buy-project-zomboid-cd-key-compare-prices/"
+     },
+     {
+      "index": 16,
+      "name": "Minecraft",
+      "platform": "pc",
+      "productType": "game",
+      "merchant": "Driffle",
+      "price": 15.04,
+      "currency": "eur",
+      "url": "https://www.allkeyshop.com/blog/compare-and-buy-cd-key-for-digital-download-minecraft/"
+     },
+     {
+      "index": 17,
+      "name": "Red Dead Redemption 2",
+      "platform": "pc",
+      "productType": "game",
+      "merchant": "GAMESEAL",
+      "price": 9.92,
+      "currency": "eur",
+      "url": "https://www.allkeyshop.com/blog/buy-red-dead-redemption-2-cd-key-compare-prices/"
+     },
+     {
+      "index": 18,
+      "name": "Elden Ring",
+      "platform": "pc",
+      "productType": "game",
+      "merchant": "Loaded",
+      "price": 42.09,
+      "currency": "eur",
+      "url": "https://www.allkeyshop.com/blog/buy-elden-ring-cd-key-compare-prices/"
+     },
+     {
+      "index": 19,
+      "name": "GTA 5",
+      "platform": "pc",
+      "productType": "game",
+      "merchant": "K4G",
+      "price": 8.46,
+      "currency": "eur",
+      "url": "https://www.allkeyshop.com/blog/buy-gta-5-cd-key-compare-prices/"
+     },
+     {
+      "index": 20,
+      "name": "Baldur's Gate 3",
+      "platform": "pc",
+      "productType": "game",
+      "merchant": "Gog.com",
+      "price": 41.99,
+      "currency": "eur",
+      "url": "https://www.allkeyshop.com/blog/buy-baldurs-gate-3-cd-key-compare-prices/"
+     },
+     {
+      "index": 21,
+      "name": "Cyberpunk 2077",
+      "platform": "pc",
+      "productType": "game",
+      "merchant": "Gog.com",
+      "price": 17.99,
+      "currency": "eur",
+      "url": "https://www.allkeyshop.com/blog/buy-cyberpunk-2077-cd-key-compare-prices/"
+     },
+     {
+      "index": 22,
+      "name": "No Man's Sky",
+      "platform": "pc",
+      "productType": "game",
+      "merchant": "K4G",
+      "price": 13.18,
+      "currency": "eur",
+      "url": "https://www.allkeyshop.com/blog/buy-no-mans-sky-cd-key-compare-prices/"
+     },
+     {
+      "index": 23,
+      "name": "Battlefield 6",
+      "platform": "pc",
+      "productType": "game",
+      "merchant": "Driffle",
+      "price": 37.93,
+      "currency": "eur",
+      "url": "https://www.allkeyshop.com/blog/buy-battlefield-6-cd-key-compare-prices/"
+     },
+     {
+      "index": 24,
+      "name": "Forza Horizon 6",
+      "platform": "pc",
+      "productType": "game",
+      "merchant": "Lootbar",
+      "price": 41.61,
+      "currency": "eur",
+      "url": "https://www.allkeyshop.com/blog/buy-forza-horizon-6-cd-key-compare-prices/"
+     },
+     {
+      "index": 25,
+      "name": "Helldivers 2",
+      "platform": "pc",
+      "productType": "game",
+      "merchant": "Eneba",
+      "price": 26.15,
+      "currency": "eur",
+      "url": "https://www.allkeyshop.com/blog/buy-helldivers-2-cd-key-compare-prices/"
+     },
+     {
+      "index": 26,
+      "name": "The Witcher 3 Wild Hunt",
+      "platform": "pc",
+      "productType": "game",
+      "merchant": "GAMIVO",
+      "price": 16.76,
+      "currency": "eur",
+      "url": "https://www.allkeyshop.com/blog/buy-the-witcher-3-wild-hunt-cd-key-compare-prices/"
+     },
+     {
+      "index": 27,
+      "name": "Resident Evil Requiem",
+      "platform": "pc",
+      "productType": "game",
+      "merchant": "Driffle",
+      "price": 33.24,
+      "currency": "eur",
+      "url": "https://www.allkeyshop.com/blog/buy-resident-evil-requiem-cd-key-compare-prices/"
+     },
+     {
+      "index": 28,
+      "name": "Ready Or Not",
+      "platform": "pc",
+      "productType": "game",
+      "merchant": "K4G",
+      "price": 15.15,
+      "currency": "eur",
+      "url": "https://www.allkeyshop.com/blog/buy-ready-or-not-cd-key-compare-prices/"
+     },
+     {
+      "index": 29,
+      "name": "Palworld",
+      "platform": "pc",
+      "productType": "game",
+      "merchant": "Driffle",
+      "price": 19.51,
+      "currency": "eur",
+      "url": "https://www.allkeyshop.com/blog/buy-palworld-cd-key-compare-prices/"
+     },
+     {
+      "index": 30,
+      "name": "007 First Light",
+      "platform": "pc",
+      "productType": "game",
+      "merchant": "Driffle",
+      "price": 40.13,
+      "currency": "eur",
+      "url": "https://www.allkeyshop.com/blog/buy-007-first-light-cd-key-compare-prices/"
+     },
+     {
+      "index": 31,
+      "name": "Office 2021 Pro Plus",
+      "platform": "pc",
+      "productType": "software",
+      "merchant": "Keys4us",
+      "price": 0.46,
+      "currency": "eur",
+      "url": "https://www.allkeyshop.com/blog/buy-microsoft-office-2021-pro-plus-cd-key-compare-prices/"
+     },
+     {
+      "index": 32,
+      "name": "Mortal Shell 2",
+      "platform": "pc",
+      "productType": "game",
+      "merchant": "G2A",
+      "price": 40.59,
+      "currency": "eur",
+      "url": "https://www.allkeyshop.com/blog/buy-mortal-shell-2-cd-key-compare-prices/"
+     },
+     {
+      "index": 33,
+      "name": "EA SPORTS FC 26",
+      "platform": "pc",
+      "productType": "game",
+      "merchant": "GAMESEAL",
+      "price": 27.8,
+      "currency": "eur",
+      "url": "https://www.allkeyshop.com/blog/buy-ea-sports-fc-26-cd-key-compare-prices/"
+     },
+     {
+      "index": 34,
+      "name": "Schedule I",
+      "platform": "pc",
+      "productType": "game",
+      "merchant": "GAMIVO",
+      "price": 18.05,
+      "currency": "eur",
+      "url": "https://www.allkeyshop.com/blog/buy-schedule-i-cd-key-compare-prices/"
+     },
+     {
+      "index": 35,
+      "name": "Assassin’s Creed Black Flag Resynced",
+      "platform": "pc",
+      "productType": "game",
+      "merchant": "Driffle",
+      "price": 37.63,
+      "currency": "eur",
+      "url": "https://www.allkeyshop.com/blog/buy-assassins-creed-black-flag-resynced-cd-key-compare-prices/"
+     },
+     {
+      "index": 36,
+      "name": "No More Room In Hell 2",
+      "platform": "pc",
+      "productType": "game",
+      "merchant": "Driffle",
+      "price": 16.56,
+      "currency": "eur",
+      "url": "https://www.allkeyshop.com/blog/buy-no-more-room-in-hell-2-cd-key-compare-prices/"
+     },
+     {
+      "index": 37,
+      "name": "Borderlands 4",
+      "platform": "pc",
+      "productType": "game",
+      "merchant": "Driffle",
+      "price": 23.43,
+      "currency": "eur",
+      "url": "https://www.allkeyshop.com/blog/buy-borderlands-4-cd-key-compare-prices/"
+     },
+     {
+      "index": 38,
+      "name": "Office 365 Pro",
+      "platform": "pc",
+      "productType": "software",
+      "merchant": "Keys4us",
+      "price": 1.51,
+      "currency": "eur",
+      "url": "https://www.allkeyshop.com/blog/buy-microsoft-office-365-pro-cd-key-compare-prices/"
+     },
+     {
+      "index": 39,
+      "name": "Monster Hunter Wilds",
+      "platform": "pc",
+      "productType": "game",
+      "merchant": "YUPLAY",
+      "price": 20.56,
+      "currency": "eur",
+      "url": "https://www.allkeyshop.com/blog/buy-monster-hunter-wilds-cd-key-compare-prices/"
+     },
+     {
+      "index": 40,
+      "name": "Dead by Daylight",
+      "platform": "pc",
+      "productType": "game",
+      "merchant": "PremiumCDkeys",
+      "price": 5.74,
+      "currency": "eur",
+      "url": "https://www.allkeyshop.com/blog/buy-dead-by-daylight-cd-key-compare-prices/"
+     },
+     {
+      "index": 41,
+      "name": "Pragmata",
+      "platform": "pc",
+      "productType": "game",
+      "merchant": "Eneba",
+      "price": 31.07,
+      "currency": "eur",
+      "url": "https://www.allkeyshop.com/blog/buy-pragmata-cd-key-compare-prices/"
+     },
+     {
+      "index": 42,
+      "name": "Black Myth WuKong",
+      "platform": "pc",
+      "productType": "game",
+      "merchant": "Driffle",
+      "price": 29.48,
+      "currency": "eur",
+      "url": "https://www.allkeyshop.com/blog/buy-black-myth-wu-kong-cd-key-compare-prices/"
+     },
+     {
+      "index": 43,
+      "name": "Marvel’s Spider-Man 2",
+      "platform": "pc",
+      "productType": "game",
+      "merchant": "Eneba",
+      "price": 28.99,
+      "currency": "eur",
+      "url": "https://www.allkeyshop.com/blog/buy-marvels-spider-man-2-cd-key-compare-prices/"
+     },
+     {
+      "index": 44,
+      "name": "Sons of the Forest",
+      "platform": "pc",
+      "productType": "game",
+      "merchant": "GAMIVO",
+      "price": 26.27,
+      "currency": "eur",
+      "url": "https://www.allkeyshop.com/blog/buy-sons-of-the-forest-cd-key-compare-prices/"
+     },
+     {
+      "index": 45,
+      "name": "Clair Obscur Expedition 33",
+      "platform": "pc",
+      "productType": "game",
+      "merchant": "Driffle",
+      "price": 18.23,
+      "currency": "eur",
+      "url": "https://www.allkeyshop.com/blog/buy-clair-obscur-expedition-33-cd-key-compare-prices/"
+     },
+     {
+      "index": 46,
+      "name": "The Isle",
+      "platform": "pc",
+      "productType": "game",
+      "merchant": "GAMIVO",
+      "price": 18.48,
+      "currency": "eur",
+      "url": "https://www.allkeyshop.com/blog/buy-the-isle-cd-key-compare-prices/"
+     },
+     {
+      "index": 47,
+      "name": "Windows 10 Pro",
+      "platform": "pc",
+      "productType": "software",
+      "merchant": "Keywrld",
+      "price": 0.84,
+      "currency": "eur",
+      "url": "https://www.allkeyshop.com/blog/buy-windows-10-professional-cd-key-compare-prices/"
+     },
+     {
+      "index": 48,
+      "name": "Minecraft Java & Bedrock Edition",
+      "platform": "pc",
+      "productType": "dlc",
+      "merchant": "Driffle",
+      "price": 15.04,
+      "currency": "eur",
+      "url": "https://www.allkeyshop.com/blog/buy-minecraft-java-bedrock-edition-cd-key-compare-prices/"
+     },
+     {
+      "index": 49,
+      "name": "Resonance A Plague Tale Legacy",
+      "platform": "pc",
+      "productType": "game",
+      "merchant": "G2A",
+      "price": 23.57,
+      "currency": "eur",
+      "url": "https://www.allkeyshop.com/blog/buy-resonance-a-plague-tale-legacy-cd-key-compare-prices/"
+     },
+     {
+      "index": 50,
+      "name": "Call of Duty Modern Warfare 4",
+      "platform": "pc",
+      "productType": "game",
+      "merchant": "Royal CD Keys",
+      "price": 50.6,
+      "currency": "eur",
+      "url": "https://www.allkeyshop.com/blog/buy-call-of-duty-modern-warfare-4-key-compare-prices/"
+     },
+     {
+      "index": 51,
+      "name": "Big Walk",
+      "platform": "pc",
+      "productType": "game",
+      "merchant": "Kinguin",
+      "price": 16.37,
+      "currency": "eur",
+      "url": "https://www.allkeyshop.com/blog/buy-big-walk-cd-key-compare-prices/"
+     },
+     {
+      "index": 52,
+      "name": "Sekiro Shadows Die Twice",
+      "platform": "pc",
+      "productType": "game",
+      "merchant": "GAMIVO",
+      "price": 53.07,
+      "currency": "eur",
+      "url": "https://www.allkeyshop.com/blog/buy-sekiro-shadows-die-twice-cd-key-compare-prices/"
+     },
+     {
+      "index": 53,
+      "name": "Dayz",
+      "platform": "pc",
+      "productType": "game",
+      "merchant": "Driffle",
+      "price": 23.25,
+      "currency": "eur",
+      "url": "https://www.allkeyshop.com/blog/buy-dayz-standalone-cd-key-compare-prices/"
+     },
+     {
+      "index": 54,
+      "name": "Marvel's Spider-Man Remastered",
+      "platform": "pc",
+      "productType": "game",
+      "merchant": "GameBoost",
+      "price": 15.93,
+      "currency": "eur",
+      "url": "https://www.allkeyshop.com/blog/buy-marvels-spider-man-remastered-cd-key-compare-prices/"
+     },
+     {
+      "index": 55,
+      "name": "Rust",
+      "platform": "pc",
+      "productType": "game",
+      "merchant": "Driffle",
+      "price": 21.08,
+      "currency": "eur",
+      "url": "https://www.allkeyshop.com/blog/buy-rust-cd-key-compare-prices/"
+     },
+     {
+      "index": 56,
+      "name": "1666: Amsterdam",
+      "platform": "pc",
+      "productType": "game",
+      "merchant": "Royal CD Keys",
+      "price": 16.37,
+      "currency": "eur",
+      "url": "https://www.allkeyshop.com/blog/buy-1666-amsterdam-key-compare-prices/"
+     },
+     {
+      "index": 57,
+      "name": "ARC Raiders",
+      "platform": "pc",
+      "productType": "game",
+      "merchant": "GameBoost",
+      "price": 19.51,
+      "currency": "eur",
+      "url": "https://www.allkeyshop.com/blog/buy-arc-raiders-cd-key-compare-prices/"
+     },
+     {
+      "index": 58,
+      "name": "S.T.A.L.K.E.R. 2 Heart of Chornobyl",
+      "platform": "pc",
+      "productType": "game",
+      "merchant": "Driffle",
+      "price": 38.08,
+      "currency": "eur",
+      "url": "https://www.allkeyshop.com/blog/buy-s-t-a-l-k-e-r-2-cd-key-compare-prices/"
+     },
+     {
+      "index": 59,
+      "name": "Subnautica 2",
+      "platform": "pc",
+      "productType": "game",
+      "merchant": "GameBoost",
+      "price": 19.3,
+      "currency": "eur",
+      "url": "https://www.allkeyshop.com/blog/buy-subnautica-2-cd-key-compare-prices/"
+     },
+     {
+      "index": 60,
+      "name": "Civilization 7",
+      "platform": "pc",
+      "productType": "game",
+      "merchant": "K4G",
+      "price": 22.27,
+      "currency": "eur",
+      "url": "https://www.allkeyshop.com/blog/buy-civilization-7-cd-key-compare-prices/"
+     }
+    ],
+    "data": {
+     "listId": 57,
+     "showMore": null,
+     "spriteVersion": 1205
+    }
+   }
+  }
+ }
+}

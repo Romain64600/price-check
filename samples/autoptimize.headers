@@ -1,0 +1,16 @@
+HTTP/1.1 200 OK
+Date: Tue, 15 Sep 2026 19:45:15 GMT
+Server: Apache
+Strict-Transport-Security: max-age=31536000
+Last-Modified: Wed, 26 Aug 2026 11:29:37 GMT
+X-Cache-Control: 1
+Content-Type: text/javascript
+Cache-Control: max-age=30672000, public, immutable
+Age: 1115648
+ETag: W/"186ce-659f188d26f8c-gzip"
+Accept-Ranges: bytes
+Vary: Accept-Encoding
+Set-Cookie: ip_country_code=ES; Path=/; Max-Age=3600; SameSite=Lax;
+Content-Length: 100046
+Connection: keep-alive
+
