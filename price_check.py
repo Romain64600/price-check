@@ -107,10 +107,11 @@ EDITION_SYNONYMS = {"goty": "game of the year", "collectors": "collector",
 BUNDLE_WORDS = ("bundle", "pack", "collection", "trilogy")  # éditions dont le nom diffère par nature
 # Mots qui ne comptent pas pour reconnaître le nom du produit dans une URL
 SOFT_WORDS = {"the", "of", "a", "an", "and", "edition", "remastered", "remaster", "remake", "hd"} | set(EDITION_WORDS)
-# Noms que les marchands écrivent autrement qu'AllKeyShop
-NAME_ALIASES = {
-    "GTA 6": ("Grand Theft Auto VI", "Grand Theft Auto 6"),
-}
+# Abréviations : un mot du nom AllKeyShop et son équivalent chez les marchands, valables dans les deux sens
+NAME_ALIASES = (
+    ("gta", "grand theft auto"),
+    ("cod", "call of duty"),
+)
 ROMAN = {1: "i", 2: "ii", 3: "iii", 4: "iv", 5: "v", 6: "vi", 7: "vii", 8: "viii", 9: "ix", 10: "x",
          11: "xi", 12: "xii", 13: "xiii", 14: "xiv", 15: "xv", 16: "xvi", 17: "xvii", 18: "xviii", 19: "xix", 20: "xx"}
 ARABIC = {v: str(k) for k, v in ROMAN.items()}
@@ -263,8 +264,15 @@ def url_text(url):
 
 
 def name_variants(product):
-    """Le nom AllKeyShop, ses alias, et leurs variantes chiffres <-> chiffres romains (« Dungeons 2 » / « Dungeons II »)."""
-    names = [product] + list(NAME_ALIASES.get(product, ()))
+    """Le nom AllKeyShop et ses variantes : abréviations (« GTA 6 PS5 » / « Grand Theft Auto 6 PS5 »)
+    et chiffres <-> chiffres romains (« Dungeons 2 » / « Dungeons II »), combinées."""
+    names = [product]
+    for short, long in NAME_ALIASES:
+        for name in list(names):
+            spaced = " %s " % norm(name).replace("-", " ")
+            for a, b in ((short, long), (long, short)):
+                if " %s " % a in spaced:
+                    names.append(spaced.replace(" %s " % a, " %s " % b).strip())
     for name in list(names):
         words = norm(name).split("-")
         roman = " ".join(ROMAN[int(w)] if w.isdigit() and int(w) in ROMAN else w for w in words)
@@ -272,7 +280,7 @@ def name_variants(product):
         for variant in (roman, arabic):
             if norm(variant) != norm(name) and variant not in names:
                 names.append(variant)
-    return tuple(names)
+    return tuple(dict.fromkeys(names))
 
 
 def name_match(names, normed):

@@ -251,6 +251,12 @@ class TestAnalyzeSuspects(unittest.TestCase):
 
     def test_alias(self):
         self.assertEqual(self.reasons("GTA 6", "https://shop.example/grand-theft-auto-vi-ps5", platform="playstation"), [])
+        # Wyrel, 30/09/2026 : « GTA 6 PS5 » écrit « grand-theft-auto-vi-ps5 »
+        url = "https://wyrel.com/en/buy-cheap-grand-theft-auto-vi-ps5-193995?referal=allkeyshop&marketplace_id=5"
+        self.assertEqual(self.reasons("GTA 6 PS5", url, region="EUROPE", platform="playstation-store"), [])
+        self.assertEqual(self.reasons("Grand Theft Auto V", "https://shop.example/gta-5-pc-rockstar-key", platform="rockstar"), [])
+        self.assertEqual(self.reasons("Call of Duty Black Ops 7", "https://shop.example/cod-black-ops-7-pc-steam"), [])
+        self.assertIn("grand theft auto vi ps5", pc.name_variants("GTA 6 PS5"))
 
     def test_partial_name(self):
         res = pc.analyze("The Witcher 3 Wild Hunt", offer(), "witcher-3-wild-hunt-goty-steam-key", "URL")

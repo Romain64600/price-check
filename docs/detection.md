@@ -58,7 +58,7 @@ Tout est normalisé en minuscules, lettres et chiffres seulement, séparés par 
 
 | Contrôle | Règle | Raison affichée |
 |---|---|---|
-| Nom du produit | Le nom AllKeyShop, sans séparateurs, doit être dans le texte (`easportsfc27`). Les chiffres et les chiffres romains sont équivalents (« Minecraft Dungeons 2 » reconnaît `minecraft-dungeons-ii`, et inversement). À défaut, tous ses mots significatifs (hors *the*, *of*, *edition*, *remastered*, mots d'édition…) doivent y être : nom **partiel**, accepté avec une note. `NAME_ALIASES` couvre les noms que les marchands écrivent autrement (GTA 6 → Grand Theft Auto VI). | `nom du produit absent` |
+| Nom du produit | Le nom AllKeyShop, sans séparateurs, doit être dans le texte (`easportsfc27`). Les chiffres et les chiffres romains sont équivalents (« Minecraft Dungeons 2 » reconnaît `minecraft-dungeons-ii`, et inversement). À défaut, tous ses mots significatifs (hors *the*, *of*, *edition*, *remastered*, mots d'édition…) doivent y être : nom **partiel**, accepté avec une note. `NAME_ALIASES` couvre les abréviations, dans les deux sens (« GTA 6 PS5 » reconnaît `grand-theft-auto-vi-ps5`, « Call of Duty » reconnaît `cod`). | `nom du produit absent` |
 | Compte | `account`, `accounts`… dans le texte pour une offre saisie en clé | `compte chez le marchand, saisi en clé` |
 | Région interdite | `ru`, `cis`, `asia`, `latam`, `india`, `tr`, `cn`, `ar`, `br`, `jp`, `kr`… (`FORBIDDEN_REGION_WORDS`) | `région interdite : …` |
 | Famille de région | AllKeyShop GLOBAL (ou GIFT, XBOX/PC) et le texte dit `eu`/`europe` sans `global` ; ou l'inverse | `région : AllKeyShop X, marchand Y` |
