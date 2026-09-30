@@ -34,7 +34,7 @@ Python 3 seulement, aucune dépendance. Chromium (déjà sur le serveur) sert de
 1. Toutes les 30 min, il relit les listes via l'API JSON `getLists`, en ne gardant que les jeux.
 2. Toutes les 2 min 30, il lit les offres de chaque page produit (`var gamePageTrans` dans le HTML, user agent `AKS/Staff`) et prend, pour chaque édition, l'offre de clé la moins chère (`priceCard`, sans les offres compte ni les offres « sans prix » à `0.02`).
 3. Toute offre en tête **jamais contrôlée** est contrôlée une fois : redirection AllKeyShop (`AKS/Staff`) → URL marchand → le nom du produit doit y être, et les mots de région, plateforme et édition doivent être compatibles avec l'offre. Si l'URL ne dit rien : le 301 du marchand, puis en dernier recours sa page ouverte avec Chromium (user agent Chrome).
-4. Verdict sur Discord : 🟢 `OK`, 🔴 `SUSPECT` (avec la raison), 🟠 `À VÉRIFIER` (impossible de conclure). Les OK partent aussi au début (`NOTIFY_OK=0` pour les couper).
+4. Verdict : 🟢 `OK`, 🔴 `SUSPECT` (avec la raison), 🟠 `À VÉRIFIER` (impossible de conclure). SUSPECT et À VÉRIFIER partent sur Discord ; les OK ne sont que dans le journal (`NOTIFY_OK=0` en production depuis le 30/09/2026).
 
 Détails et exemple d'alerte : [docs/detection.md](docs/detection.md). Le moniteur ne fait que des GET, jamais de wp-admin ; `AKS/Staff` n'est utilisé que sur AllKeyShop.
 
