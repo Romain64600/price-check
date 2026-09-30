@@ -12,11 +12,17 @@ Contrôler le **premier prix** de chaque page suivie : l'offre la moins chère d
 
 L'écart de prix avec l'offre suivante n'est pas un critère : une offre fautive peut n'être moins chère que d'un centime.
 
-Exemple (échantillon du 28/09/2026) : sur EA SPORTS FC 27, le premier prix Standard est Mmoga à 54,99 €, en région `IN ENGLISH ONLY` (`EA ENG/POL/RUS ONLY`), soit seulement 3 % sous GAMIVO à 56,61 €.
+Attention à ne pas confondre région et langue. Sur EA SPORTS FC 27 (échantillon du 28/09/2026), le premier prix Standard est Mmoga à 54,99 € en `IN ENGLISH ONLY` (`EA ENG/POL/RUS ONLY`) : c'est une offre **légitime**, car `IN ENGLISH ONLY` n'est qu'une restriction de langue, pas de région.
+
+## Régions déjà tranchées
+
+| Région (`region_name`) | `filter_name` | Verdict |
+|---|---|---|
+| `IN ENGLISH ONLY` | `EA ENG/POL/RUS ONLY` | Autorisée : restriction de langue, pas de région |
 
 ## Questions ouvertes
 
-1. **Régions** : quelles régions sont autorisées sur notre marché (allkeyshop.com, EUR) ? Par exemple, `IN ENGLISH ONLY` est-elle acceptable ? Régions vues dans les échantillons : `GLOBAL`, `EUROPE`, `GIFT`, `GIFT EU`, `IN ENGLISH ONLY`, `XBOX/PC`, `XBOX/PC EU`, `ACCOUNT`.
+1. **Régions** : quelles régions sont autorisées sur notre marché (allkeyshop.com, EUR) ? Régions vues dans les échantillons, en plus de `IN ENGLISH ONLY` : `GLOBAL`, `EUROPE`, `GIFT`, `GIFT EU`, `XBOX/PC`, `XBOX/PC EU`. Une liste des régions interdites suffirait.
 2. **Compte ou clé** : pour le vérifier, il faut voir la page produit du marchand. Son URL n'apparaît pas dans la page publique, seulement via `/redirection/offer/...`, qui compte des clics. Existe-t-il un accès staff à l'URL marchand de chaque offre (wp-admin, flux marchands) ?
 3. **Premier prix** : lequel contrôle-t-on ? Le premier prix global de la page (en haut du tableau), ou le premier prix de chaque édition ?
 4. **Alerte** : alerte-t-on à chaque changement de premier prix, pour vérification humaine, ou seulement quand une règle automatique juge l'offre suspecte ?

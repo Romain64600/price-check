@@ -16,8 +16,6 @@ Une offre peut être ajoutée sur une page produit alors qu'elle ne devrait pas 
 
 Si cette offre est la moins chère, elle devient le premier prix affiché, et ce premier prix est faux. **L'écart avec l'offre suivante n'est pas un critère** : il peut être de 30 %, comme d'un centime. Il faut donc contrôler l'offre elle-même, pas son écart de prix.
 
-Exemple réel (28/09/2026) : sur EA SPORTS FC 27, le premier prix Standard est Mmoga à 54,99 €, en région « IN ENGLISH ONLY » (`EA ENG/POL/RUS ONLY`). Il n'est que 3 % sous GAMIVO à 56,61 €.
-
 > **État actuel** : la version en place ne détecte qu'un écart d'au moins 30 % entre les deux offres les moins chères. Elle ne répond pas à l'objectif et doit être revue. Voir les questions ouvertes dans [docs/detection.md](docs/detection.md#questions-ouvertes).
 
 ## Démarrage rapide
