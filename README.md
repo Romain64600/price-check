@@ -39,12 +39,23 @@ Python 3 seulement, aucune dépendance.
 
 Le moniteur ne fait que des GET en lecture seule et n'appelle jamais les liens `/redirection/` (ils comptent des clics).
 
+## Couverture des marchands
+
+Le contrôle passe par l'URL marchand que donne le lien de redirection AllKeyShop. État au 30/09/2026, sur 28 marchands testés :
+
+- **26 contrôlables par l'URL seule**, dont 2 après le 301 du marchand lui-même (Instant Gaming, Fanatical).
+- **2 pas encore couverts** : Epic Games et EA.com (URL partielle, page à ouvrir avec Chromium).
+- **Non testés** : les marchands des 7 autres pages suivies.
+
+Table détaillée, méthode par méthode : [docs/marchands.md](docs/marchands.md). Elle doit être mise à jour à chaque marchand qui oblige à ouvrir sa page, pour qu'on sache toujours qui est monitoré et qui ne l'est pas encore.
+
 ## Documentation
 
 | Document | Contenu |
 |---|---|
 | [docs/detection.md](docs/detection.md) | Objectif, user agents, lien de redirection, règle proposée « l'URL d'abord », règle actuelle, questions ouvertes |
 | [docs/exploitation.md](docs/exploitation.md) | Installation, options, réglages, systemd, journaux, tests |
+| [docs/marchands.md](docs/marchands.md) | Couverture par marchand : méthode de contrôle, marchands non couverts |
 | [docs/reconnaissance.md](docs/reconnaissance.md) | Analyse du site : API des listes, cache, structure des offres |
 
 ## Arborescence
