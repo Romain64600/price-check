@@ -196,6 +196,21 @@ class TestAnalyzeSuspects(unittest.TestCase):
         self.assertEqual(self.reasons("EA SPORTS FC 27", "https://shop.example/ea-sports-fc-27-steam-gift-global", region="GIFT"), [])
         self.assertEqual(self.reasons("EA SPORTS FC 27", "https://shop.example/ea-sports-fc-27-steam-gift-europe", region="GIFT"), [])
 
+    def test_gift_region_is_not_compared(self):
+
+        # K4G, 30/09/2026 (formation) : « steam-europe … altergift » affiché GIFT, c'est normal
+
+        url = "https://k4g.com/product/screamer-steam-europe-instant-altergift-digital-deluxe-edition-alter-gift-X9G4J5WN?r=aks"
+
+        self.assertEqual(self.reasons("Screamer 2026", url, edition="Deluxe", region="GIFT"), [])
+
+        self.assertEqual(self.reasons("Screamer 2026", url, edition="Deluxe", region="GIFT EU"), [])
+
+        self.assertEqual(self.reasons("Screamer 2026", url, edition="Deluxe", region="GLOBAL"),
+
+                         ["région : AllKeyShop GLOBAL, marchand EU", "gift chez le marchand, affiché en clé GLOBAL"])
+
+
     def test_gift_sold_as_key(self):
         self.assertEqual(self.reasons("EA SPORTS FC 27", "https://shop.example/ea-sports-fc-27-steam-altergift", region="GLOBAL"),
                          ["gift chez le marchand, affiché en clé GLOBAL"])
