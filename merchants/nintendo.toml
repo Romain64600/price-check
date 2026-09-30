@@ -1,0 +1,9 @@
+# Nintendo eShop (nintendo.com, boutiques FR / IT / DE... d'AllKeyShop).
+# L'URL et le titre sont dans la langue de la boutique (« Le Chat Chapeauté Pagaille sous la pluie ») :
+# le nom se contrôle sur la version anglaise de la page, donnée par son lien hreflang en-GB.
+# Vérifié le 30/09/2026 : la page se lit en HTTP simple ; TORO 2 -> « Metal-Garden » reste bien suspect.
+name = "Nintendo eShop"
+hosts = ["nintendo.com"]
+
+[product_name]
+hreflang = "en-GB"

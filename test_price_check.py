@@ -307,6 +307,46 @@ class TestAnalyzeSuspects(unittest.TestCase):
         self.assertEqual(self.reasons("Red Dead Redemption 2", "https://shop.example/red-dead-redemption-pc-rockstar-key",
                                       platform="rockstar"), ["nom du produit absent (URL)"])
 
+    def test_console_names_and_stores(self):
+        # Instant Gaming et Playerland, 30/09/2026 : « microsoft-store » dans l'URL d'une offre Xbox
+        url = "https://www.instant-gaming.com/en/23587-buy-ea-sports-fc-27-ultimate-edition-xbox-series-x-s-xbox-one-microsoft-store/"
+        self.assertEqual(self.reasons("EA SPORTS FC 27 Xbox Series", url, edition="Ultimate + Bonus", region="XBOX X|S", platform="xbox"), [])
+        url = "https://www.instant-gaming.com/en/22985-buy-fable-pc-xbox-series-x-s-microsoft-store/"
+        self.assertEqual(self.reasons("Fable Xbox Series", url, edition="Preorder bonus", region="XBOX/PC", platform="xbox-play-anywhere"), [])
+        # Eneba préfixe ses URL par « steam- » même pour une clé Xbox Live
+        url = "https://www.eneba.com/steam-nba-2k26-superstar-edition-xbox-series-x-s-xbox-live-key-europe"
+        self.assertEqual(self.reasons("NBA 2K26 Xbox Series", url, edition="Superstar Edition", region="EU IN ENGLISH ONLY", platform="xbox"), [])
+        # mais une clé Steam affichée EA App reste suspecte
+        self.assertEqual(self.reasons("EA SPORTS FC 26", "https://www.gamingdragons.com/en/game/buy-ea-sports-fc-26-ultimate-edition-steam-key.html",
+                                      edition="Ultimate", platform="ea-app"), ["plateforme : AllKeyShop ea-app, marchand steam"])
+
+    def test_suffixes_year_vr_switch2_and_acronyms(self):
+        self.assertEqual(self.reasons("Screamer 2026", "https://store.steampowered.com/app/2814990/Screamer/"), [])
+        self.assertEqual(self.reasons("Ragnarock VR", "https://www.kinguin.net/category/89340/ragnarock-steam-cd-key"), [])
+        self.assertEqual(self.reasons("Metro Awakening VR", "https://gameboost.com/metro-awakening-deluxe-edition-pc-steam-key-global-00-17545",
+                                      edition="Deluxe"), [])
+        self.assertEqual(self.reasons("Azure Striker Gunvolt Trilogy Enhanced Nintendo Switch 2",
+                                      "https://www.nintendo.com/de-de/Spiele/Nintendo-Switch-Download-Software/Azure-Striker-Gunvolt-Trilogy-Enhanced-3000000.html",
+                                      region="GLOBAL", platform="nintendo-eshop"), [])
+        self.assertEqual(self.reasons("S.T.A.L.K.E.R. 2 Heart of Chornobyl",
+                                      "https://www.g2a.com/en/stalker-2-heart-of-chernobyl-deluxe-edition-pc-steam-key-global-i10000255894008",
+                                      edition="Deluxe"), [])
+        self.assertEqual(self.reasons("MXGP 26 The Official Game Xbox Series",
+                                      "https://www.xbox.com/de-de/games/store/mxgp-26-fox-holeshot-edition/9p730qptxz4q",
+                                      edition="Fox Holeshot Edition", region="XBOX X|S", platform="xbox"), [])
+        self.assertEqual(pc.norm("S.T.A.L.K.E.R. 2"), "stalker-2")
+        self.assertIn("screamer", pc.name_variants("Screamer 2026"))
+
+    def test_short_page_title_contained_in_the_name(self):
+        # PS Store US, 30/09/2026 : <title> « UFC® 5 » pour « EA Sports UFC 5 PS5 »
+        o = offer(region="PS5", platform="playstation-store")
+        res = pc.analyze("EA Sports UFC 5 PS5", o, "UFC® 5 | Access Denied", "titre de la page")
+        self.assertEqual((res["match"], res["reasons"]), ("partial", []))
+        res = pc.analyze("Pokemon Sword Nintendo Switch", o, "Pokémon Shield | Nintendo", "titre de la page")
+        self.assertIsNone(res["match"])
+        res = pc.analyze("Sonic Racing CrossWorlds", o, "Sonic | SEGA", "titre de la page")
+        self.assertIsNone(res["match"])  # un seul mot, pas assez
+
     def test_wrong_product_dredge_doom(self):
         # Greenmangaming, 30/09/2026 : DOOM The Dark Ages en premier prix « Premium » de la page DREDGE
         self.assertEqual(self.reasons("DREDGE", "https://www.greenmangaming.com/games/doom-the-dark-ages-premium-edition-pc/",
@@ -374,6 +414,30 @@ class TestMerchantConfigs(unittest.TestCase):
             res = pc.analyze("Kingdom Come Deliverance 2", offer(merchantName="Wyrel", region=region), pc.url_text(url5), "URL",
                              region=pc.region_text(url5, cfg))
             self.assertEqual(res["reasons"], expected, region)
+
+    def test_alternate_url(self):
+        page = ('<html><head><link rel="alternate" hreflang="fr-FR" href="https://www.nintendo.com/fr-fr/x.html">'
+                '<link href="https://www.nintendo.com/en-gb/Games/Nintendo-Switch-download-software/Metal-Garden-3177422.html" '
+                'rel="alternate" hreflang="en-GB"></head></html>')
+        self.assertEqual(pc.alternate_url(page, "en-GB"), "https://www.nintendo.com/en-gb/Games/Nintendo-Switch-download-software/Metal-Garden-3177422.html")
+        self.assertIsNone(pc.alternate_url("<html></html>", "en-GB"))
+
+    @mock.patch.object(pc, "REQUEST_DELAY", 0)
+    def test_nintendo_name_checked_on_the_english_page(self):
+        # Nintendo eShop FR, 30/09/2026 : TORO 2 renvoie sur Metal Garden ; Le Chat Chapeauté est bien The Cat in the Hat
+        cases = [("TORO 2 Nintendo Switch", "Metal-Garden-3177422", "Metal-Garden-3177422", "SUSPECT"),
+                 ("The Cat in the Hat Rainy Day Mayhem Nintendo Switch", "Le-Chat-Chapeaute-Pagaille-sous-la-pluie-3110607",
+                  "The-Cat-in-the-Hat-Rainy-Day-Mayhem-3110607", "OK")]
+        for product, fr_slug, en_slug, expected in cases:
+            fr = "https://www.nintendo.com/fr-fr/Jeux/Jeux-Nintendo-Switch/%s.html" % fr_slug
+            page = TestCheckOffer.INTERSTITIAL.replace(TestRedirection.KINGUIN, fr).replace(
+                TestRedirection.KINGUIN.replace("/", "\\/"), fr.replace("/", "\\/"))
+            nintendo = '<html><head><link rel="alternate" hreflang="en-GB" href="https://www.nintendo.com/en-gb/Games/Nintendo-Switch-games/%s.html"></head></html>' % en_slug
+            with mock.patch.object(pc, "http_get", side_effect=[(200, None, page), (200, None, nintendo)]), \
+                 mock.patch.object(pc, "page_title") as title:
+                res = pc.check_offer(product, offer(merchantName="Nintendo eShop FR", region="GLOBAL", platform="nintendo-eshop"))
+            title.assert_not_called()
+            self.assertEqual((res["verdict"], res["method"]), (expected, "URL de la version en-GB"), product)
 
     @mock.patch.object(pc, "REQUEST_DELAY", 0)
     def test_amazon_never_opens_a_browser(self):

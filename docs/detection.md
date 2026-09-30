@@ -58,12 +58,12 @@ Tout est normalisé en minuscules, lettres et chiffres seulement, séparés par 
 
 | Contrôle | Règle | Raison affichée |
 |---|---|---|
-| Nom du produit | Le nom AllKeyShop, sans séparateurs, doit être dans le texte (`easportsfc27`). Les chiffres et les chiffres romains sont équivalents (« Minecraft Dungeons 2 » reconnaît `minecraft-dungeons-ii`, et inversement), et le suffixe plateforme du nom (« GTA 6 **PS5** », « … Xbox Series ») est facultatif chez le marchand. À défaut, tous ses mots significatifs (hors *the*, *of*, *edition*, *remastered*, mots d'édition…) doivent y être : nom **partiel**, accepté avec une note. `NAME_ALIASES` couvre les abréviations, dans les deux sens (« GTA 6 PS5 » reconnaît `grand-theft-auto-vi-ps5`, « Call of Duty » reconnaît `cod`). | `nom du produit absent` |
+| Nom du produit | Le nom AllKeyShop, sans séparateurs, doit être dans le texte (`easportsfc27`). Les chiffres et les chiffres romains sont équivalents (« Minecraft Dungeons 2 » reconnaît `minecraft-dungeons-ii`, et inversement) ; le suffixe plateforme du nom (« GTA 6 **PS5** », « … Xbox Series », « … Nintendo Switch 2 », « … VR »), l'année de désambiguïsation (« Screamer **2026** ») et les sigles pointés (« S.T.A.L.K.E.R. » = `stalker`) sont gérés ; « The Official Game » ne compte pas. Sur un titre de page, un titre court entièrement contenu dans le nom (« UFC® 5 » pour « EA Sports UFC 5 PS5 », deux mots au moins) est accepté. À défaut, tous ses mots significatifs (hors *the*, *of*, *edition*, *remastered*, mots d'édition…) doivent y être : nom **partiel**, accepté avec une note. `NAME_ALIASES` couvre les abréviations, dans les deux sens (« GTA 6 PS5 » reconnaît `grand-theft-auto-vi-ps5`, « Call of Duty » reconnaît `cod`). | `nom du produit absent` |
 | Compte | `account`, `accounts`… dans le texte pour une offre saisie en clé | `compte chez le marchand, saisi en clé` |
 | Région interdite | `ru`, `cis`, `asia`, `latam`, `india`, `tr`, `cn`, `ar`, `br`, `jp`, `kr`… (`FORBIDDEN_REGION_WORDS`) | `région interdite : …` |
 | Famille de région | Familles GLOBAL (`global`, `worldwide`), EU (`eu`, `europe`) et ROW (`row`) : AllKeyShop affiche une famille et le texte marchand en nomme une autre. Validé par formation le 30/09/2026 (Stellaris : Kinguin EU affiché GLOBAL). Un marchand peut porter la région ailleurs que dans le chemin de l'URL : voir `merchants/*.toml` (Wyrel : paramètre `region=`). | `région : AllKeyShop X, marchand Y` |
 | Gift | `gift`/`altergift` dans le texte pour une offre dont la région AllKeyShop n'est pas GIFT | `gift chez le marchand, affiché en clé` |
-| Plateforme | Le texte nomme une plateforme (`steam`, `ea-app`/`origin`, `epic`, `gog`, `xbox`…) d'une autre famille que `activationPlatform` | `plateforme : AllKeyShop X, marchand Y` |
+| Plateforme | Le texte nomme une plateforme (`steam`, `ea-app`/`origin`, `epic`, `gog`, `xbox`, `microsoft-store`…) d'une autre famille que `activationPlatform`, et aucune de la bonne famille. Contrôle fait sur tous les mots du texte, nom du produit compris (« EA SPORTS FC 27 **Xbox Series** »). `microsoft-store` avec `xbox` = famille Xbox ; le préfixe `steam-` des URL Eneba ne compte pas s'il y a aussi `xbox-live`. | `plateforme : AllKeyShop X, marchand Y` |
 | Édition | Le texte nomme une édition (`deluxe`, `ultimate`, `goty`…) qui n'est pas celle d'AllKeyShop. Seulement si l'édition AllKeyShop est elle-même connue : « Preorder bonus », « Early Access », « Supporter Edition » ne se comparent pas. `standard` pour « Standard + Bonus » passe, `goty` pour « Game of the Year » aussi (synonymes canonisés des deux côtés). | `édition : AllKeyShop X, marchand Y` |
 | Contenu additionnel | `dlc`, `season-pass`, `expansion`, `soundtrack`, `upgrade`, sauf si le texte contient aussi `bonus` (`pre-order-bonus-dlc` est le bonus de précommande vendu avec le jeu) ou si l'édition AllKeyShop annonce du contenu en plus (« Standard + DLC Bundle », « … + Bonus ») | `contenu additionnel : …` |
 
@@ -92,6 +92,10 @@ Page : <https://www.allkeyshop.com/blog/buy-sonic-racing-crossworlds-cd-key-comp
 ```
 
 Un contrôle ou un envoi Discord raté est retenté au passage suivant ; rien n'est marqué contrôlé tant que l'alerte n'est pas partie.
+
+### Boutiques localisées
+
+Sur les eShop Nintendo (FR, IT, DE…), l'URL et le titre sont dans la langue de la boutique. `merchants/nintendo.toml` fait contrôler le nom sur la **version anglaise** de la page, donnée par son lien `hreflang="en-GB"` : « Le Chat Chapeauté Pagaille sous la pluie » redevient *The Cat in the Hat Rainy Day Mayhem*, et « TORO 2 → Metal Garden » reste suspect. Les boutiques PlayStation donnent un `<title>` court (« UFC® 5 »), accepté s'il est contenu dans le nom. Amazon (éditions physiques, titres en français, page illisible) sort en À VÉRIFIER.
 
 ## Limites connues
 

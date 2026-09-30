@@ -116,10 +116,10 @@ BUNDLE_WORDS = ("bundle", "pack", "collection", "trilogy")  # éditions dont le 
 EXTRA_CONTENT_WORDS = ("dlc", "bundle", "pack", "collection", "bonus", "season", "expansion", "soundtrack", "ost")  # éditions qui annoncent du contenu en plus
 NOT_A_LANGUAGE = {"pc", "eu", "us", "uk", "na", "ww", "vr", "hd", "ps", "cd", "dl", "xs"}  # codes de 2 lettres qui ne sont pas des langues
 # Suffixes plateforme des noms AllKeyShop (« GTA 6 PS5 »), que les marchands omettent souvent
-PLATFORM_SUFFIXES = ("ps5", "ps4", "playstation 5", "playstation 4", "xbox series x", "xbox series", "xbox one",
-                     "xbox", "nintendo switch", "switch", "pc")
+PLATFORM_SUFFIXES = ("ps5", "ps4", "playstation 5", "playstation 4", "xbox series x s", "xbox series x", "xbox series",
+                     "xbox one", "xbox", "nintendo switch 2", "switch 2", "nintendo switch", "switch", "pc", "vr")
 # Mots qui ne comptent pas pour reconnaître le nom du produit dans une URL
-SOFT_WORDS = {"the", "of", "a", "an", "and", "edition", "remastered", "remaster", "remake", "hd"} | set(EDITION_WORDS)
+SOFT_WORDS = {"the", "of", "a", "an", "and", "edition", "remastered", "remaster", "remake", "hd", "official", "game"} | set(EDITION_WORDS)
 # Abréviations : un mot du nom AllKeyShop et son équivalent chez les marchands, valables dans les deux sens
 NAME_ALIASES = (
     ("gta", "grand theft auto"),
@@ -296,8 +296,9 @@ def region_text(url, cfg):
 # ---- Analyse d'une URL ou d'un titre marchand --------------------------------
 
 def norm(text):
-    """« EA SPORTS FC 27 » -> « ea-sports-fc-27 »."""
+    """« EA SPORTS FC 27 » -> « ea-sports-fc-27 » ; « S.T.A.L.K.E.R. 2 » -> « stalker-2 »."""
     text = unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode()
+    text = re.sub(r"\b(\w)\.", r"\1", text)  # sigle pointé : S.T.A.L.K.E.R. -> STALKER
     return re.sub(r"[^a-z0-9]+", "-", text.lower().replace("&", " and ")).strip("-")
 
 
@@ -318,10 +319,15 @@ def name_variants(product):
     """Le nom AllKeyShop et ses variantes : abréviations (« GTA 6 PS5 » / « Grand Theft Auto 6 PS5 »)
     et chiffres <-> chiffres romains (« Dungeons 2 » / « Dungeons II »), combinées."""
     names = [product]
-    for suffix in PLATFORM_SUFFIXES:
-        if norm(product).endswith("-" + norm(suffix)) and norm(product) != norm(suffix):
-            names.append(norm(product)[:-len(norm(suffix)) - 1].replace("-", " "))
+    base = norm(product)
+    for suffix in PLATFORM_SUFFIXES:  # « GTA 6 PS5 » -> « GTA 6 », « Ragnarock VR » -> « Ragnarock »
+        if base.endswith("-" + norm(suffix)) and base != norm(suffix):
+            base = base[:-len(norm(suffix)) - 1]
+            names.append(base.replace("-", " "))
             break
+    m = re.fullmatch(r"(.+)-(20\d\d)", base)  # année de désambiguïsation AllKeyShop : « Screamer 2026 » -> « Screamer »
+    if m:
+        names.append(m.group(1).replace("-", " "))
     for short, long in NAME_ALIASES:
         for name in list(names):
             spaced = " %s " % norm(name).replace("-", " ")
@@ -357,6 +363,27 @@ def name_match(names, normed):
             return "partial"
         if len(significant) >= 4 and len(missing) == 1 and not (missing[0].isdigit() or missing[0] in ARABIC):
             return "partial"
+    return None
+
+
+def title_match(names, text):
+    """Un titre de page court, entièrement contenu dans le nom AllKeyShop (« UFC 5 » pour
+    « EA Sports UFC 5 PS5 »), avec au moins deux mots significatifs : « partial »."""
+    product_tokens = {w for name in names for w in norm(name).split("-")}
+    for segment in re.split(r"\s[|\-\u2013\u2014]\s|\|", text):
+        tokens = [w for w in norm(segment).split("-") if w and w not in SOFT_WORDS]
+        if len(tokens) >= 2 and all(w in product_tokens for w in tokens):
+            return "partial"
+    return None
+
+
+def alternate_url(page_html, hreflang):
+    """Le lien <link rel="alternate" hreflang="..."> d'une page (Nintendo : version anglaise)."""
+    for tag in re.findall(r"<link[^>]+>", page_html):
+        if re.search(r'hreflang="%s"' % re.escape(hreflang), tag, re.IGNORECASE):
+            m = re.search(r'href="([^"]+)"', tag)
+            if m:
+                return html.unescape(m.group(1))
     return None
 
 
@@ -442,6 +469,10 @@ def analyze(product, offer, text, source, region=None):
         return re.search(r"(^|-)%s(-|$)" % re.escape(word), words if where is None else where) is not None
 
     reasons, notes = [], []
+    if match is None and source == "titre de la page":
+        match = title_match(names, text)
+        if match:
+            notes.append("titre court contenu dans le nom")
     if match is None and is_bundle(offer["edition"]):
         notes.append("édition %s : nom non contrôlé" % offer["edition"])  # un bundle porte un autre nom
     elif match is None:
@@ -459,8 +490,9 @@ def analyze(product, offer, text, source, region=None):
         reasons.append("région : AllKeyShop %s, marchand %s" % (offer["region"], "/".join(sorted(url_regions))))
     if any(has(w) for w in GIFT_WORDS) and "GIFT" not in offer["region"].upper():
         reasons.append("gift chez le marchand, affiché en clé %s" % offer["region"])
+    # plateforme : sur tous les mots, car « Xbox Series » fait partie du nom AllKeyShop et de l'URL
     aks_platform = platform_family(offer["platform"])
-    url_platforms = {f for f, ws in PLATFORM_FAMILIES.items() if any(has(w) for w in ws)}
+    url_platforms = {f for f, ws in PLATFORM_FAMILIES.items() if any(has(w, normed) for w in ws)}
     if aks_platform and url_platforms and aks_platform not in url_platforms:
         reasons.append("plateforme : AllKeyShop %s, marchand %s" % (offer["platform"], "/".join(sorted(url_platforms))))
     url_editions = [w for w in EDITION_WORDS if has(w)]
@@ -484,13 +516,15 @@ TITLE_RES = (
 
 
 def page_title_from_html(dom):
+    """« <title> | og:title | h1 » de la page, chaque partie séparée par « | »."""
     parts = []
     for rx in TITLE_RES:
         m = rx.search(dom)
         if m:
-            parts.append(re.sub(r"<[^>]+>", " ", html.unescape(m.group(1))))
-    text = re.sub(r"\s+", " ", " ".join(parts)).strip()
-    return text or None
+            part = re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", html.unescape(m.group(1)))).strip()
+            if part and part not in parts:
+                parts.append(part)
+    return " | ".join(parts) or None
 
 
 def page_title(url):
@@ -536,6 +570,22 @@ def check_offer(product, offer):
     result, method = analyze(product, offer, url_text(url), "URL", region=region_text(url, cfg)), "URL"
     if (cfg.get("region") or {}).get("from") == "query":
         result["notes"].append("région lue dans le paramètre %s de l'URL" % (cfg["region"].get("param", "region")))
+
+    hreflang = (cfg.get("product_name") or {}).get("hreflang")
+    if result["match"] is None and hreflang:
+        # boutique localisée (Nintendo eShop FR/IT/DE) : le nom se contrôle sur la version anglaise de la page
+        try:
+            _, _, page = http_get(url, BROWSER_UA)
+        except OSError:
+            page = ""
+        time.sleep(REQUEST_DELAY)
+        alt = alternate_url(page, hreflang)
+        if alt:
+            result = analyze(product, offer, url_text(alt), "URL de la version %s" % hreflang, region=region_text(alt, cfg))
+            result["notes"].append("nom contrôlé sur %s" % alt)
+            method = "URL de la version %s" % hreflang
+            return {"verdict": "SUSPECT" if result["reasons"] else "OK", "url": url, "method": method,
+                    "reasons": result["reasons"], "notes": result["notes"]}
 
     if result["match"] is None:
         # 1er repli : le marchand redirige peut-être vers l'URL complète (Instant Gaming, Fanatical)
