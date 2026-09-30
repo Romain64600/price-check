@@ -93,6 +93,9 @@ SOFT_WORDS = {"the", "of", "a", "an", "and", "edition", "remastered", "remaster"
 NAME_ALIASES = {
     "GTA 6": ("Grand Theft Auto VI", "Grand Theft Auto 6"),
 }
+ROMAN = {1: "i", 2: "ii", 3: "iii", 4: "iv", 5: "v", 6: "vi", 7: "vii", 8: "viii", 9: "ix", 10: "x",
+         11: "xi", 12: "xii", 13: "xiii", 14: "xiv", 15: "xv", 16: "xvi", 17: "xvii", 18: "xviii", 19: "xix", 20: "xx"}
+ARABIC = {v: str(k) for k, v in ROMAN.items()}
 
 log = logging.getLogger("price-check")
 
@@ -215,6 +218,19 @@ def url_text(url):
     return " ".join(urllib.parse.unquote(s) for s in segments)
 
 
+def name_variants(product):
+    """Le nom AllKeyShop, ses alias, et leurs variantes chiffres <-> chiffres romains (« Dungeons 2 » / « Dungeons II »)."""
+    names = [product] + list(NAME_ALIASES.get(product, ()))
+    for name in list(names):
+        words = norm(name).split("-")
+        roman = " ".join(ROMAN[int(w)] if w.isdigit() and int(w) in ROMAN else w for w in words)
+        arabic = " ".join(ARABIC.get(w, w) for w in words)
+        for variant in (roman, arabic):
+            if norm(variant) != norm(name) and variant not in names:
+                names.append(variant)
+    return tuple(names)
+
+
 def name_match(names, normed):
     """« exact » si un des noms est dans le texte, « partial » si tous ses mots significatifs y sont."""
     compact_text = normed.replace("-", "")
@@ -272,7 +288,7 @@ def analyze(product, offer, text, source):
     Renvoie {"match": "exact" | "partial" | None, "reasons": [...], "notes": [...]}.
     Chaque raison est un motif de SUSPECT.
     """
-    names = (product,) + tuple(NAME_ALIASES.get(product, ()))
+    names = name_variants(product)
     normed = norm(text)
     match = name_match(names, normed)
     # Le reste s'analyse sans les mots du nom du produit (« Complete Edition Remastered »...)
