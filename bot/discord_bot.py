@@ -223,6 +223,8 @@ class Bot(discord.Client):
                  len(message.content))
         if message.channel.id != self.channel_id or message.author.bot or message.webhook_id:
             return
+        if message.type not in (discord.MessageType.default, discord.MessageType.reply):
+            return  # message système (« a épinglé un message », arrivée d'un membre...)
         if not self.owner_id:  # appairage : le premier humain du salon devient le propriétaire
             self.owner_id = message.author.id
             self.state["owner_id"] = self.owner_id
