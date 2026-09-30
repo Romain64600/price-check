@@ -4,8 +4,14 @@ Un seul utilisateur autorisé (DISCORD_OWNER_ID). Chaque message qu'il écrit da
 transmis à `claude -p` (mode de permission « auto » : pas de question posée, le classificateur
 tranche), dans une session reprise d'un message à l'autre, et la réponse revient dans le salon.
 
-Commandes : !new (nouvelle session), !stop (interrompre), !status, !help.
-Réglages dans ../.env : DISCORD_BOT_TOKEN, DISCORD_CHANNEL_ID, DISCORD_OWNER_ID,
+D'autres personnes du salon peuvent être autorisées par le propriétaire (!allow @membre) : tout le
+monde partage la même conversation, chaque message est signé de son auteur. Avec « !mention on »,
+le bot ne traite que les messages qui le mentionnent, répondent à lui ou commencent par « ! ».
+
+Commandes : !new (nouvelle session), !stop (interrompre), !status, !help ;
+propriétaire : !allow @membre, !deny @membre, !who, !mention on|off.
+Réglages dans ../.env : DISCORD_BOT_TOKEN, DISCORD_CHANNEL_ID, DISCORD_OWNER_ID, DISCORD_ALLOWED_IDS
+(ids séparés par des virgules), DISCORD_REQUIRE_MENTION (1 = mention obligatoire au départ),
 CLAUDE_CWD (défaut /root/price-checker), CLAUDE_PERMISSION_MODE (défaut auto), CLAUDE_TIMEOUT (s).
 """
 
@@ -61,6 +67,22 @@ def save_state(state):
     with open(tmp, "w") as f:
         json.dump(state, f, indent=1)
     os.replace(tmp, STATE_PATH)
+
+
+# ---- Qui peut parler au bot ------------------------------------------------------
+
+def is_authorized(author_id, owner_id, allowed):
+    return author_id == owner_id or author_id in allowed
+
+
+def wants_bot(content, mentioned, is_reply_to_bot, require_mention):
+    """Avec la mention obligatoire, seuls les messages qui mentionnent le bot, répondent à un de
+    ses messages ou commencent par « ! » lui sont adressés ; sinon, tous."""
+    return (not require_mention) or mentioned or is_reply_to_bot or content.lstrip().startswith("!")
+
+
+def strip_mention(content, bot_id):
+    return re.sub(r"<@!?%d>" % bot_id, "", content).strip()
 
 
 # ---- Découpage des réponses pour Discord -------------------------------------
@@ -169,6 +191,11 @@ class Bot(discord.Client):
         self.state = load_state()
         if not self.owner_id:
             self.owner_id = int(self.state.get("owner_id") or 0)
+        self.state.setdefault("allowed", [])
+        for raw in os.environ.get("DISCORD_ALLOWED_IDS", "").split(","):
+            if raw.strip().isdigit() and int(raw) not in self.state["allowed"]:
+                self.state["allowed"].append(int(raw))
+        self.state.setdefault("require_mention", os.environ.get("DISCORD_REQUIRE_MENTION") == "1")
         self.queue = asyncio.Queue()
         self.busy = None  # message en cours de traitement
         self.started = time.time()
@@ -202,32 +229,72 @@ class Bot(discord.Client):
             save_state(self.state)
             log.warning("propriétaire appairé : %s (%s)", message.author, self.owner_id)
             await message.reply("👋 Appairé : je ne réponds qu'à toi ici. Envoie `!help` pour les commandes.")
-        if message.author.id != self.owner_id:
+        if not is_authorized(message.author.id, self.owner_id, self.state["allowed"]):
+            log.info("ignoré : %s (%s) n'est pas autorisé", message.author, message.author.id)
             return
-        text = message.content.strip()
+        mentioned = self.user in message.mentions
+        replied = message.reference is not None and getattr(message.reference.resolved, "author", None) == self.user
+        if not wants_bot(message.content, mentioned, replied, self.state["require_mention"]):
+            return
+        text = strip_mention(message.content, self.user.id)
         if text.startswith("!"):
             handled = await self.command(message, text)
             if handled:
                 return
-        await self.queue.put(message)
+        if not text:
+            return
+        await self.queue.put((message, text))
         if self.busy:
             await message.add_reaction("🕒")  # en file d'attente
 
     async def command(self, message, text):
         word = text.split()[0].lower()
-        if word == "!new":
+        owner_only = word in ("!allow", "!deny", "!who", "!mention")
+        if owner_only and message.author.id != self.owner_id:
+            await message.reply("Commande réservée au propriétaire du bot.")
+            return True
+        if word == "!allow" or word == "!deny":
+            people = [m for m in message.mentions if m != self.user]
+            if not people:
+                await message.reply("Mentionne la ou les personnes : `%s @membre`" % word)
+                return True
+            for member in people:
+                if word == "!allow" and member.id not in self.state["allowed"] and member.id != self.owner_id:
+                    self.state["allowed"].append(member.id)
+                if word == "!deny" and member.id in self.state["allowed"]:
+                    self.state["allowed"].remove(member.id)
+            save_state(self.state)
+            log.warning("%s par %s : %s", word, message.author, [(m.name, m.id) for m in people])
+            await message.reply("✅ %s : %s" % ("autorisé(s)" if word == "!allow" else "retiré(s)", ", ".join(m.mention for m in people)))
+        elif word == "!who":
+            names = []
+            for uid in [self.owner_id] + self.state["allowed"]:
+                member = message.guild.get_member(uid) if message.guild else None
+                names.append("%s%s" % (member.mention if member else "`%s`" % uid, " (propriétaire)" if uid == self.owner_id else ""))
+            await message.reply("Peuvent me parler : " + ", ".join(names) + "\nMention obligatoire : %s" % ("oui" if self.state["require_mention"] else "non"))
+        elif word == "!mention":
+            arg = (text.split() + [""])[1].lower()
+            if arg not in ("on", "off"):
+                await message.reply("Usage : `!mention on` (je ne réponds qu'aux messages qui me mentionnent, me répondent ou commencent par `!`) ou `!mention off`.")
+                return True
+            self.state["require_mention"] = arg == "on"
+            save_state(self.state)
+            await message.reply("Mention obligatoire : %s." % ("oui" if arg == "on" else "non"))
+        elif word == "!new":
             self.state["session_id"] = None
             save_state(self.state)
             await message.reply("🆕 Nouvelle session : la suivante repart de zéro (mémoire du projet conservée).")
         elif word == "!stop":
             await message.reply("🛑 Interrompu." if self.runner.stop() else "Rien en cours.")
         elif word == "!status":
-            await message.reply("session : `%s`\nen cours : %s\nen attente : %d\nmode : %s\nactif depuis : %s" % (
+            await message.reply("session : `%s`\nen cours : %s\nen attente : %d\nmode : %s\nautorisés : %d + propriétaire, mention obligatoire : %s\nactif depuis : %s" % (
                 self.state.get("session_id") or "aucune", "oui" if self.busy else "non", self.queue.qsize(),
-                self.runner.permission_mode, time.strftime("%d/%m %H:%M", time.localtime(self.started))))
+                self.runner.permission_mode, len(self.state["allowed"]), "oui" if self.state["require_mention"] else "non",
+                time.strftime("%d/%m %H:%M", time.localtime(self.started))))
         elif word == "!help":
-            await message.reply("Écris-moi ici comme dans le terminal. Commandes : `!new` nouvelle session, "
-                                "`!stop` interrompre, `!status` état, `!help`.")
+            await message.reply("Écris-moi ici comme dans le terminal ; la conversation est partagée par tout le salon et chaque message est signé.\n"
+                                "Commandes : `!new` nouvelle session, `!stop` interrompre, `!status` état, `!help`.\n"
+                                "Propriétaire : `!allow @membre`, `!deny @membre`, `!who`, `!mention on|off`.")
         else:
             return False
         return True
@@ -235,10 +302,10 @@ class Bot(discord.Client):
     async def worker(self):
         await self.wait_until_ready()
         while True:
-            message = await self.queue.get()
+            message, text = await self.queue.get()
             self.busy = message
             try:
-                await self.handle(message)
+                await self.handle(message, text)
             except Exception:
                 log.exception("traitement raté")
                 try:
@@ -248,7 +315,7 @@ class Bot(discord.Client):
             finally:
                 self.busy = None
 
-    async def handle(self, message):
+    async def handle(self, message, text):
         await message.add_reaction("⏳")
         status = await message.channel.send("⚙️ je réfléchis…")
         last = {"text": None, "at": 0.0}
@@ -263,8 +330,9 @@ class Bot(discord.Client):
                     pass
 
         started = time.monotonic()
+        prompt = "[%s] %s" % (message.author.display_name, text)  # signé : Claude sait qui parle
         async with message.channel.typing():
-            text, session_id, error = await self.runner.run(message.content, self.state.get("session_id"), on_progress)
+            text, session_id, error = await self.runner.run(prompt, self.state.get("session_id"), on_progress)
         if session_id:
             self.state["session_id"] = session_id
             save_state(self.state)

@@ -32,6 +32,24 @@ class TestSplitMessage(unittest.TestCase):
         self.assertEqual("".join(chunks), "a" * 5000)
 
 
+class TestWhoCanTalk(unittest.TestCase):
+    def test_authorized(self):
+        self.assertTrue(db.is_authorized(1, 1, []))
+        self.assertTrue(db.is_authorized(2, 1, [2, 3]))
+        self.assertFalse(db.is_authorized(4, 1, [2, 3]))
+
+    def test_mention_requirement(self):
+        self.assertTrue(db.wants_bot("salut", False, False, require_mention=False))
+        self.assertFalse(db.wants_bot("salut Rémy", False, False, require_mention=True))
+        self.assertTrue(db.wants_bot("<@1> salut", True, False, require_mention=True))
+        self.assertTrue(db.wants_bot("oui", False, True, require_mention=True))
+        self.assertTrue(db.wants_bot("!status", False, False, require_mention=True))
+
+    def test_strip_mention(self):
+        self.assertEqual(db.strip_mention("<@1554843596358946937> où en est le passage ?", 1554843596358946937), "où en est le passage ?")
+        self.assertEqual(db.strip_mention("<@!42> !status", 42), "!status")
+
+
 class TestProgressLine(unittest.TestCase):
     def test_tool_use(self):
         event = {"type": "assistant", "message": {"content": [

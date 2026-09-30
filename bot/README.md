@@ -7,9 +7,16 @@ sessions terminal (même répertoire de travail `/root/price-checker`).
 
 ## Sécurité
 
-- Un seul utilisateur autorisé : `DISCORD_OWNER_ID`. Les autres membres du salon sont ignorés.
-  Si la variable est vide, **le premier humain qui écrit dans le salon devient le propriétaire**
-  (appairage, journalisé) : à ne faire que tant que le salon n'est pas partagé.
+- Un propriétaire : `DISCORD_OWNER_ID`. Si la variable est vide, **le premier humain qui écrit dans le
+  salon devient le propriétaire** (appairage, journalisé) : à ne faire que tant que le salon n'est pas partagé.
+- Le propriétaire autorise d'autres membres avec `!allow @membre` (`!deny` pour retirer, `!who` pour
+  lister ; ou `DISCORD_ALLOWED_IDS` dans `.env`). Toute personne autorisée a les mêmes pouvoirs sur
+  Claude Code que le propriétaire (dépôt, serveur). Les autres membres sont ignorés en silence.
+- Une seule conversation, partagée par le salon : chaque message envoyé à Claude est signé
+  `[Prénom] …`, il sait donc qui parle.
+- Salon partagé : `!mention on` (ou `DISCORD_REQUIRE_MENTION=1`) pour que le bot ne traite que les
+  messages qui le mentionnent, répondent à un de ses messages ou commencent par `!`, et laisse les
+  humains discuter entre eux.
 - Les messages de robots et de webhooks (les alertes) sont ignorés.
 - Claude Code tourne en mode de permission `auto` : aucune question n'est posée, le
   classificateur approuve ou refuse chaque action (`--dangerously-skip-permissions` est de toute
@@ -30,6 +37,9 @@ sessions terminal (même répertoire de travail `/root/price-checker`).
    DISCORD_CHANNEL_ID=1554820760365965444   # salon des alertes (celui du webhook)
    DISCORD_OWNER_ID=...             # votre identifiant Discord (Paramètres → Avancés → Mode développeur, puis clic droit sur votre nom → Copier l'identifiant) ; vide = appairage au premier message
    ```
+   Le bot doit aussi avoir accès au salon : sur un salon privé, ajoutez-le dans *Modifier le salon → Permissions*
+   (Voir le salon, Envoyer des messages, Lire l'historique, Ajouter des réactions, Joindre des fichiers) ;
+   au démarrage, le journal signale les permissions manquantes.
    Optionnel : `CLAUDE_CWD` (défaut `/root/price-checker`), `CLAUDE_PERMISSION_MODE` (défaut `auto`),
    `CLAUDE_TIMEOUT` (défaut 1800 s).
 4. **Lancer** :
@@ -54,6 +64,8 @@ fichier joint au-delà de 6 000 caractères) et réagit ✅, ou ❌ avec l'erreu
 | `!stop` | Interrompre le traitement en cours |
 | `!status` | Session, traitement en cours, file d'attente, mode |
 | `!help` | Aide |
+| `!allow @membre`, `!deny @membre`, `!who` | Propriétaire : qui peut parler au bot |
+| `!mention on\|off` | Propriétaire : mention obligatoire ou non |
 
 Les messages envoyés pendant un traitement sont mis en file (réaction 🕒) et traités dans l'ordre.
 
