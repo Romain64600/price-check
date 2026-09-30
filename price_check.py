@@ -105,7 +105,8 @@ EDITION_WORDS = ("standard", "deluxe", "digital-deluxe", "ultimate", "gold", "pr
 EDITION_SYNONYMS = {"goty": "game of the year", "collectors": "collector",
                     "digital-deluxe": "deluxe", "directors-cut": "director s cut"}
 BUNDLE_WORDS = ("bundle", "pack", "collection", "trilogy")  # éditions dont le nom diffère par nature
-EXTRA_CONTENT_WORDS = ("dlc", "bundle", "pack", "collection", "bonus", "season", "expansion")  # éditions qui annoncent du contenu en plus
+EXTRA_CONTENT_WORDS = ("dlc", "bundle", "pack", "collection", "bonus", "season", "expansion", "soundtrack", "ost")  # éditions qui annoncent du contenu en plus
+NOT_A_LANGUAGE = {"pc", "eu", "us", "uk", "na", "ww", "vr", "hd", "ps", "cd", "dl", "xs"}  # codes de 2 lettres qui ne sont pas des langues
 # Suffixes plateforme des noms AllKeyShop (« GTA 6 PS5 »), que les marchands omettent souvent
 PLATFORM_SUFFIXES = ("ps5", "ps4", "playstation 5", "playstation 4", "xbox series x", "xbox series", "xbox one",
                      "xbox", "nintendo switch", "switch", "pc")
@@ -292,7 +293,11 @@ def name_variants(product):
 
 
 def name_match(names, normed):
-    """« exact » si un des noms est dans le texte, « partial » si tous ses mots significatifs y sont."""
+    """« exact » si un des noms est dans le texte, « partial » si ses mots significatifs y sont.
+
+    Sur un nom long (4 mots significatifs ou plus), un seul mot peut manquer, sauf un nombre :
+    Amazon tronque (« Zelda-Kingdom-Collector »), mais « Modern Warfare 3 » n'est pas « Modern Warfare 4 ».
+    """
     compact_text = normed.replace("-", "")
     for name in names:
         c = compact(name)
@@ -301,9 +306,27 @@ def name_match(names, normed):
     tokens = set(normed.split("-"))
     for name in names:
         significant = [w for w in norm(name).split("-") if w and w not in SOFT_WORDS]
-        if significant and all(w in tokens for w in significant):
+        missing = [w for w in significant if w not in tokens]
+        if significant and not missing:
+            return "partial"
+        if len(significant) >= 4 and len(missing) == 1 and not (missing[0].isdigit() or missing[0] in ARABIC):
             return "partial"
     return None
+
+
+def drop_language_lists(tokens):
+    """Retire les listes de langues des URL (GAMIVO : « en-de-fr-ru-zh-es ») : 3 codes de 2 lettres ou plus à la suite."""
+    out, run = [], []
+    for t in tokens + [None]:
+        if t is not None and len(t) == 2 and t.isalpha() and t not in NOT_A_LANGUAGE:
+            run.append(t)
+            continue
+        if len(run) < 3:
+            out.extend(run)
+        run = []
+        if t is not None:
+            out.append(t)
+    return out
 
 
 def region_family(region_name):
@@ -362,7 +385,7 @@ def analyze(product, offer, text, source):
     match = name_match(names, normed)
     # Le reste s'analyse sans les mots du nom du produit (« Complete Edition Remastered »...)
     product_words = {w for name in names for w in norm(name).split("-")}
-    words = "-".join(w for w in normed.split("-") if w and w not in product_words)
+    words = "-".join(drop_language_lists([w for w in normed.split("-") if w and w not in product_words]))
 
     def has(word):
         return re.search(r"(^|-)%s(-|$)" % re.escape(word), words) is not None
@@ -443,10 +466,14 @@ def check_offer(product, offer):
 
     Renvoie {"verdict", "reasons", "notes", "url", "method"}.
     """
-    try:
-        status, _, body = http_get(REDIRECTION_URL % (offer["id"], offer["merchant"]), AKS_UA)
-    except OSError as e:
-        raise CheckError("redirection AllKeyShop : %s" % e)
+    for attempt in (1, 2):
+        try:
+            status, _, body = http_get(REDIRECTION_URL % (offer["id"], offer["merchant"]), AKS_UA)
+        except OSError as e:
+            raise CheckError("redirection AllKeyShop : %s" % e)
+        if status < 500 or attempt == 2:
+            break
+        time.sleep(REQUEST_DELAY * 3)  # 503 passager de la redirection AllKeyShop : un second essai
     time.sleep(REQUEST_DELAY)
     if status != 200:
         raise CheckError("redirection AllKeyShop HTTP %s" % status)

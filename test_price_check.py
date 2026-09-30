@@ -275,6 +275,43 @@ class TestAnalyzeSuspects(unittest.TestCase):
         self.assertEqual(self.reasons("Hunt Showdown", url, edition="Standard + DLC Bundle"), [])
         self.assertEqual(self.reasons("Hunt Showdown", url, edition="Standard"), ["contenu additionnel : dlc"])
 
+    def test_language_lists_are_not_regions(self):
+        # GAMIVO, 30/09/2026 : les langues de la clé dans l'URL, dont « ru » et « tr »
+        url = "https://www.gamivo.com/product/rimworld-stareter-pack-pc-steam-global-en-de-fr-it-pl-cs-nl-ja-ko-no-pt-ru-zh-es-sv-tr-zh-hu-da-ro-fi-uk-standard"
+        self.assertEqual(self.reasons("RimWorld", url, edition="Starter Pack"), [])
+        url = "https://www.gamivo.com/product/age-of-wonders-4-pc-steam-global-en-de-fr-pl-ja-ko-ru-zh-es-standard"
+        self.assertEqual(self.reasons("Age of Wonders 4", url), [])
+        self.assertEqual(self.reasons("Age of Wonders 4", "https://shop.example/age-of-wonders-4-steam-key-ru-cis"),
+                         ["région interdite : ru, cis"])
+        self.assertEqual(self.reasons("Age of Wonders 4", "https://shop.example/age-of-wonders-4-pc-eu-key", region="GLOBAL"),
+                         ["région : AllKeyShop GLOBAL, marchand EU"])
+
+    def test_soundtrack_edition(self):
+        # Steam, 30/09/2026 : Stray « Soundtrack Edition »
+        res = pc.analyze("Stray", offer(edition="Soundtrack Edition"), "Stray + Soundtrack Bundle on Steam", "titre de la page")
+        self.assertEqual(res["reasons"], [])
+        self.assertEqual(self.reasons("Stray", "https://shop.example/stray-soundtrack-dlc", edition="Standard"),
+                         ["contenu additionnel : dlc, soundtrack"])
+
+    def test_long_name_tolerates_one_missing_word(self):
+        # Amazon.fr, 30/09/2026 : URL tronquée « Nintendo-Legend-Zelda-Kingdom-Collector »
+        product = "The Legend of Zelda Tears of the Kingdom Nintendo Switch"
+        o = offer(edition="Collector", region="BOX", platform="physical-medium")
+        res = pc.analyze(product, o, pc.url_text("https://www.amazon.fr/Nintendo-Legend-Zelda-Kingdom-Collector/dp/B0BVBNDRL9/"), "URL")
+        self.assertEqual((res["match"], res["reasons"]), ("partial", []))
+        res = pc.analyze(product, o, pc.url_text("https://www.amazon.fr/Nintendo-Legend-Zelda-Tears-Kingdom/dp/B0BVW3SJMF/"), "URL")
+        self.assertEqual((res["match"], res["reasons"]), ("partial", []))
+        # mais un numéro qui manque, c'est un autre jeu
+        self.assertEqual(self.reasons("Call of Duty Modern Warfare 4", "https://shop.example/call-of-duty-modern-warfare-3-pc"),
+                         ["nom du produit absent (URL)"])
+        self.assertEqual(self.reasons("Red Dead Redemption 2", "https://shop.example/red-dead-redemption-pc-rockstar-key"),
+                         ["nom du produit absent (URL)"])
+
+    def test_wrong_product_dredge_doom(self):
+        # Greenmangaming, 30/09/2026 : DOOM The Dark Ages en premier prix « Premium » de la page DREDGE
+        self.assertEqual(self.reasons("DREDGE", "https://www.greenmangaming.com/games/doom-the-dark-ages-premium-edition-pc/",
+                                      edition="Premium"), ["nom du produit absent (URL)"])
+
     def test_alias(self):
         self.assertEqual(self.reasons("GTA 6", "https://shop.example/grand-theft-auto-vi-ps5", platform="playstation"), [])
         # Wyrel, 30/09/2026 : « GTA 6 PS5 » écrit « grand-theft-auto-vi-ps5 »
@@ -357,9 +394,15 @@ class TestCheckOffer(unittest.TestCase):
         self.assertEqual((res["verdict"], res["method"]), ("À VÉRIFIER", "aucune"))
 
     def test_redirection_failure_is_retryable(self):
-        with mock.patch.object(pc, "http_get", return_value=(503, None, "")):
+        with mock.patch.object(pc, "http_get", return_value=(503, None, "")) as get:
             with self.assertRaises(pc.CheckError):
                 pc.check_offer("EA SPORTS FC 27", offer())
+        self.assertEqual(get.call_count, 2)  # un second essai sur un 5xx
+
+    def test_transient_503_then_ok(self):
+        with mock.patch.object(pc, "http_get", side_effect=[(503, None, ""), (200, None, self.INTERSTITIAL)]):
+            res = pc.check_offer("EA SPORTS FC 27", offer(region="GIFT"))
+        self.assertEqual(res["verdict"], "OK")
         with mock.patch.object(pc, "http_get", return_value=(200, None, "<html>rien</html>")):
             with self.assertRaises(pc.CheckError):
                 pc.check_offer("EA SPORTS FC 27", offer())
