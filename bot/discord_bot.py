@@ -1,0 +1,299 @@
+"""Pont Discord <-> Claude Code : parler au moniteur, et le développer, depuis le salon des alertes.
+
+Un seul utilisateur autorisé (DISCORD_OWNER_ID). Chaque message qu'il écrit dans le salon est
+transmis à `claude -p` (mode de permission « auto » : pas de question posée, le classificateur
+tranche), dans une session reprise d'un message à l'autre, et la réponse revient dans le salon.
+
+Commandes : !new (nouvelle session), !stop (interrompre), !status, !help.
+Réglages dans ../.env : DISCORD_BOT_TOKEN, DISCORD_CHANNEL_ID, DISCORD_OWNER_ID,
+CLAUDE_CWD (défaut /root/price-checker), CLAUDE_PERMISSION_MODE (défaut auto), CLAUDE_TIMEOUT (s).
+"""
+
+import asyncio
+import io
+import json
+import logging
+import os
+import re
+import sys
+import time
+
+import discord
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+ENV_PATH = os.environ.get("PRICE_CHECK_ENV", os.path.join(os.path.dirname(HERE), ".env"))
+STATE_PATH = os.path.join(HERE, "state.json")
+DISCORD_LIMIT = 2000  # taille maximale d'un message Discord
+FILE_THRESHOLD = 6000  # au-delà, la réponse est aussi jointe en fichier .md
+PROGRESS_EVERY = 5  # secondes entre deux mises à jour du message de progression
+
+SYSTEM_PROMPT = (
+    "Tu réponds dans un salon Discord, pas dans un terminal : messages courts et directs, en français ; "
+    "pas de tableaux Markdown (Discord ne les affiche pas), utilise des listes ; les blocs de code sont bien rendus. "
+    "Le salon reçoit aussi les alertes du moniteur price-check via un webhook."
+)
+
+log = logging.getLogger("price-check-bot")
+
+
+def load_env(path):
+    try:
+        with open(path) as f:
+            for line in f:
+                line = line.strip()
+                if line and not line.startswith("#") and "=" in line:
+                    key, value = line.split("=", 1)
+                    os.environ.setdefault(key.strip(), value.strip())
+    except OSError:
+        pass
+
+
+def load_state():
+    try:
+        with open(STATE_PATH) as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return {}
+
+
+def save_state(state):
+    tmp = STATE_PATH + ".tmp"
+    with open(tmp, "w") as f:
+        json.dump(state, f, indent=1)
+    os.replace(tmp, STATE_PATH)
+
+
+# ---- Découpage des réponses pour Discord -------------------------------------
+
+def split_message(text, limit=DISCORD_LIMIT):
+    """Découpe un texte en morceaux de `limit` caractères au plus, sur des fins de ligne,
+    sans casser un bloc de code : un bloc ouvert est refermé et rouvert dans le morceau suivant."""
+    chunks, current, fence = [], "", None
+    for line in text.split("\n"):
+        while len(line) > limit - 10:  # ligne trop longue à elle seule
+            chunks.append(current + line[:limit - 10]) if not current else chunks.extend([current, line[:limit - 10]])
+            current, line = "", line[limit - 10:]
+        m = re.match(r"^```(\w*)", line)
+        candidate = current + ("\n" if current else "") + line
+        closing = "\n```" if fence is not None and not m else ""
+        if len(candidate) + len(closing) > limit:
+            chunks.append(current + closing if fence is not None and not m else current)
+            current = ("```%s\n" % fence if fence is not None and not m else "") + line
+        else:
+            current = candidate
+        if m:
+            fence = None if fence is not None else m.group(1)
+    if current:
+        chunks.append(current)
+    return [c for c in chunks if c.strip()] or ["(réponse vide)"]
+
+
+def progress_line(event):
+    """Une ligne de progression lisible pour un événement stream-json, ou None."""
+    if event.get("type") != "assistant":
+        return None
+    for block in event.get("message", {}).get("content", []):
+        if block.get("type") != "tool_use":
+            continue
+        name, inp = block.get("name", "?"), block.get("input") or {}
+        detail = inp.get("command") or inp.get("file_path") or inp.get("pattern") or inp.get("description") or inp.get("query") or ""
+        detail = re.sub(r"\s+", " ", str(detail))[:90]
+        return "⚙️ %s %s" % (name, detail)
+    return None
+
+
+# ---- Claude Code en sous-processus ---------------------------------------------
+
+class ClaudeRunner:
+    def __init__(self, cwd, permission_mode, timeout):
+        self.cwd, self.permission_mode, self.timeout = cwd, permission_mode, timeout
+        self.process = None
+
+    async def run(self, prompt, session_id, on_progress):
+        """Lance `claude -p`, suit la progression, renvoie (texte, session_id, erreur)."""
+        cmd = [os.environ.get("CLAUDE_BIN", "claude"), "-p", "--output-format", "stream-json", "--verbose",
+               "--permission-mode", self.permission_mode, "--permission-prompts", "none",
+               "--append-system-prompt", SYSTEM_PROMPT]
+        if session_id:
+            cmd += ["--resume", session_id]
+        env = dict(os.environ, HOME=os.environ.get("HOME", "/root"))
+        self.process = await asyncio.create_subprocess_exec(
+            *cmd, cwd=self.cwd, env=env, stdin=asyncio.subprocess.PIPE,
+            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+        self.process.stdin.write(prompt.encode())
+        self.process.stdin.close()
+        result, new_session, error = None, session_id, None
+        try:
+            async with asyncio.timeout(self.timeout):
+                async for raw in self.process.stdout:
+                    try:
+                        event = json.loads(raw)
+                    except ValueError:
+                        continue
+                    if event.get("session_id"):
+                        new_session = event["session_id"]
+                    line = progress_line(event)
+                    if line:
+                        await on_progress(line)
+                    if event.get("type") == "result":
+                        result = event.get("result") or ""
+                        if event.get("is_error"):
+                            error = result or "erreur Claude Code"
+                stderr = (await self.process.stderr.read()).decode(errors="replace")
+                await self.process.wait()
+        except TimeoutError:
+            self.process.kill()
+            error = "délai dépassé (%d s), session interrompue" % self.timeout
+            stderr = ""
+        finally:
+            self.process = None
+        if result is None and not error:
+            error = "pas de réponse de Claude Code" + (" : " + stderr.strip()[-500:] if stderr.strip() else "")
+        return result or "", new_session, error
+
+    def stop(self):
+        if self.process:
+            self.process.kill()
+            return True
+        return False
+
+
+# ---- Le bot --------------------------------------------------------------------
+
+class Bot(discord.Client):
+    def __init__(self, channel_id, owner_id, runner):
+        intents = discord.Intents.default()
+        intents.message_content = True
+        super().__init__(intents=intents)
+        self.channel_id, self.owner_id, self.runner = channel_id, owner_id, runner
+        self.state = load_state()
+        if not self.owner_id:
+            self.owner_id = int(self.state.get("owner_id") or 0)
+        self.queue = asyncio.Queue()
+        self.busy = None  # message en cours de traitement
+        self.started = time.time()
+
+    async def setup_hook(self):
+        self.loop.create_task(self.worker())
+
+    async def on_ready(self):
+        log.info("connecté : %s ; salon %s ; propriétaire %s ; session %s",
+                 self.user, self.channel_id, self.owner_id or "à définir", self.state.get("session_id"))
+
+    async def on_message(self, message):
+        if message.channel.id != self.channel_id or message.author.bot or message.webhook_id:
+            return
+        if not self.owner_id:  # appairage : le premier humain du salon devient le propriétaire
+            self.owner_id = message.author.id
+            self.state["owner_id"] = self.owner_id
+            save_state(self.state)
+            log.warning("propriétaire appairé : %s (%s)", message.author, self.owner_id)
+            await message.reply("👋 Appairé : je ne réponds qu'à toi ici. Envoie `!help` pour les commandes.")
+        if message.author.id != self.owner_id:
+            return
+        text = message.content.strip()
+        if text.startswith("!"):
+            handled = await self.command(message, text)
+            if handled:
+                return
+        await self.queue.put(message)
+        if self.busy:
+            await message.add_reaction("🕒")  # en file d'attente
+
+    async def command(self, message, text):
+        word = text.split()[0].lower()
+        if word == "!new":
+            self.state["session_id"] = None
+            save_state(self.state)
+            await message.reply("🆕 Nouvelle session : la suivante repart de zéro (mémoire du projet conservée).")
+        elif word == "!stop":
+            await message.reply("🛑 Interrompu." if self.runner.stop() else "Rien en cours.")
+        elif word == "!status":
+            await message.reply("session : `%s`\nen cours : %s\nen attente : %d\nmode : %s\nactif depuis : %s" % (
+                self.state.get("session_id") or "aucune", "oui" if self.busy else "non", self.queue.qsize(),
+                self.runner.permission_mode, time.strftime("%d/%m %H:%M", time.localtime(self.started))))
+        elif word == "!help":
+            await message.reply("Écris-moi ici comme dans le terminal. Commandes : `!new` nouvelle session, "
+                                "`!stop` interrompre, `!status` état, `!help`.")
+        else:
+            return False
+        return True
+
+    async def worker(self):
+        await self.wait_until_ready()
+        while True:
+            message = await self.queue.get()
+            self.busy = message
+            try:
+                await self.handle(message)
+            except Exception:
+                log.exception("traitement raté")
+                try:
+                    await message.add_reaction("❌")
+                except discord.HTTPException:
+                    pass
+            finally:
+                self.busy = None
+
+    async def handle(self, message):
+        await message.add_reaction("⏳")
+        status = await message.channel.send("⚙️ je réfléchis…")
+        last = {"text": None, "at": 0.0}
+
+        async def on_progress(line):
+            now = time.monotonic()
+            if line != last["text"] and now - last["at"] >= PROGRESS_EVERY:
+                last.update(text=line, at=now)
+                try:
+                    await status.edit(content=line)
+                except discord.HTTPException:
+                    pass
+
+        started = time.monotonic()
+        async with message.channel.typing():
+            text, session_id, error = await self.runner.run(message.content, self.state.get("session_id"), on_progress)
+        if session_id:
+            self.state["session_id"] = session_id
+            save_state(self.state)
+        try:
+            await status.delete()
+        except discord.HTTPException:
+            pass
+        elapsed = int(time.monotonic() - started)
+        if error and not text:
+            await message.reply("❌ %s" % error[:1500])
+            await message.add_reaction("❌")
+            return
+        chunks = split_message(text)
+        first = True
+        for chunk in chunks:
+            if first:
+                await message.reply(chunk, mention_author=False)
+                first = False
+            else:
+                await message.channel.send(chunk)
+        if len(text) > FILE_THRESHOLD:
+            await message.channel.send("📎 réponse complète en pièce jointe",
+                                       file=discord.File(io.BytesIO(text.encode()), filename="reponse.md"))
+        if error:
+            await message.channel.send("⚠️ %s" % error[:1500])
+        log.info("répondu en %d s (%d caractères, %d morceaux)", elapsed, len(text), len(chunks))
+        await message.remove_reaction("⏳", self.user)
+        await message.add_reaction("✅")
+
+
+def main():
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+    load_env(ENV_PATH)
+    token = os.environ.get("DISCORD_BOT_TOKEN")
+    channel_id = os.environ.get("DISCORD_CHANNEL_ID")
+    if not token or not channel_id:
+        sys.exit("DISCORD_BOT_TOKEN et DISCORD_CHANNEL_ID manquants dans %s" % ENV_PATH)
+    runner = ClaudeRunner(cwd=os.environ.get("CLAUDE_CWD", "/root/price-checker"),
+                          permission_mode=os.environ.get("CLAUDE_PERMISSION_MODE", "auto"),
+                          timeout=int(os.environ.get("CLAUDE_TIMEOUT", "1800")))
+    Bot(int(channel_id), int(os.environ.get("DISCORD_OWNER_ID", "0") or 0), runner).run(token, log_handler=None)
+
+
+if __name__ == "__main__":
+    main()

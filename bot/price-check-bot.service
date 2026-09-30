@@ -1,0 +1,15 @@
+[Unit]
+Description=price-check bot - pont Discord <-> Claude Code
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+WorkingDirectory=/root/price-checker/price-check/bot
+Environment=HOME=/root
+EnvironmentFile=/root/price-checker/price-check/.env
+ExecStart=/root/price-checker/price-check/bot/.venv/bin/python discord_bot.py
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

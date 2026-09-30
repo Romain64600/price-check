@@ -69,6 +69,7 @@ Table détaillée, méthode par méthode, et configs marchands : [docs/marchands
 |---|---|
 | `price_check.py` | Le moniteur (réglages et listes de mots en tête de fichier) |
 | `test_price_check.py` | Tests hors ligne : `python3 -m unittest -v` |
+| `bot/` | Bot Discord : parler à Claude Code depuis le salon des alertes et développer le projet depuis Discord. Voir [bot/README.md](bot/README.md) |
 | `merchants/` | Une exception par marchand (TOML) : Wyrel (région dans le paramètre `region=`), Amazon (pas de Chromium). Voir [docs/marchands.md](docs/marchands.md#configs-marchands-merchantstoml) |
 | `price-check.service` | Service systemd |
 | `docs/` | Documentation |

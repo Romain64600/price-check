@@ -2,3 +2,7 @@ state.json
 state.json.tmp
 .env
 __pycache__/
+bot/.venv/
+bot/state.json
+bot/state.json.tmp
+bot/__pycache__/
