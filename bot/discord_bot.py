@@ -179,8 +179,21 @@ class Bot(discord.Client):
     async def on_ready(self):
         log.info("connecté : %s ; salon %s ; propriétaire %s ; session %s",
                  self.user, self.channel_id, self.owner_id or "à définir", self.state.get("session_id"))
+        channel = self.get_channel(self.channel_id)
+        if channel is None:
+            log.warning("salon %s introuvable : le bot est-il invité sur le serveur, avec accès au salon ?", self.channel_id)
+        else:
+            perms = channel.permissions_for(channel.guild.me)
+            missing = [name for name, ok in (("view_channel", perms.view_channel), ("send_messages", perms.send_messages),
+                                             ("read_message_history", perms.read_message_history),
+                                             ("add_reactions", perms.add_reactions), ("attach_files", perms.attach_files)) if not ok]
+            log.info("salon trouvé : #%s (%s)%s", channel.name, channel.guild.name,
+                     " ; PERMISSIONS MANQUANTES : " + ", ".join(missing) if missing else " ; permissions OK")
 
     async def on_message(self, message):
+        log.info("message reçu : salon %s, auteur %s (%s)%s, %d caractères", message.channel.id, message.author,
+                 message.author.id, " [webhook]" if message.webhook_id else (" [bot]" if message.author.bot else ""),
+                 len(message.content))
         if message.channel.id != self.channel_id or message.author.bot or message.webhook_id:
             return
         if not self.owner_id:  # appairage : le premier humain du salon devient le propriétaire
