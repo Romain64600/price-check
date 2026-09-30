@@ -58,20 +58,20 @@ Tout est normalisé en minuscules, lettres et chiffres seulement, séparés par 
 
 | Contrôle | Règle | Raison affichée |
 |---|---|---|
-| Nom du produit | Le nom AllKeyShop, sans séparateurs, doit être dans le texte (`easportsfc27`). Les chiffres et les chiffres romains sont équivalents (« Minecraft Dungeons 2 » reconnaît `minecraft-dungeons-ii`, et inversement). À défaut, tous ses mots significatifs (hors *the*, *of*, *edition*, *remastered*, mots d'édition…) doivent y être : nom **partiel**, accepté avec une note. `NAME_ALIASES` couvre les abréviations, dans les deux sens (« GTA 6 PS5 » reconnaît `grand-theft-auto-vi-ps5`, « Call of Duty » reconnaît `cod`). | `nom du produit absent` |
+| Nom du produit | Le nom AllKeyShop, sans séparateurs, doit être dans le texte (`easportsfc27`). Les chiffres et les chiffres romains sont équivalents (« Minecraft Dungeons 2 » reconnaît `minecraft-dungeons-ii`, et inversement), et le suffixe plateforme du nom (« GTA 6 **PS5** », « … Xbox Series ») est facultatif chez le marchand. À défaut, tous ses mots significatifs (hors *the*, *of*, *edition*, *remastered*, mots d'édition…) doivent y être : nom **partiel**, accepté avec une note. `NAME_ALIASES` couvre les abréviations, dans les deux sens (« GTA 6 PS5 » reconnaît `grand-theft-auto-vi-ps5`, « Call of Duty » reconnaît `cod`). | `nom du produit absent` |
 | Compte | `account`, `accounts`… dans le texte pour une offre saisie en clé | `compte chez le marchand, saisi en clé` |
 | Région interdite | `ru`, `cis`, `asia`, `latam`, `india`, `tr`, `cn`, `ar`, `br`, `jp`, `kr`… (`FORBIDDEN_REGION_WORDS`) | `région interdite : …` |
 | Famille de région | AllKeyShop GLOBAL (ou GIFT, XBOX/PC) et le texte dit `eu`/`europe` sans `global` ; ou l'inverse | `région : AllKeyShop X, marchand Y` |
 | Gift | `gift`/`altergift` dans le texte pour une offre dont la région AllKeyShop n'est pas GIFT | `gift chez le marchand, affiché en clé` |
 | Plateforme | Le texte nomme une plateforme (`steam`, `ea-app`/`origin`, `epic`, `gog`, `xbox`…) d'une autre famille que `activationPlatform` | `plateforme : AllKeyShop X, marchand Y` |
-| Édition | Le texte nomme une édition (`deluxe`, `ultimate`, `goty`…) qui n'est pas celle d'AllKeyShop. `standard` pour « Standard + Bonus » passe, `goty` pour « Game of the Year » aussi (synonymes canonisés des deux côtés). | `édition : AllKeyShop X, marchand Y` |
-| Contenu additionnel | `dlc`, `season-pass`, `expansion`, `soundtrack`, `upgrade`, sauf si le texte contient aussi `bonus` : `pre-order-bonus-dlc` est le bonus de précommande vendu avec le jeu (éditions « Standard + Bonus ») | `contenu additionnel : …` |
+| Édition | Le texte nomme une édition (`deluxe`, `ultimate`, `goty`…) qui n'est pas celle d'AllKeyShop. Seulement si l'édition AllKeyShop est elle-même connue : « Preorder bonus », « Early Access », « Supporter Edition » ne se comparent pas. `standard` pour « Standard + Bonus » passe, `goty` pour « Game of the Year » aussi (synonymes canonisés des deux côtés). | `édition : AllKeyShop X, marchand Y` |
+| Contenu additionnel | `dlc`, `season-pass`, `expansion`, `soundtrack`, `upgrade`, sauf si le texte contient aussi `bonus` (`pre-order-bonus-dlc` est le bonus de précommande vendu avec le jeu) ou si l'édition AllKeyShop annonce du contenu en plus (« Standard + DLC Bundle », « … + Bonus ») | `contenu additionnel : …` |
 
 Les mots du nom du produit sont retirés avant les contrôles de région, plateforme et édition : « Dynasty Warriors 3 Complete Edition Remastered » ne déclenche pas le contrôle d'édition.
 
 **Éditions bundle** (`Bundle`, `Pack`, `Collection`, `Trilogy` dans le nom de l'édition) : le marchand vend un lot qui porte un autre nom (« The Witcher Trilogy Pack » sur la page de The Witcher 3), le nom du produit n'est donc pas contrôlé, seulement la région, la plateforme, le compte et le gift. L'alerte le dit en note.
 
-Ces règles viennent des premiers passages réels du 30/09/2026 : 29 offres en tête, 5 faux SUSPECT (bonus DLC, GOTY, bundle), puis 2 faux SUSPECT sur Minecraft Dungeons 2 (« II » chez GameBoost et YUPLAY). Aucune vraie anomalie.
+Ces règles viennent des premiers passages réels du 30/09/2026 : mode top-games, 29 offres en tête, 5 faux SUSPECT (bonus DLC, GOTY, bundle), puis 2 sur Minecraft Dungeons 2 (« II ») ; calibrage du mode homepage, faux SUSPECT sur GTA 6 PS5 (alias « GTA », suffixe « PS5 »), « Preorder bonus » contre `standard-edition`, « Standard + DLC Bundle » contre `dlc`. Aucune vraie anomalie.
 
 ### 5. Verdict et alerte Discord
 

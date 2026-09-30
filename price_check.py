@@ -105,6 +105,10 @@ EDITION_WORDS = ("standard", "deluxe", "digital-deluxe", "ultimate", "gold", "pr
 EDITION_SYNONYMS = {"goty": "game of the year", "collectors": "collector",
                     "digital-deluxe": "deluxe", "directors-cut": "director s cut"}
 BUNDLE_WORDS = ("bundle", "pack", "collection", "trilogy")  # éditions dont le nom diffère par nature
+EXTRA_CONTENT_WORDS = ("dlc", "bundle", "pack", "collection", "bonus", "season", "expansion")  # éditions qui annoncent du contenu en plus
+# Suffixes plateforme des noms AllKeyShop (« GTA 6 PS5 »), que les marchands omettent souvent
+PLATFORM_SUFFIXES = ("ps5", "ps4", "playstation 5", "playstation 4", "xbox series x", "xbox series", "xbox one",
+                     "xbox", "nintendo switch", "switch", "pc")
 # Mots qui ne comptent pas pour reconnaître le nom du produit dans une URL
 SOFT_WORDS = {"the", "of", "a", "an", "and", "edition", "remastered", "remaster", "remake", "hd"} | set(EDITION_WORDS)
 # Abréviations : un mot du nom AllKeyShop et son équivalent chez les marchands, valables dans les deux sens
@@ -267,6 +271,10 @@ def name_variants(product):
     """Le nom AllKeyShop et ses variantes : abréviations (« GTA 6 PS5 » / « Grand Theft Auto 6 PS5 »)
     et chiffres <-> chiffres romains (« Dungeons 2 » / « Dungeons II »), combinées."""
     names = [product]
+    for suffix in PLATFORM_SUFFIXES:
+        if norm(product).endswith("-" + norm(suffix)) and norm(product) != norm(suffix):
+            names.append(norm(product)[:-len(norm(suffix)) - 1].replace("-", " "))
+            break
     for short, long in NAME_ALIASES:
         for name in list(names):
             spaced = " %s " % norm(name).replace("-", " ")
@@ -325,8 +333,17 @@ def canonical_edition(text):
 
 
 def edition_matches(edition_name, url_editions):
+    """Faux seulement si l'édition AllKeyShop est connue (standard, deluxe, GOTY...) et que le
+    marchand en nomme une autre. « Preorder bonus », « Early Access »... ne se comparent pas."""
     aks = canonical_edition(edition_name)
+    if not any(canonical_edition(w) in aks for w in EDITION_WORDS):
+        return True
     return any(canonical_edition(w) in aks for w in url_editions)
+
+
+def announces_extra_content(edition_name):
+    words = set(norm(edition_name).split("-"))
+    return any(w in words for w in EXTRA_CONTENT_WORDS)
 
 
 def is_bundle(edition_name):
@@ -376,7 +393,8 @@ def analyze(product, offer, text, source):
     if url_editions and not edition_matches(offer["edition"], url_editions):
         reasons.append("édition : AllKeyShop %s, marchand %s" % (offer["edition"], ", ".join(url_editions)))
     dlc = [w for w in DLC_WORDS if has(w)]
-    if dlc and not has("bonus"):  # « pre-order-bonus-dlc » : le bonus vendu avec le jeu
+    # « pre-order-bonus-dlc » est le bonus vendu avec le jeu ; « Standard + DLC Bundle » l'annonce
+    if dlc and not has("bonus") and not announces_extra_content(offer["edition"]):
         reasons.append("contenu additionnel : " + ", ".join(dlc))
     return {"match": match, "reasons": reasons, "notes": notes}
 
