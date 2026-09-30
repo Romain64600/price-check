@@ -188,6 +188,14 @@ class TestAnalyzeSuspects(unittest.TestCase):
                          ["région : AllKeyShop EUROPE, marchand GLOBAL"])
         self.assertEqual(self.reasons("EA SPORTS FC 27", "https://shop.example/ea-sports-fc-27-steam-key-europe", region="GIFT EU"), [])
 
+    def test_gift_region_has_no_geography(self):
+        # Faux positif du 30/09/2026 : Screamer 2026 Deluxe chez K4G, « steam-europe-instant-altergift » affiché GIFT
+        url = "https://k4g.com/product/screamer-steam-europe-instant-altergift-digital-deluxe-edition-alter-gift-X9G4J5WN?r=aks"
+        res = pc.analyze("Screamer 2026", offer(edition="Deluxe", region="GIFT"), pc.url_text(url), "URL")
+        self.assertEqual(res["reasons"], [])
+        self.assertEqual(self.reasons("EA SPORTS FC 27", "https://shop.example/ea-sports-fc-27-steam-gift-global", region="GIFT"), [])
+        self.assertEqual(self.reasons("EA SPORTS FC 27", "https://shop.example/ea-sports-fc-27-steam-gift-europe", region="GIFT"), [])
+
     def test_gift_sold_as_key(self):
         self.assertEqual(self.reasons("EA SPORTS FC 27", "https://shop.example/ea-sports-fc-27-steam-altergift", region="GLOBAL"),
                          ["gift chez le marchand, affiché en clé GLOBAL"])

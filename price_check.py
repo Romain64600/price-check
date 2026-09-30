@@ -408,9 +408,9 @@ def region_family(region_name):
         return "ROW"
     if re.search(r"\bEU\b|EUROPE", n):
         return "EU"
-    if "GLOBAL" in n or "WORLDWIDE" in n or n in ("GIFT", "XBOX/PC"):
+    if "GLOBAL" in n or "WORLDWIDE" in n or n == "XBOX/PC":
         return "GLOBAL"
-    return None
+    return None  # « GIFT » seul : pas de zone géographique, le marchand peut dire EU ou GLOBAL
 
 
 def platform_family(platform):
