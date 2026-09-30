@@ -203,6 +203,15 @@ def parse_game_page(page_html):
     return json.loads(m.group(1))
 
 
+def is_dlc_page(trans, product):
+    """La page AllKeyShop est celle d'un DLC : une de ses éditions s'appelle « DLC » (Diablo 4 Lord of
+    Hatred Xbox Series, formation du 30/09/2026), ou son nom le dit. Les listes et CatalogV2 typent
+    pourtant ces pages « game » sur console."""
+    editions = {norm(e.get("name", "")) for e in (trans.get("editions") or {}).values()}
+    words = set(norm(product).split("-"))
+    return "dlc" in editions or bool(words & {"dlc", "expansion"}) or "season-pass" in norm(product)
+
+
 def first_prices(trans):
     """Offre de clé la moins chère de chaque édition (priceCard), hors offres compte et « sans prix »."""
     editions = trans.get("editions") or {}
@@ -499,8 +508,9 @@ def analyze(product, offer, text, source, region=None):
     if url_editions and not edition_matches(offer["edition"], url_editions):
         reasons.append("édition : AllKeyShop %s, marchand %s" % (offer["edition"], ", ".join(url_editions)))
     dlc = [w for w in DLC_WORDS if has(w)]
-    # « pre-order-bonus-dlc » est le bonus vendu avec le jeu ; « Standard + DLC Bundle » l'annonce
-    if dlc and not has("bonus") and not announces_extra_content(offer["edition"]):
+    # « pre-order-bonus-dlc » est le bonus vendu avec le jeu ; « Standard + DLC Bundle » l'annonce ;
+    # sur la page d'un DLC (édition « DLC » présente), le mot est attendu
+    if dlc and not has("bonus") and not announces_extra_content(offer["edition"]) and not offer.get("page_dlc"):
         reasons.append("contenu additionnel : " + ", ".join(dlc))
     return {"match": match, "reasons": reasons, "notes": notes}
 
@@ -713,7 +723,9 @@ def run_cycle(targets, notify, state, checker=check_offer, save=None):
             continue
         finally:
             time.sleep(PAGE_DELAY)
+        page_dlc = is_dlc_page(trans, product)
         for offer in first_prices(trans):
+            offer["page_dlc"] = page_dlc
             key = str(offer["id"])
             if key in state["checked"]:
                 state["checked"][key]["seen"] = now

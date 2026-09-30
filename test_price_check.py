@@ -370,6 +370,18 @@ class TestAnalyzeSuspects(unittest.TestCase):
         res = pc.analyze("Sonic Racing CrossWorlds", o, "Sonic | SEGA", "titre de la page")
         self.assertIsNone(res["match"])  # un seul mot, pas assez
 
+    def test_dlc_page(self):
+        # Driffle, 30/09/2026 (formation) : la page AllKeyShop de Diablo 4 Lord of Hatred est un DLC
+        url = "https://www.driffle.com/diablo-iv-lord-of-hatred-ultimate-edition-dlc-global-xbox-one-xbox-series-xs-xbox-live-digital-key-p9990076"
+        o = offer(edition="Ultimate", region="XBOX X|S", platform="xbox", page_dlc=True)
+        self.assertEqual(pc.analyze("Diablo 4 Lord of Hatred Xbox Series", o, pc.url_text(url), "URL")["reasons"], [])
+        o["page_dlc"] = False
+        self.assertEqual(pc.analyze("Diablo 4 Lord of Hatred Xbox Series", o, pc.url_text(url), "URL")["reasons"], ["contenu additionnel : dlc"])
+        trans = {"editions": {"1": {"name": "Standard"}, "16": {"name": "DLC"}, "21": {"name": "Ultimate"}}}
+        self.assertTrue(pc.is_dlc_page(trans, "Diablo 4 Lord of Hatred Xbox Series"))
+        self.assertFalse(pc.is_dlc_page({"editions": {"1": {"name": "Standard"}}}, "Diablo 4"))
+        self.assertTrue(pc.is_dlc_page({"editions": {}}, "Farming Simulator 25 Year 1 Season Pass"))
+
     def test_wrong_product_dredge_doom(self):
         # Greenmangaming, 30/09/2026 : DOOM The Dark Ages en premier prix « Premium » de la page DREDGE
         self.assertEqual(self.reasons("DREDGE", "https://www.greenmangaming.com/games/doom-the-dark-ages-premium-edition-pc/",
