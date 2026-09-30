@@ -24,32 +24,28 @@ Attention à ne pas confondre région et langue. Sur EA SPORTS FC 27 (échantill
 
 C'est surtout ce cas qui fait peur : sur la page du dernier Sonic, un marchand ajoute une offre qui est en fait Sonic 1, ou un vieux Mario. Elle est moins chère, donc elle devient le premier prix du comparateur.
 
-Une offre ne dit pas, côté public, quel produit le marchand vend réellement. Vérifié le 30/09/2026 :
+**Périmètre : les pages produit publiques, rien d'autre.** Pas de wp-admin, pas de lien `/redirection/` (il compte un clic).
 
-| Source | Ce qu'on y trouve | Titre marchand ? |
-|---|---|---|
-| Page produit (`gamePageTrans.prices[]`) | id d'offre, marchand, édition, région, plateforme, prix | Non |
-| API publique CatalogV2 (`vaks.php?action=CatalogV2`) | nom canonique du produit, `offers_count`, une seule offre (la meilleure) avec `buy_url` = lien `/redirection/` | Non |
-| Lien `/redirection/offer/<id>` | la page du marchand | Oui, mais **compte un clic**, interdit |
-| wp-admin, `admin.php?page=aks-merchant-feeds-9&search[field]=productId&search[search]=<legacyId>&list=all&store=all` | lignes `tr[data-offer]` avec `{id, name, url, storeId, price}` : `name` est le titre du produit chez le marchand, `url` sa page | **Oui** |
-| API historique de prix (`price_history_api.php`) | répond `{"error":"400-2"}` avec l'id ou le slug, paramètres à retrouver | Non |
-
-Seul wp-admin donne donc le titre marchand. La détection automatique d'un mauvais produit passe par là.
+Ce que la page produit donne pour chaque offre (`gamePageTrans.prices[]`) : id d'offre, marchand, édition, région, plateforme d'activation, prix, disponibilité. Elle ne dit pas quel produit le marchand vend réellement (vérifié le 30/09/2026, ni dans le HTML ni dans l'API publique CatalogV2). Un mauvais produit ne peut donc pas être identifié automatiquement : le moniteur doit **signaler ce qui vient d'arriver en tête**, et un humain vérifie sur le site.
 
 ## Règle proposée
 
-Trois niveaux, du plus sûr au plus automatique :
+Le scénario redouté est toujours le même : **une offre ajoutée à la page devient le premier prix**. C'est détectable sans regarder le prix :
 
-1. **Nouveau premier prix → alerte « à vérifier ».** À chaque passage, si l'offre en tête d'une page (id d'offre) change, on alerte avec marchand, région, édition, plateforme, prix et id. Une offre jamais vue sur la page est marquée **NOUVELLE OFFRE** : c'est le scénario redouté, une offre fraîchement ajoutée qui passe devant. Un humain vérifie. Rien ne peut être raté, mais chaque changement de tête alerte.
-2. **Titre marchand ≠ produit → « SUSPECT : produit différent ».** Si le moniteur dispose d'un accès wp-admin, il récupère le titre marchand de l'offre en tête (recherche par `productId`), le normalise (minuscules, `&` → `and`, ponctuation retirée, édition retirée en fin de titre, mêmes règles que la saisie des offres) et le compare **strictement** au nom canonique du produit. En cas de différence, l'alerte est marquée suspecte et affiche les deux titres : « Sonic the Hedgehog » contre « Sonic Racing CrossWorlds » se voit d'un coup d'œil.
-3. **Signaux automatiques sans wp-admin**, ajoutés en marque « suspect » sur l'alerte : région dans une liste interdite (à définir) ; prix très en dessous des autres offres de la même édition (par exemple sous la moitié de la médiane). Ce dernier signal n'est qu'une aide : une offre fautive peut n'être qu'un centime sous la suivante.
+1. **Mémoire des offres de chaque page.** À chaque passage, le moniteur note les id d'offre présents sur la page. Au premier passage, toutes les offres présentes servent de base.
+2. **Nouvelle offre en tête → alerte.** Si l'offre en premier prix a un id jamais vu sur cette page, alerte Discord avec marchand, région, édition, plateforme, prix, id d'offre et lien de la page. Cela marche même si elle n'est qu'un centime sous la suivante.
+3. **Indices ajoutés à l'alerte**, pour aider l'humain, sans jamais conditionner l'envoi :
+   - prix très en dessous des autres offres de la même édition (un vieux Sonic à 2 € sur un jeu à 50 €) ;
+   - marchand jamais vu sur cette page ;
+   - région jamais vue sur cette page, ou dans une liste interdite (à définir).
+
+Option, à décider : alerter aussi quand une offre déjà connue passe en tête (changement de premier prix), en alerte de moindre priorité.
 
 ## Questions ouvertes
 
-1. **Accès wp-admin pour le moniteur.** Peut-on lui donner une session staff (compte dédié ou cookie) utilisable depuis le serveur, pour lire `merchant_feeds` ? Et cette liste couvre-t-elle toutes les offres en ligne d'un produit, ou seulement celles venues des flux marchands ?
-2. **Régions interdites** sur allkeyshop.com en EUR : lesquelles ? Une liste suffirait.
-3. **Quel premier prix ?** Celui de la page (haut du tableau), ou celui de chaque édition ?
-4. **Volume d'alertes acceptable.** Alerter à chaque changement de tête, ou seulement sur NOUVELLE OFFRE et SUSPECT ?
+1. **Quel premier prix ?** Celui de la page (haut du tableau), ou celui de chaque édition ? Je propose chaque édition : une offre fautive dans « Deluxe » n'est pas en tête de page, mais elle est bien en tête de son édition.
+2. **Changement de premier prix entre offres connues** : alerter aussi, ou seulement sur nouvelle offre ?
+3. **Régions interdites** sur allkeyshop.com en EUR : lesquelles ?
 
 ## Règle actuelle (à remplacer)
 

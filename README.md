@@ -16,7 +16,7 @@ Une offre peut être ajoutée sur une page produit alors qu'elle ne devrait pas 
 
 Si cette offre est la moins chère, elle devient le premier prix affiché, et ce premier prix est faux. **L'écart avec l'offre suivante n'est pas un critère** : il peut être de 30 %, comme d'un centime. Il faut donc contrôler l'offre elle-même, pas son écart de prix.
 
-> **État actuel** : la version en place ne détecte qu'un écart d'au moins 30 % entre les deux offres les moins chères. Elle ne répond pas à l'objectif et doit être revue. La règle proposée et les questions ouvertes sont dans [docs/detection.md](docs/detection.md#règle-proposée). Point clé : seul wp-admin donne le titre du produit chez le marchand, la détection automatique d'un mauvais produit passe donc par un accès staff.
+> **État actuel** : la version en place ne détecte qu'un écart d'au moins 30 % entre les deux offres les moins chères. Elle ne répond pas à l'objectif et doit être revue. La règle proposée et les questions ouvertes sont dans [docs/detection.md](docs/detection.md#règle-proposée). Périmètre : les pages produit publiques uniquement. Elles ne disent pas quel produit le marchand vend réellement, donc le moniteur signale toute **nouvelle offre qui arrive en premier prix**, et un humain vérifie.
 
 ## Démarrage rapide
 
