@@ -341,6 +341,11 @@ class TestPageTitle(unittest.TestCase):
         with mock.patch.object(pc.shutil, "which", return_value=None):
             self.assertIsNone(pc.page_title("https://shop.example/"))
 
+    def test_page_title_skips_hosts_that_block_browsers(self):
+        with mock.patch.object(pc.subprocess, "run") as run:
+            self.assertIsNone(pc.page_title("https://www.amazon.fr/Nintendo-Legend-Zelda/dp/B0BVW3SJMF/"))
+        run.assert_not_called()
+
 
 @mock.patch.object(pc, "REQUEST_DELAY", 0)
 class TestCheckOffer(unittest.TestCase):
@@ -483,6 +488,12 @@ class TestCycle(unittest.TestCase):
         self.assertEqual(state["checked"], {})
         pc.run_cycle(self.TARGETS, sent.append, state, self.ok)
         self.assertEqual(len(sent), 4)
+
+    def test_periodic_save_during_a_pass(self):
+        saves = []
+        targets = [("Popular", i, "EA SPORTS FC 27", "https://www.allkeyshop.com/blog/p%d/" % i) for i in range(1, 2 * pc.SAVE_EVERY + 2)]
+        pc.run_cycle(targets, lambda m: None, pc.load_state("/nonexistent"), self.ok, save=lambda: saves.append(1))
+        self.assertEqual(len(saves), 2)
 
     def test_state_roundtrip_and_prune(self):
         state = pc.load_state("/nonexistent")

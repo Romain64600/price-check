@@ -64,6 +64,7 @@ AKS_UA = "AKS/Staff"  # pages AllKeyShop seulement, jamais chez le marchand
 BROWSER_UA = ("Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) "
               "Chrome/150.0.0.0 Safari/537.36")  # chez le marchand
 CHROMIUM = os.environ.get("CHROMIUM_BIN", "chromium")  # dernier repli : ouvrir la page marchand
+NO_BROWSER_HOSTS = ("amazon.",)  # hôtes qui bloquent Chromium : inutile d'y perdre 90 s
 NOTIFY_OK = os.environ.get("NOTIFY_OK", "1") != "0"  # envoyer aussi les verdicts OK sur Discord
 
 NO_PRICE = 0.02  # sentinelle « pas de prix »
@@ -72,6 +73,7 @@ PAGE_DELAY = 1  # pause entre deux pages produit AllKeyShop
 REQUEST_DELAY = 2  # pause entre deux requêtes d'un contrôle (redirection, marchand)
 MAX_CHECK_FAILURES = 3  # échecs de contrôle avant de conclure « À VÉRIFIER »
 STATE_TTL_DAYS = 30  # oubli des offres plus vues en premier prix depuis ce délai
+SAVE_EVERY = 25  # pages entre deux sauvegardes de l'état pendant un passage
 
 # Mots d'URL ou de titre marchand, après normalisation (minuscules, tout ce qui
 # n'est pas lettre ou chiffre devient « - »). Un mot n'est reconnu qu'entier.
@@ -444,7 +446,7 @@ def page_title_from_html(dom):
 
 def page_title(url):
     """Titre, og:title et h1 de la page marchand, via Chromium sans écran. None si impossible."""
-    if not shutil.which(CHROMIUM):
+    if not shutil.which(CHROMIUM) or any(h in urllib.parse.urlparse(url).netloc for h in NO_BROWSER_HOSTS):
         return None
     cmd = [CHROMIUM, "--headless=new", "--no-sandbox", "--disable-gpu", "--disable-dev-shm-usage",
            "--user-agent=" + BROWSER_UA, "--virtual-time-budget=20000", "--dump-dom", url]
@@ -567,11 +569,16 @@ def prune_state(state, now):
 FAILURES = {}  # id d'offre -> contrôles ratés d'affilée
 
 
-def run_cycle(targets, notify, state, checker=check_offer):
-    """Lit chaque page suivie et contrôle toute offre en premier prix pas encore contrôlée."""
+def run_cycle(targets, notify, state, checker=check_offer, save=None):
+    """Lit chaque page suivie et contrôle toute offre en premier prix pas encore contrôlée.
+
+    `save()` est appelé toutes les SAVE_EVERY pages : un long passage interrompu ne repart pas de zéro.
+    """
     now = time.time()
     stamp = time.strftime("%Y-%m-%d %H:%M", time.localtime(now))
-    for label, rank, product, page_url in targets:
+    for count, (label, rank, product, page_url) in enumerate(targets, 1):
+        if save and count % SAVE_EVERY == 0:
+            save()
         try:
             _, _, page_html = http_get(page_url, AKS_UA)
             trans = parse_game_page(page_html)
@@ -678,7 +685,7 @@ def main():
                     lists_at[mode] = now
                     names = ", ".join(t[2] for t in targets[mode]) if len(targets[mode]) <= 20 else ""
                     log.info("%s : %d pages suivies %s", mode, len(targets[mode]), names)
-                run_cycle(targets[mode], notify, state)
+                run_cycle(targets[mode], notify, state, save=lambda: save_state(args.state, state))
                 save_state(args.state, state)
             except Exception:
                 log.exception("%s : passage en échec, nouvel essai au prochain cycle", mode)
