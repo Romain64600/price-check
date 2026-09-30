@@ -1,10 +1,24 @@
 # price-check
 
-Surveille en continu les pages produit du top AllKeyShop et envoie une alerte Discord dès qu'une offre semble mal placée, c'est-à-dire **au moins 30 % moins chère** que la suivante dans la même édition.
+Surveille en continu le **premier prix** des pages produit du top AllKeyShop, et alerte sur Discord quand ce premier prix ne correspond pas au produit ou à notre marché.
 
 Pages suivies (widget top clics de la barre de droite) :
 - top 5 **All Popular** (`sidebar.all.popular`)
 - top 4 **Coming soon PC** (`sidebar.pc.soon`)
+
+## Objectif
+
+Une offre peut être ajoutée sur une page produit alors qu'elle ne devrait pas y être :
+
+- **Région non affichable** : c'est bien le produit, mais dans une région qu'on n'est pas censé afficher sur notre marché.
+- **Compte saisi comme clé** : sur la page du marchand, c'est un compte, mais nous l'avons saisi en tant que clé normale.
+- **Autre produit ou autre édition** : l'offre ne correspond pas au produit de la page.
+
+Si cette offre est la moins chère, elle devient le premier prix affiché, et ce premier prix est faux. **L'écart avec l'offre suivante n'est pas un critère** : il peut être de 30 %, comme d'un centime. Il faut donc contrôler l'offre elle-même, pas son écart de prix.
+
+Exemple réel (28/09/2026) : sur EA SPORTS FC 27, le premier prix Standard est Mmoga à 54,99 €, en région « IN ENGLISH ONLY » (`EA ENG/POL/RUS ONLY`). Il n'est que 3 % sous GAMIVO à 56,61 €.
+
+> **État actuel** : la version en place ne détecte qu'un écart d'au moins 30 % entre les deux offres les moins chères. Elle ne répond pas à l'objectif et doit être revue. Voir les questions ouvertes dans [docs/detection.md](docs/detection.md#questions-ouvertes).
 
 ## Démarrage rapide
 
@@ -18,7 +32,7 @@ journalctl -u price-check -f
 
 Python 3 seulement, aucune dépendance.
 
-## Fonctionnement
+## Fonctionnement actuel (à revoir)
 
 1. Toutes les 30 min, il relit les listes via l'API JSON `getLists`, en ne gardant que les jeux.
 2. Toutes les 2 min 30, il lit les offres de chaque page (`var gamePageTrans` dans le HTML), avec 2 s de pause entre deux GET.
@@ -31,7 +45,7 @@ Le moniteur ne fait que des GET en lecture seule et n'appelle jamais les liens `
 
 | Document | Contenu |
 |---|---|
-| [docs/detection.md](docs/detection.md) | Règle de détection, anti-doublon, exemple d'alerte, limites connues |
+| [docs/detection.md](docs/detection.md) | Objectif de détection, règle actuelle, questions ouvertes |
 | [docs/exploitation.md](docs/exploitation.md) | Installation, options, réglages, systemd, journaux, tests |
 | [docs/reconnaissance.md](docs/reconnaissance.md) | Analyse du site : API des listes, cache, structure des offres |
 
