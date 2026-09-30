@@ -83,8 +83,12 @@ def wants_bot(content, mentioned, is_reply_to_bot, require_mention):
     return (not require_mention) or mentioned or is_reply_to_bot or content.lstrip().startswith("!")
 
 
-def strip_mention(content, bot_id):
-    return re.sub(r"<@!?%d>" % bot_id, "", content).strip()
+def strip_mention(content, bot_id, role_ids=()):
+    """Retire la mention du bot (<@id>) et celles de ses rôles (<@&id>, le rôle « Price Checker »)."""
+    content = re.sub(r"<@!?%d>" % bot_id, "", content)
+    for role_id in role_ids:
+        content = re.sub(r"<@&%d>" % role_id, "", content)
+    return content.strip()
 
 
 # ---- Découpage des réponses pour Discord -------------------------------------
@@ -251,11 +255,12 @@ class Bot(discord.Client):
         if not is_authorized(message.author.id, self.owner_id, self.state["allowed"]):
             log.info("ignoré : %s (%s) n'est pas autorisé", message.author, message.author.id)
             return
-        mentioned = self.user in message.mentions
+        my_roles = [r.id for r in getattr(message.guild.me, "roles", [])] if message.guild else []
+        mentioned = self.user in message.mentions or any(r.id in my_roles for r in message.role_mentions)  # @Price Checker, utilisateur ou rôle
         replied = message.reference is not None and getattr(message.reference.resolved, "author", None) == self.user
         if not wants_bot(message.content, mentioned, replied, self.state["require_mention"]):
             return
-        text = strip_mention(message.content, self.user.id)
+        text = strip_mention(message.content, self.user.id, my_roles)
         if text.startswith("!"):
             handled = await self.command(message, text)
             if handled:

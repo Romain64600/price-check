@@ -48,6 +48,9 @@ class TestWhoCanTalk(unittest.TestCase):
     def test_strip_mention(self):
         self.assertEqual(db.strip_mention("<@1554843596358946937> où en est le passage ?", 1554843596358946937), "où en est le passage ?")
         self.assertEqual(db.strip_mention("<@!42> !status", 42), "!status")
+        # mention du rôle « Price Checker » (30/09/2026 : c'est ainsi que Discord a complété @Price Checker)
+        self.assertEqual(db.strip_mention("<@&1554844856441110540> Tu as trouvé des erreurs ?", 42, [1554844856441110540]),
+                         "Tu as trouvé des erreurs ?")
 
 
 class TestProgressLine(unittest.TestCase):
