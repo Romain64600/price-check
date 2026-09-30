@@ -24,28 +24,61 @@ Attention à ne pas confondre région et langue. Sur EA SPORTS FC 27 (échantill
 
 C'est surtout ce cas qui fait peur : sur la page du dernier Sonic, un marchand ajoute une offre qui est en fait Sonic 1, ou un vieux Mario. Elle est moins chère, donc elle devient le premier prix du comparateur.
 
-**Périmètre : les pages produit publiques, rien d'autre.** Pas de wp-admin, pas de lien `/redirection/` (il compte un clic).
+La page produit ne dit pas quel produit le marchand vend réellement (`gamePageTrans.prices[]` : id d'offre, marchand, édition, région, plateforme, prix). Pour le savoir, on suit le lien de redirection de l'offre.
 
-Ce que la page produit donne pour chaque offre (`gamePageTrans.prices[]`) : id d'offre, marchand, édition, région, plateforme d'activation, prix, disponibilité. Elle ne dit pas quel produit le marchand vend réellement (vérifié le 30/09/2026, ni dans le HTML ni dans l'API publique CatalogV2). Un mauvais produit ne peut donc pas être identifié automatiquement : le moniteur doit **signaler ce qui vient d'arriver en tête**, et un humain vérifie sur le site.
+## User agents
 
-## Règle proposée
+| Où | User agent |
+|---|---|
+| Pages AllKeyShop : page produit, API des listes, lien de redirection | `AKS/Staff` |
+| Chez le marchand | un navigateur normal, jamais `AKS/Staff` |
 
-Le scénario redouté est toujours le même : **une offre ajoutée à la page devient le premier prix**. C'est détectable sans regarder le prix :
+Pas de wp-admin.
 
-1. **Mémoire des offres de chaque page.** À chaque passage, le moniteur note les id d'offre présents sur la page. Au premier passage, toutes les offres présentes servent de base.
-2. **Nouvelle offre en tête → alerte.** Si l'offre en premier prix a un id jamais vu sur cette page, alerte Discord avec marchand, région, édition, plateforme, prix, id d'offre et lien de la page. Cela marche même si elle n'est qu'un centime sous la suivante.
-3. **Indices ajoutés à l'alerte**, pour aider l'humain, sans jamais conditionner l'envoi :
-   - prix très en dessous des autres offres de la même édition (un vieux Sonic à 2 € sur un jeu à 50 €) ;
-   - marchand jamais vu sur cette page ;
-   - région jamais vue sur cette page, ou dans une liste interdite (à définir).
+## Le lien de redirection (vérifié le 30/09/2026)
 
-Option, à décider : alerter aussi quand une offre déjà connue passe en tête (changement de premier prix), en alerte de moindre priorité.
+```
+GET https://www.allkeyshop.com/redirection/offer/eur/<id d'offre>?locale=en&merchant=<id marchand>     (UA AKS/Staff)
+```
+
+`id d'offre` et `id marchand` sont les champs `id` et `merchant` de l'offre dans `gamePageTrans`. Le tableau des offres étant construit en JS, ce lien n'est pas dans le HTML, il faut le composer.
+
+Réponse : HTTP 200, page intermédiaire « Redirecting... » qui contient l'URL marchand à trois endroits : `<script id="appData">` (JSON, clé `redirectionUrl`), `<meta http-equiv="refresh">` et un lien « click here ». On lit `appData.redirectionUrl`.
+
+**L'URL marchand suffit presque toujours** : elle contient le nom du produit, et souvent la région, la plateforme et l'édition. Test sur les 6 premières offres Standard d'EA SPORTS FC 27 :
+
+| Marchand | Offre AKS (édition / région / plateforme) | URL marchand (chemin) | Nom du produit dans l'URL | Mots région / plateforme |
+|---|---|---|---|---|
+| Kinguin | Standard / GIFT / steam | `kinguin.net/category/609603/ea-sports-fc-27-pc-steam-altergift` | oui | steam, altergift |
+| GAMIVO | Standard / GIFT / steam | `gamivo.com/product/ea-sports-fc-27-pc-steam-gift-global-standard` | oui | steam, gift, global, standard |
+| Gamers Outlet | Standard / GLOBAL / ea-app | `gamers-outlet.net/en/ea-sports-fc-27-pc-ea-app-key-global` | oui | ea-app, key, global |
+| Loaded | Standard / GLOBAL / ea-app | `go.loaded.com/c/…?u=https://www.loaded.com/ea-sports-fc-27-standard-edition-pc-ea-app` (lien affilié, cible dans `u=`) | oui | standard, ea-app |
+| Driffle | Standard / GLOBAL / ea-app | `driffle.com/ea-sports-fc-27-global-pc-ea-play-digital-key-p9997937` | oui | global, ea-play, key |
+| Instant Gaming | Standard / GLOBAL / ea-app | `instant-gaming.com/en/21656-/` | **non** : un simple numéro | aucun |
+
+Quand l'URL ne dit rien (Instant Gaming), il faut ouvrir la page marchand. En HTTP simple (urllib/curl, user agent Chrome), Instant Gaming, Gamers Outlet et Driffle répondent, mais Kinguin (Akamai), GAMIVO (Cloudflare, « Just a moment... ») et le lien affilié de Loaded renvoient 403. Avec **Chromium sans écran** (installé sur le serveur, `chromium --headless=new --dump-dom`, user agent Chrome), Kinguin, GAMIVO et Gamers Outlet donnent leur titre : « EA Sports FC 27 PC Steam Altergift », « Get EA Sports FC 27 – Steam Gift (Global) », « EA SPORTS FC 27 (PC EA App Key - Global) ». Seul le lien affilié de Loaded reste bloqué, mais son URL contient déjà la cible.
+
+## Règle proposée : l'URL d'abord
+
+1. **Premier prix.** Sur chaque page suivie, l'offre de clé la moins chère de chaque édition (`priceCard`, sans offres compte ni `0.02`).
+2. **Nouvelle offre en tête → contrôle.** Le moniteur garde les id d'offre déjà contrôlés. Une offre en tête jamais contrôlée déclenche le contrôle ; les autres ne coûtent rien.
+3. **Contrôle par l'URL.** Redirection AKS → `redirectionUrl` (cible extraite de `u=` pour un lien affilié). Puis :
+   - **nom du produit** : le nom AKS normalisé (minuscules, `&` → `and`, ponctuation → `-` : `ea-sports-fc-27`) doit apparaître dans le chemin de l'URL ;
+   - **région et plateforme** : les mots de l'URL (global, eu, europe, gift, altergift, row, steam, ea-app, ea-play, epic, xbox, ps5, key, account…) doivent être compatibles avec l'offre AKS. Une URL qui dit `account` pour une offre saisie en clé, ou `ru`, `asia`, `latam`, `tr`… pour une région GLOBAL/EU, est suspecte ;
+   - **édition** : `deluxe`, `ultimate`… dans l'URL pour une offre Standard est suspect.
+4. **Repli sur la page marchand** quand l'URL n'a pas de nom : Chromium sans écran, user agent navigateur, lecture de `<title>` / `og:title` / `h1`, mêmes contrôles sur le titre.
+5. **Verdict et alerte Discord** :
+   - `SUSPECT` : nom absent de l'URL et du titre, ou région / plateforme / édition incompatible → alerte ;
+   - `À VÉRIFIER` : impossible de conclure (URL muette et page bloquée) → alerte, un humain regarde ;
+   - `OK` : tout concorde → journal seulement.
+
+Chaque alerte donne le jeu, l'édition, le marchand, le prix, l'URL marchand et la raison.
 
 ## Questions ouvertes
 
-1. **Quel premier prix ?** Celui de la page (haut du tableau), ou celui de chaque édition ? Je propose chaque édition : une offre fautive dans « Deluxe » n'est pas en tête de page, mais elle est bien en tête de son édition.
-2. **Changement de premier prix entre offres connues** : alerter aussi, ou seulement sur nouvelle offre ?
-3. **Régions interdites** sur allkeyshop.com en EUR : lesquelles ?
+1. **Premier prix de chaque édition** (proposé) ou seulement de la page ?
+2. **Régions acceptées** sur allkeyshop.com en EUR : quels mots d'URL sont normaux (global, eu, gift…) et lesquels sont interdits (ru, cis, asia, latam, tr, cn…) ? Une liste suffirait, on peut la compléter au fil des alertes.
+3. **Alerter aussi les `OK`** en faible priorité, pour voir l'outil travailler au début ?
 
 ## Règle actuelle (à remplacer)
 

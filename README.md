@@ -16,7 +16,7 @@ Une offre peut être ajoutée sur une page produit alors qu'elle ne devrait pas 
 
 Si cette offre est la moins chère, elle devient le premier prix affiché, et ce premier prix est faux. **L'écart avec l'offre suivante n'est pas un critère** : il peut être de 30 %, comme d'un centime. Il faut donc contrôler l'offre elle-même, pas son écart de prix.
 
-> **État actuel** : la version en place ne détecte qu'un écart d'au moins 30 % entre les deux offres les moins chères. Elle ne répond pas à l'objectif et doit être revue. La règle proposée et les questions ouvertes sont dans [docs/detection.md](docs/detection.md#règle-proposée). Périmètre : les pages produit publiques uniquement. Elles ne disent pas quel produit le marchand vend réellement, donc le moniteur signale toute **nouvelle offre qui arrive en premier prix**, et un humain vérifie.
+> **État actuel** : la version en place ne détecte qu'un écart d'au moins 30 % entre les deux offres les moins chères. Elle ne répond pas à l'objectif et doit être revue. La règle proposée est dans [docs/detection.md](docs/detection.md#règle-proposée--lurl-dabord) : pour toute nouvelle offre en premier prix, suivre son lien de redirection AllKeyShop (UA `AKS/Staff`) et contrôler **l'URL marchand**, qui contient presque toujours le nom du produit, la région et la plateforme. Chromium sans écran en repli quand l'URL ne dit rien.
 
 ## Démarrage rapide
 
@@ -43,7 +43,7 @@ Le moniteur ne fait que des GET en lecture seule et n'appelle jamais les liens `
 
 | Document | Contenu |
 |---|---|
-| [docs/detection.md](docs/detection.md) | Objectif, sources disponibles, règle proposée, règle actuelle, questions ouvertes |
+| [docs/detection.md](docs/detection.md) | Objectif, user agents, lien de redirection, règle proposée « l'URL d'abord », règle actuelle, questions ouvertes |
 | [docs/exploitation.md](docs/exploitation.md) | Installation, options, réglages, systemd, journaux, tests |
 | [docs/reconnaissance.md](docs/reconnaissance.md) | Analyse du site : API des listes, cache, structure des offres |
 
