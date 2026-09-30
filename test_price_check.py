@@ -304,8 +304,8 @@ class TestAnalyzeSuspects(unittest.TestCase):
         # mais un numéro qui manque, c'est un autre jeu
         self.assertEqual(self.reasons("Call of Duty Modern Warfare 4", "https://shop.example/call-of-duty-modern-warfare-3-pc"),
                          ["nom du produit absent (URL)"])
-        self.assertEqual(self.reasons("Red Dead Redemption 2", "https://shop.example/red-dead-redemption-pc-rockstar-key"),
-                         ["nom du produit absent (URL)"])
+        self.assertEqual(self.reasons("Red Dead Redemption 2", "https://shop.example/red-dead-redemption-pc-rockstar-key",
+                                      platform="rockstar"), ["nom du produit absent (URL)"])
 
     def test_wrong_product_dredge_doom(self):
         # Greenmangaming, 30/09/2026 : DOOM The Dark Ages en premier prix « Premium » de la page DREDGE
