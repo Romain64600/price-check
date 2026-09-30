@@ -1,56 +1,59 @@
 # price-check
 
-Moniteur des pages produit du top AllKeyShop (top 10 Popular, top 4 Coming soon, top clics de la barre de droite). Le but est de repérer rapidement une offre mal placée et beaucoup moins chère.
+Surveille en continu les pages produit du top AllKeyShop et envoie une alerte Discord dès qu'une offre semble mal placée, c'est-à-dire **au moins 30 % moins chère** que la suivante dans la même édition.
 
-Ce dépôt contient pour l'instant la reconnaissance du site, faite le 28/09/2026 en lecture seule (7 GET, UA `AKS/Staff`). Les fichiers bruts sont dans `samples/`.
+Pages suivies (widget top clics de la barre de droite) :
+- top 5 **All Popular** (`sidebar.all.popular`)
+- top 4 **Coming soon PC** (`sidebar.pc.soon`)
 
-## 1. Listes à surveiller
-
-Les listes Popular et Coming soon sont les deux onglets du widget top clics de la barre de droite. On n'a pas besoin de parser le HTML pour les obtenir, une API JSON publique les renvoie :
+## Démarrage rapide
 
 ```
-GET https://api.allkeyshop.com/videogame/api/topClick/getLists/eur/allkeyshop.com?lists[]=sidebar.all.popular&lists[]=sidebar.all.soon
+echo 'DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/...' > .env
+python3 price_check.py --dry-run --once          # test : un passage, sans envoi
+sudo cp price-check.service /etc/systemd/system/
+sudo systemctl enable --now price-check          # boucle sans fin, relancée si elle plante
+journalctl -u price-check -f
 ```
 
-- Réponse : `{sidebar: {"all.popular": {items: [...], data: {listId: 57}}, "all.soon": {items: [...], data: {listId: 56}}}}`
-- Champs d'un item : `index`, `name`, `legacyId` (id produit, = `sku` JSON-LD), `urls["allkeyshop.com.eur"]`, `platform`, `productType`, `releaseDates`, `merchant`, `price`.
-- Id de liste : `sidebar.<all|pc|xbox|playstation|nintendo>.<popular|soon>`.
-- En-têtes : `Cache-Control: max-age=1800`, `X-RateLimit-Limit: 60`.
-- Popular contient aussi des logiciels (Windows, Office). Pour ne garder que les jeux, filtrer sur `productType == "game"`.
-- Côté HTML : `div.content-box.topclick[data-type="sidebar"] > .tab-content.topclick-list.sidebar`, rendu en JS. `all.popular` est préchargée dans `var topclickTrans = {..., preloadData}`.
+Python 3 seulement, aucune dépendance.
 
-## 2. Cache
+## Fonctionnement
 
-- Serveur Apache, pas de Cloudflare. Il y a un cache HTTP devant le site : `Cache-Control: max-age=120` avec un en-tête `Age`.
-- `AKS/Staff` ne contourne pas le cache : la page renvoyée est identique octet pour octet à celle servie à Chrome. Il faut donc compter jusqu'à environ 2 minutes de retard.
+1. Toutes les 30 min, il relit les listes via l'API JSON `getLists`, en ne gardant que les jeux.
+2. Toutes les 2 min 30, il lit les offres de chaque page (`var gamePageTrans` dans le HTML), avec 2 s de pause entre deux GET.
+3. Pour chaque édition, il compare les deux offres de clés les moins chères (`priceCard`, sans les offres compte ni les offres « sans prix » à `0.02`).
+4. Si l'écart est d'au moins 30 %, il alerte sur Discord, une seule fois par offre et par prix (`alerted.json`).
 
-## 3. Offres d'une page produit
+Le moniteur ne fait que des GET en lecture seule et n'appelle jamais les liens `/redirection/` (ils comptent des clics).
 
-Les offres sont déjà dans le HTML, sans AJAX, dans `<script id="aks-offers-js-extra">var gamePageTrans = {...};` :
+## Documentation
 
-- `prices[]` : `id` (id d'offre), `merchant`, `merchantName`, `edition`, `region`, `activationPlatform`, `account`, `originalPrice`, `voucher_code`, `voucher_discount_value`, `price` (après coupon), `pricePaypal` / `feesPaypal`, `priceCard` / `feesCard`, `dispo`, `isOfficial`
-- `editions{id: {name}}`, `regions{id: {region_name, ...}}`, `merchants{id: {name, rating, ...}}`
+| Document | Contenu |
+|---|---|
+| [docs/detection.md](docs/detection.md) | Règle de détection, anti-doublon, exemple d'alerte, limites connues |
+| [docs/exploitation.md](docs/exploitation.md) | Installation, options, réglages, systemd, journaux, tests |
+| [docs/reconnaissance.md](docs/reconnaissance.md) | Analyse du site : API des listes, cache, structure des offres |
 
-Extraction : regex `var gamePageTrans = (\{.*?\});\n` (flag DOTALL), puis `json.loads`.
+## Arborescence
 
-Par défaut, le tableau affiché (`#offerTable`, rendu par DataTables) montre `priceCard` et seulement les offres de clés, sans les offres compte.
+| Fichier | Rôle |
+|---|---|
+| `price_check.py` | Le moniteur (réglages en tête de fichier) |
+| `test_price_check.py` | Tests hors ligne : `python3 -m unittest -v` |
+| `price-check.service` | Service systemd |
+| `docs/` | Documentation |
+| `samples/` | Réponses brutes du site, utilisées par les tests |
 
-**Sentinelle : `price == 0.02` veut dire « pas de prix ».** Le JS du site trie ces offres en dernier et le JSON-LD les exclut. Il faut les ignorer, sinon on aura des faux positifs massifs (47 offres sur 147 pour EA FC 27).
-
-Autres sources :
-- JSON-LD `AggregateOffer` (`lowPrice`, `offerCount`), sans édition ni région, et qui inclut les offres compte.
-- Historique de prix : `https://www.allkeyshop.com/api/price_history_api.php?normalised_name=<id>&currency=eur&database=allkeyshop.com&v2=1`
-
-Ne pas appeler les liens `/redirection/offer/...` : ils comptent des clics.
-
-## samples/
+### samples/
 
 | Fichier | Contenu |
 |---|---|
 | `home_staff.html` / `.headers` | Accueil, UA AKS/Staff |
 | `home_chrome.html` / `.headers` | Accueil, UA Chrome (identique) |
 | `home_topclickTrans.json` | JSON préchargé des top clics |
-| `api_topclick_sidebar.json` | Réponse de l'API getLists (popular + soon) |
+| `api_topclick_sidebar.json` | Réponse de l'API getLists (all.popular + all.soon), 28/09/2026 |
+| `api_topclick_all-popular_pc-soon.json` | Réponse de l'API getLists (all.popular + pc.soon), 30/09/2026 |
 | `prod_popular1_ea-fc-27.html` + `_gamePageTrans.json` | Page produit n°1 Popular |
 | `prod_soon1_minecraft-dungeons-2.html` + `_gamePageTrans.json` | Page produit n°1 Coming soon |
 | `autoptimize.js`, `product_bundle.js` | Bundles JS du site (logique top clics et offres) |
