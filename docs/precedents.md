@@ -1,0 +1,87 @@
+# Registre des précédents
+
+Chaque cas réel jugé, avec sa décision, sa preuve et la règle qui en découle. Deux sources : la **formation** (réponse de Romain à un report) et l'**étude** (analyse des reports par Claude, pages AllKeyShop et pages marchands à l'appui). Chaque précédent a son test dans `test_price_check.py` (classes `TestStudy20260930` et `TestConfirmOnMerchantPage`, et les tests nommés dans les tables).
+
+**À tenir à jour** à chaque nouvelle formation : ajouter la ligne, la règle et le test.
+
+## Principes (tirés des précédents)
+
+1. **La page du marchand fait foi, l'URL n'est qu'un indice.** Wyrel met `-eu-` dans un slug d'offre Global ; Gamingdragons met `steam-key` dans l'URL d'une clé EA App. Quand l'URL contredit AllKeyShop sur la plateforme, la console ou la zone, le moniteur lit la page avant d'alerter. Une page muette ne contredit rien ; une page illisible laisse l'URL faire foi.
+2. **On alerte quand le marchand vend moins, ou autre chose, que ce qu'affiche AllKeyShop** : un autre produit, une autre plateforme, une zone plus étroite (clé EU affichée GLOBAL), un DLC seul affiché comme édition du jeu, un compte affiché comme clé, une édition inférieure. **Pas quand il vend plus large** : une clé GLOBAL affichée EUROPE marche en Europe.
+3. **Le vrai sens d'une région AllKeyShop est son nom de filtre**, pas son nom affiché : « GIFT » = `STEAM GIFT GLOBAL`, « GERMANY » peut être `STEAM GIFT GERMANY`, « GLOBAL » = `STEAM GLOBAL`, `EA GLOBAL` ou `ROCKSTAR GLOBAL` selon l'offre.
+4. **Langue n'est pas région** : `IN ENGLISH ONLY`, `EN/FR`, les listes de langues des URL GAMIVO (`en-de-fr-ru-zh-es`) ne disent rien de la zone.
+5. **Une édition est mal rangée quand la page AllKeyShop a l'édition que vend le marchand** (GTA 4 : la page a « Complete », Steam vend la Complete Edition, l'offre est en Standard). Sans cette édition sur la page, un nom différent n'est qu'une différence de nommage.
+6. **Un gift n'a pas de zone comparée** (formation) : K4G « Steam Europe altergift » affiché `STEAM GIFT GLOBAL` est normal.
+7. **Dans le doute, on alerte** en `À VÉRIFIER` (page illisible, titre traduit) : jamais de silence. La réponse de l'humain devient une règle, une config marchand ou un alias.
+
+## Vraies erreurs (doivent alerter)
+
+| Date | Jeu · édition | Marchand | Erreur | Preuve | Source |
+|---|---|---|---|---|---|
+| 30/09 | DREDGE · Premium | Greenmangaming | **Mauvais produit** : vend *DOOM: The Dark Ages Premium Edition* | URL et titre de la page | étude |
+| 30/09 | TORO 2 Nintendo Switch · Standard | Nintendo eShop FR | **Mauvais produit** : la page est celle de *Metal Garden* | version en-GB de la page | étude |
+| 30/09 | Stellaris · Bundle 1 | Kinguin | Clé **EU** affichée `STEAM GLOBAL` | URL `…-starter-pack-eu-steam-cd-key` | **formation** (« celui-ci est OK ») |
+| 30/09 | Crusader Kings 3 · Standard | Driffle | Clé **EU** affichée GLOBAL (10,97 €) | URL `crusader-kings-iii-eu-pc-steam-digital-code` ; page bloquée | étude (même cas que Stellaris) |
+| 30/09 | The Blood Of Dawnwalker · Deluxe | Eneba | Clé **EU** affichée `STEAM GLOBAL` | page : « Steam Key (PC) EUROPE » | étude |
+| 30/09 | F1 25 · 2026 Season Edition | GAMIVO | Version **Xbox Series** affichée `STEAM EU EN ONLY` | page : « … Xbox Series Key Europe » | étude |
+| 30/09 | EA SPORTS FC 26 · ICONS Edition | Driffle | Clé **Steam** affichée `EA GLOBAL` (44,81 € contre 53,83 € pour l'offre suivante) | URL `…-global-pc-steam-digital-key` ; page bloquée | étude |
+| 30/09 | Farming Simulator 25 · Year 1 Edition | Loaded | **Season pass seul** rangé en « Year 1 Edition » (jeu + pass), la page a aussi « Year 1 Bundle » | URL `…-year-1-season-pass-pc-steam` ; 29,19 € contre 40,45 € chez GAMIVO pour le jeu + pass | étude (formation en attente) |
+| 30/09 | Elden Ring Xbox Series · Launch Edition | Amazon.fr | Version **PlayStation** sur la page Xbox | URL `…-3391892017632-PlayStation` ; page Amazon illisible | étude |
+| 30/09 | GTA 4 · Standard | Steam | **Complete Edition** rangée en Standard, la page a une édition Complete | titre Steam « Grand Theft Auto IV: The Complete Edition » | étude (gravité faible, à trancher) |
+| 30/09 | STAR WARS Zero Company Xbox Series · Standard + DLC | GAMIVO | **Deluxe + bonus** rangée en « Standard + DLC », la page a « Deluxe + Bonus » | URL `…-global-deluxe-pre-order-bonus` | étude (gravité faible, à trancher) |
+
+## Faux positifs corrigés
+
+| Date | Jeu · édition | Marchand | Motif du faux positif | Règle | Source |
+|---|---|---|---|---|---|
+| 30/09 | EA SPORTS FC 27 · Standard | Mmoga | `IN ENGLISH ONLY` pris pour une région | langue ≠ région | **formation** |
+| 30/09 | GTA 5 · Standard + DLC | Wyrel | slug `-eu-`, page Global | région Wyrel lue dans `region=` (`merchants/wyrel.toml`) | **formation** |
+| 30/09 | Screamer 2026 · Deluxe | K4G | « Steam Europe altergift » affiché `STEAM GIFT GLOBAL` | zone d'un gift non comparée | **formation** |
+| 30/09 | Diablo 4 Lord of Hatred Xbox Series · Ultimate | Driffle | `dlc` dans l'URL d'un DLC | page DLC (édition « DLC » sur la page) | **formation** |
+| 30/09 | Big Walk · Standard | Kinguin | « GERMANY » cru clé, c'est `STEAM GIFT GERMANY` | nom de filtre de la région | étude |
+| 30/09 | Mario Kart World Switch 2 · Standard | K4G | clé GLOBAL affichée EUROPE | zone comparée dans un seul sens | étude |
+| 30/09 | EA SPORTS FC 26 · Ultimate | Gamingdragons | URL `steam-key`, page « PC - EA App Download » | confirmation sur la page | étude |
+| 30/09 | Gran Turismo 7 PS5 · Deluxe | PS Store ES | « ™ » transformé en « TM » par la normalisation | symboles de marque retirés | étude |
+| 30/09 | Dragon Quest Monsters PS5 · Deluxe | PS Store ES | titre espagnol « El reino marchito » | PS Store lu en en-gb (`merchants/playstation.toml`) | étude |
+| 30/09 | Attack on Titan 3 PS5 · Deluxe, Preorder | PS Store UK | titre officiel « A.O.T. 3 » | sigles des premiers mots | étude |
+| 30/09 | Crimson Desert PS5 · Standard | PS Store US | produit nommé « Crimson Desert Enhanced », édition « Standard Edition » | libellé d'édition du JSON PS Store | étude |
+| 30/09 | EA Sports UFC 5 PS5 | PS Store US | titre court « UFC® 5 » | titre court contenu dans le nom | étude |
+| 30/09 | Pokemon Legends Z-A Mega Dimension · DLC | Dreamgame | « Pokémon » écrit `pokmon` | mot à une lettre près (6 lettres et plus) | étude |
+| 30/09 | Rhythm Heaven Groove Switch 2 | Loaded | titre européen « Rhythm Paradise » | `aliases.toml` | étude |
+| 30/09 | Kirby, Pokémon Sword, Brilliant Diamond (Switch) | Amazon.fr | titres français | `aliases.toml` ; titre traduit non reconnu → À VÉRIFIER | étude |
+| 30/09 | Minecraft Dungeons 2 | GameBoost, YUPLAY | « Dungeons II » | chiffres romains | étude |
+| 30/09 | 9 offres Xbox | Instant Gaming, Playerland | `microsoft-store` dans l'URL | Microsoft Store = Xbox | étude |
+| 30/09 | NBA 2K26 Xbox Series | Eneba | préfixe `steam-` des URL Eneba | plateformes comparées sur tous les mots | étude |
+| 30/09 | Screamer 2026, Ragnarock VR, Metro Awakening VR, … Switch 2 | divers | suffixes « 2026 », « VR », « Nintendo Switch 2 » | suffixes et année retirés du nom | étude |
+| 30/09 | S.T.A.L.K.E.R. 2 | G2A | sigle pointé | `S.T.A.L.K.E.R.` = `stalker` | étude |
+| 30/09 | Age of Wonders 4, Crusader Kings 3, RimWorld, ETS2, Stellaris | GAMIVO | listes de langues (`ru`, `tr`) | listes de langues ignorées | étude |
+| 30/09 | EA FC 27, Ace Combat 8, Assetto Corsa… | Driffle, Kinguin | `pre-order-bonus-dlc`, pack DLC rangé en « Bonus » | édition qui annonce du contenu | étude |
+| 30/09 | Call of Duty MW4 · Preorder bonus | Dreamgame | `standard-edition-pre-purchase` | édition de base + « standard » | étude |
+| 30/09 | ETS2, Stellaris, RimWorld (bundles) | divers | noms de bundles | éditions génériques non comparées ; mot propre à l'édition (`2024`, `mediterranean`, `starter`) | étude |
+| 30/09 | Hunt Showdown · Standard + DLC Bundle | Kinguin | `10-dlc-bundle` | page : « Hunt: Showdown 1896 +10 DLC Bundle » (jeu + DLC) | étude |
+
+## Faux négatifs évités
+
+| Date | Cas | Règle |
+|---|---|---|
+| 30/09 | « Pokémon **Bouclier** » passait pour « Pokemon **Sword** Nintendo Switch » : la tolérance d'un mot manquant comptait « Nintendo Switch » | tolérance calculée sur le nom sans suffixe de plateforme |
+| 30/09 | Elden Ring Xbox chez Amazon : nom illisible, donc « À VÉRIFIER » sans mentionner la PlayStation | console de la page comparée à l'URL ; le problème vu dans l'URL reste une alerte même si le nom est invérifiable |
+
+Revue des 202 offres jugées OK sur une base fragile (nom partiel, titre court, nom non contrôlé) : aucune erreur manquée. Vérifiés un par un : GTA The Trilogy (Switch et Xbox, chacune sur sa page), Among Us VR (Loaded `among-us-3d-vr` : le jeu s'appelle désormais « Among Us 3D: VR » sur Steam, prix au niveau des autres offres).
+
+## Cas à trancher
+
+| Cas | Question |
+|---|---|
+| Forza Horizon 6 Premium Upgrade Bundle Xbox · Upgrade, LDShop (42,54 €) | La page LDShop regroupe plusieurs produits (Standard, Deluxe, Premium Upgrade…) et le lien `skuId=16560` ne dit pas lequel. Est-ce bien l'upgrade ? |
+| GTA 4 (Complete en Standard), Zero Company (Deluxe + bonus en Standard + DLC) | L'acheteur reçoit plus que ce qui est affiché. Alerter ces offres mal rangées, ou seulement celles où il reçoit moins ? |
+| Amazon, URL sans nom (`gp/product/B01N223WHL`) | Page captcha : impossible à contrôler. Garder l'alerte À VÉRIFIER (une fois par offre), ou taire Amazon et le lister comme non monitoré ? |
+| Euro Truck Simulator 2 · Collection Bundle, Driffle (« Collector's Bundle ») | La page a aussi « Collectors Bundle Edition ». Éditions génériques non comparées pour l'instant : faut-il les comparer ? |
+
+## Ce que l'étude a appris sur AllKeyShop
+
+- **Régions** : chaque région a un nom affiché (`region_name`), un nom de filtre (`filter_name`) et une description. Le nom de filtre porte la plateforme et la zone : `STEAM EU`, `EA EUROPE`, `ROCKSTAR ROW`, `XBOX X|S EUROPE`, `STEAM GIFT GERMANY`, `PSN WALLET DE`… 81 régions distinctes relevées sur 63 pages.
+- **Éditions** : chaque page a ses propres éditions, parfois très nombreuses (22 sur Euro Truck Simulator 2, 20 sur Stellaris). Les DLC peuvent être rangés comme une édition du jeu (« Bonus » sur Assetto Corsa Competizione).
+- **Pages DLC sur console** : les listes et CatalogV2 les typent `game` ; l'édition « DLC » sur la page les trahit.
+- **Sites sœurs** (goclecd.fr, keyforsteam.de, cdkeyit.it, clavecd.es…) : les slugs sont en anglais, ils ne donnent pas les titres localisés. Hypothèse vérifiée et réfutée le 30/09/2026.
+- **Pages marchands** : PS Store, Steam, Gamingdragons, Instant Gaming, Eneba, Nintendo se lisent en HTTP simple ; Kinguin, GAMIVO, LDShop demandent Chromium ; Driffle et Loaded bloquent même Chromium ; Amazon renvoie un captcha, parfois la page.

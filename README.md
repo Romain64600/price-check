@@ -59,6 +59,7 @@ Table détaillée, méthode par méthode, et configs marchands : [docs/marchands
 | Document | Contenu |
 |---|---|
 | [docs/detection.md](docs/detection.md) | Objectif, user agents, lien de redirection, règle en place, verdicts, limites, questions ouvertes |
+| [docs/precedents.md](docs/precedents.md) | Registre des précédents : chaque cas réel jugé (formation ou étude), sa décision, sa preuve, les principes et les cas à trancher |
 | [docs/marchands.md](docs/marchands.md) | Couverture par marchand : méthode de contrôle, marchands non couverts |
 | [docs/exploitation.md](docs/exploitation.md) | Installation, options, réglages, systemd, journaux, état, tests |
 | [docs/reconnaissance.md](docs/reconnaissance.md) | Analyse du site : API des listes, cache, structure des offres |
@@ -70,7 +71,8 @@ Table détaillée, méthode par méthode, et configs marchands : [docs/marchands
 | `price_check.py` | Le moniteur (réglages et listes de mots en tête de fichier) |
 | `test_price_check.py` | Tests hors ligne : `python3 -m unittest -v` |
 | `bot/` | Bot Discord : parler à Claude Code depuis le salon des alertes et développer le projet depuis Discord. Voir [bot/README.md](bot/README.md) |
-| `merchants/` | Une exception par marchand (TOML) : Wyrel (région dans le paramètre `region=`), Amazon (pas de Chromium). Voir [docs/marchands.md](docs/marchands.md#configs-marchands-merchantstoml) |
+| `aliases.toml` | Autres noms des produits (titre européen, titres français d'Amazon), appris au fil de la formation |
+| `merchants/` | Une exception par marchand (TOML) : Wyrel (région dans le paramètre `region=`), Amazon (pas de Chromium, titres traduits), Nintendo (version anglaise), PlayStation (page lue en en-gb). Voir [docs/marchands.md](docs/marchands.md#configs-marchands-merchantstoml) |
 | `price-check.service` | Service systemd |
 | `docs/` | Documentation |
 | `samples/` | Réponses brutes du site, utilisées par les tests |

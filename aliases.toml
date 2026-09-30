@@ -1,0 +1,10 @@
+# Autres noms d'un produit, appris au fil de la formation (titre européen, titre localisé...).
+# Clé : le nom AllKeyShop (sans le suffixe de plateforme) ; valeur : les noms utilisés par les marchands.
+
+[products]
+# Rhythm Heaven s'appelle Rhythm Paradise en Europe (Loaded, 30/09/2026)
+"Rhythm Heaven Groove" = ["Rhythm Paradise Groove"]
+# Titres français d'Amazon.fr, vérifiés le 30/09/2026 (titres officiels Nintendo en France)
+"Kirby and the Forgotten Land" = ["Kirby et le monde oublié"]
+"Pokemon Sword" = ["Pokémon Épée"]
+"Pokémon Brilliant Diamond" = ["Pokémon Diamant Étincelant"]

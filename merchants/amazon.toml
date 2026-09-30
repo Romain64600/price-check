@@ -4,3 +4,10 @@
 name = "Amazon"
 hosts = ["amazon."]
 browser = false
+# Titres en français, allemand... (« Kirby et le monde oublié ») : un nom non reconnu dans le titre
+# donne À VÉRIFIER, pas SUSPECT (étude du 30/09/2026). La réponse de l'humain va dans aliases.toml.
+localized = true
+# Formation du 30/09/2026 : « ne t'embête pas avec Amazon ». Une offre Amazon invérifiable (URL sans
+# nom, captcha, titre traduit inconnu) est notée NON VÉRIFIABLE, jamais envoyée. Un problème vu dans
+# l'URL (Elden Ring Xbox : « PlayStation ») reste une alerte SUSPECT.
+unverifiable = "note"

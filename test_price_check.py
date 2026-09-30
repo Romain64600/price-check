@@ -184,8 +184,8 @@ class TestAnalyzeSuspects(unittest.TestCase):
     def test_region_family_mismatch(self):
         self.assertEqual(self.reasons("EA SPORTS FC 27", "https://shop.example/ea-sports-fc-27-steam-key-europe", region="GLOBAL"),
                          ["région : AllKeyShop GLOBAL, marchand EU"])
-        self.assertEqual(self.reasons("EA SPORTS FC 27", "https://shop.example/ea-sports-fc-27-steam-key-global", region="EUROPE"),
-                         ["région : AllKeyShop EUROPE, marchand GLOBAL"])
+        # l'inverse est sans danger : une clé GLOBAL affichée EUROPE marche en Europe
+        self.assertEqual(self.reasons("EA SPORTS FC 27", "https://shop.example/ea-sports-fc-27-steam-key-global", region="EUROPE"), [])
         self.assertEqual(self.reasons("EA SPORTS FC 27", "https://shop.example/ea-sports-fc-27-steam-key-europe", region="GIFT EU"), [])
 
     def test_gift_region_has_no_geography(self):
@@ -224,8 +224,11 @@ class TestAnalyzeSuspects(unittest.TestCase):
         self.assertEqual(self.reasons("EA SPORTS FC 27", "https://shop.example/ea-sports-fc-27-pc-key", platform="mystery-platform"), [])
 
     def test_edition_mismatch(self):
-        self.assertEqual(self.reasons("EA SPORTS FC 27", "https://shop.example/ea-sports-fc-27-deluxe-edition-pc-steam", edition="Standard"),
-                         ["édition : AllKeyShop Standard, marchand deluxe"])
+        self.assertEqual(self.reasons("EA SPORTS FC 27", "https://shop.example/ea-sports-fc-27-deluxe-edition-pc-steam", edition="Standard",
+                                      page_editions=["Standard", "Deluxe"]),
+                         ["édition : rangée en Standard, le marchand vend deluxe (la page a une édition Deluxe)"])
+        # pas d'édition Deluxe sur la page : l'acheteur a plus que ce qui est affiché, pas d'alerte
+        self.assertEqual(self.reasons("EA SPORTS FC 27", "https://shop.example/ea-sports-fc-27-deluxe-edition-pc-steam", edition="Standard"), [])
         self.assertEqual(self.reasons("EA SPORTS FC 27", "https://shop.example/ea-sports-fc-27-standard-edition", edition="Ultimate"),
                          ["édition : AllKeyShop Ultimate, marchand standard"])
         self.assertEqual(self.reasons("EA SPORTS FC 27", "https://shop.example/ea-sports-fc-27-standard-edition", edition="Standard + Bonus"), [])
@@ -249,8 +252,9 @@ class TestAnalyzeSuspects(unittest.TestCase):
         # Instant Gaming, 30/09/2026, édition AllKeyShop « GOTY »
         url = "https://www.instant-gaming.com/en/1497-buy-key-gogcom-the-witcher-3-wild-hunt-goty/"
         self.assertEqual(self.reasons("The Witcher 3 Wild Hunt", url, edition="GOTY", platform="gog"), [])
-        self.assertEqual(self.reasons("The Witcher 3 Wild Hunt", url, edition="Standard", platform="gog"),
-                         ["édition : AllKeyShop Standard, marchand goty"])
+        self.assertEqual(self.reasons("The Witcher 3 Wild Hunt", url, edition="Standard", platform="gog",
+                                      page_editions=["Complete", "GOTY", "Standard", "Bundle"]),
+                         ["édition : rangée en Standard, le marchand vend goty (la page a une édition GOTY)"])
 
     def test_bundle_edition_has_another_name(self):
         # G2A, 30/09/2026, édition AllKeyShop « Bundle » : The Witcher Trilogy Pack
@@ -289,8 +293,9 @@ class TestAnalyzeSuspects(unittest.TestCase):
         self.assertEqual(self.reasons("Call of Duty Modern Warfare 4", url, edition="Preorder bonus",
                                       region="XBOX/PC", platform="xbox-play-anywhere"), [])
         self.assertEqual(self.reasons("WARDOGS", "https://shop.example/wardogs-deluxe-edition-pc-steam", edition="Early Access"), [])
-        self.assertEqual(self.reasons("WARDOGS", "https://shop.example/wardogs-deluxe-edition-pc-steam", edition="Standard"),
-                         ["édition : AllKeyShop Standard, marchand deluxe"])
+        self.assertEqual(self.reasons("WARDOGS", "https://shop.example/wardogs-deluxe-edition-pc-steam", edition="Standard",
+                                      page_editions=["Standard", "Deluxe"]),
+                         ["édition : rangée en Standard, le marchand vend deluxe (la page a une édition Deluxe)"])
 
     def test_edition_announcing_dlc(self):
         # Kinguin, 30/09/2026 : édition AllKeyShop « Standard + DLC Bundle »
@@ -397,9 +402,9 @@ class TestAnalyzeSuspects(unittest.TestCase):
         self.assertIn("grand theft auto vi ps5", pc.name_variants("GTA 6 PS5"))
 
     def test_partial_name(self):
-        res = pc.analyze("The Witcher 3 Wild Hunt", offer(), "witcher-3-wild-hunt-goty-steam-key", "URL")
+        res = pc.analyze("The Witcher 3 Wild Hunt", offer(page_editions=["Standard", "GOTY"]), "witcher-3-wild-hunt-goty-steam-key", "URL")
         self.assertEqual((res["match"], res["notes"]), ("partial", ["nom partiel"]))
-        self.assertEqual(res["reasons"], ["édition : AllKeyShop Standard, marchand goty"])
+        self.assertEqual(res["reasons"], ["édition : rangée en Standard, le marchand vend goty (la page a une édition GOTY)"])
 
 
 class TestPageTitle(unittest.TestCase):
@@ -478,12 +483,252 @@ class TestMerchantConfigs(unittest.TestCase):
     def test_amazon_never_opens_a_browser(self):
         page = TestCheckOffer.INTERSTITIAL.replace(TestRedirection.KINGUIN, "https://www.amazon.fr/Nintendo-Zelda/dp/B0BVW3SJMF/").replace(
             TestRedirection.KINGUIN.replace("/", "\\/"), "https://www.amazon.fr/Nintendo-Zelda/dp/B0BVW3SJMF/".replace("/", "\\/"))
-        with mock.patch.object(pc, "http_get", side_effect=[(200, None, page), (200, None, "")]), \
+        with mock.patch.object(pc, "http_get", side_effect=[(200, None, page), (200, None, ""), (200, None, "<title>Amazon.fr</title>")]), \
              mock.patch.object(pc, "page_title") as title:
             res = pc.check_offer("The Legend of Zelda Tears of the Kingdom Nintendo Switch",
                                  offer(merchantName="Amazon.fr", region="BOX", platform="physical-medium"))
         title.assert_not_called()
         self.assertEqual(res["verdict"], "À VÉRIFIER")
+
+
+class TestStudy20260930(unittest.TestCase):
+    """Étude des 80 reports du 30/09/2026 (docs/precedents.md) : chaque cas réel, avec la région telle
+    qu'AllKeyShop la définit (nom affiché + nom de filtre)."""
+
+    def reasons(self, product, url, **kw):
+        return pc.analyze(product, offer(**kw), pc.url_text(pc.unwrap_affiliate(url)), "URL")["reasons"]
+
+    # -- vraies erreurs : doivent sortir --
+    def test_eu_key_shown_global(self):
+        self.assertEqual(self.reasons("Stellaris", "https://kinguin.net/category/172478/stellaris-starter-pack-eu-steam-cd-key",
+                                      edition="Bundle 1", region="GLOBAL", region_filter="STEAM GLOBAL"),
+                         ["région : AllKeyShop GLOBAL, marchand EU"])
+        self.assertEqual(self.reasons("The Blood Of Dawnwalker",
+                                      "https://www.eneba.com/steam-the-blood-of-dawnwalker-eclipse-edition-deluxe-steam-key-pc-europe",
+                                      edition="Deluxe", region="GLOBAL", region_filter="STEAM GLOBAL"),
+                         ["région : AllKeyShop GLOBAL, marchand EU"])
+
+    def test_wrong_platform(self):
+        self.assertEqual(self.reasons("F1 25", "https://www.gamivo.com/product/f1-25-xbox-xbox-series-eu-2026-season",
+                                      edition="2026 Season Edition", region="EU ENGLISH ONLY", region_filter="STEAM EU EN ONLY"),
+                         ["plateforme : AllKeyShop steam, marchand xbox"])
+        self.assertEqual(self.reasons("EA SPORTS FC 26", "https://www.driffle.com/ea-sports-fc-26-icons-edition-global-pc-steam-digital-key-p9990128",
+                                      edition="ICONS Edition", region="GLOBAL", region_filter="EA GLOBAL", platform="ea-app"),
+                         ["plateforme : AllKeyShop ea-app, marchand steam"])
+
+    def test_platform_from_region_filter(self):
+        # activationPlatform vide, mais la région dit EA GLOBAL
+        self.assertEqual(self.reasons("EA SPORTS FC 26", "https://shop.example/ea-sports-fc-26-pc-steam-key",
+                                      region="GLOBAL", region_filter="EA GLOBAL", platform=""),
+                         ["plateforme : AllKeyShop ea, marchand steam".replace("ea,", "ea-app,")])
+
+    def test_console_of_the_page(self):
+        # Amazon.fr, Elden Ring Xbox Series : l'URL parle de PlayStation
+        url = "https://www.amazon.fr/Bandai-Namco-Entertainment-3391892017632-PlayStation/dp/B0977LKSQ6/"
+        res = pc.analyze("Elden Ring Xbox Series", offer(edition="Launch Edition", region="BOX", region_filter="BOX", platform="physical-medium"),
+                         pc.url_text(url), "URL")
+        self.assertIn("plateforme : page AllKeyShop Xbox, marchand PlayStation", res["reasons"])
+        # la bonne console, ou une URL qui n'en parle pas : rien
+        self.assertEqual(self.reasons("GTA The Trilogy The Definitive Edition Xbox Series", "https://www.amazon.fr/GTA-Trilogy-Definition-Xbox-X/dp/B09KGZ37M1/",
+                                      region="BOX", platform="physical-medium"), [])
+
+    def test_season_pass_as_game_edition(self):
+        # Loaded : le season pass seul, rangé dans « Year 1 Edition » (jeu + pass, 40,45 € chez GAMIVO)
+        self.assertEqual(self.reasons("Farming Simulator 25", "https://www.loaded.com/farming-simulator-25-year-1-season-pass-pc-steam",
+                                      edition="Year 1 Edition", page_editions=["Standard", "Highlands Fishing Edition", "Year 1 Bundle", "Year 1 Edition"]),
+                         ["contenu additionnel : season-pass"])
+
+    def test_edition_misfiled_while_the_page_has_it(self):
+        gta4 = ["Complete", "Standard", "Collection", "Complete Bundle", "Complete Pack", "Bundle"]
+        res = pc.analyze("GTA 4", offer(edition="Standard", page_editions=gta4), "Grand Theft Auto IV: The Complete Edition on Steam", "titre de la page")
+        self.assertEqual(res["reasons"], ["édition : rangée en Standard, le marchand vend complete (la page a une édition Complete)"])
+        zero = ["Standard", "Deluxe", "Deluxe + Bonus", "Bonus", "Standard + DLC"]
+        self.assertEqual(self.reasons("STAR WARS Zero Company Xbox Series",
+                                      "https://www.gamivo.com/product/star-wars-zero-company-xbox-xbox-series-global-deluxe-pre-order-bonus",
+                                      edition="Standard + DLC", region="XBOX X|S", region_filter="XBOX X|S GLOBAL", platform="xbox", page_editions=zero),
+                         ["édition : rangée en Standard + DLC, le marchand vend deluxe (la page a une édition Deluxe)"])
+
+    # -- faux positifs : ne doivent plus sortir --
+    def test_gift_germany_is_a_gift(self):
+        # Kinguin Big Walk : région « GERMANY » = STEAM GIFT GERMANY, le marchand vend un gift DE
+        self.assertEqual(self.reasons("Big Walk", "https://www.kinguin.net/category/713896/big-walk-de-pc-steam-altergift",
+                                      region="GERMANY", region_filter="STEAM GIFT GERMANY"), [])
+
+    def test_wider_zone_is_fine(self):
+        # K4G Mario Kart World : clé GLOBAL affichée EUROPE
+        self.assertEqual(self.reasons("Mario Kart World Nintendo Switch 2",
+                                      "https://k4g.com/product/mario-kart-world-nintendo-switch-2-global-instant-cd-key-cd-key-6N1RIW9B",
+                                      region="EUROPE", region_filter="EUROPE", region_desc="NINTENDO Download Code for Europe.", platform="nintendo-eshop"), [])
+
+    def test_playstation_titles(self):
+        o = offer(region="PS5", region_filter="PS5", platform="playstation-store")
+        for product, edition, title in (
+                ("Gran Turismo 7 PS5", "Deluxe", "Gran Turismo™ 7 25th Anniversary Digital Deluxe Edition | Digital Deluxe Edition"),
+                ("DRAGON QUEST MONSTERS The Withered World PS5", "Deluxe", "DRAGON QUEST MONSTERS: The Withered World - Digital Deluxe Edition | Digital Deluxe Edition"),
+                ("Attack on Titan 3 PS5", "Deluxe", "A.O.T. 3 Digital Deluxe Edition | Digital Deluxe Edition"),
+                ("Crimson Desert PS5", "Standard", "Crimson Desert Enhanced | Standard Edition")):
+            o["edition"] = edition
+            o["page_editions"] = ["Standard", "Enhanced", "Deluxe"]
+            res = pc.analyze(product, o, title, "titre de la page")
+            self.assertIsNotNone(res["match"], product)
+            self.assertEqual(res["reasons"], [], product)
+
+    def test_playstation_parser_and_locale(self):
+        page = ('<script>{"Product:UP4162-PPSA25286_00-0653729629077452":{"id":"UP4162-PPSA25286_00-0653729629077452",'
+                '"__typename":"Product","concept":{"__ref":"Concept:10002363"},"edition":{"__typename":"ProductEdition",'
+                '"name":"Standard Edition"},"name":"Crimson Desert Enhanced","description":"x"}}</script><title>Crimson Desert Enhanced</title>')
+        self.assertEqual(pc.playstation_text(page, "https://store.playstation.com/en-us/product/UP4162-PPSA25286_00-0653729629077452"),
+                         "Crimson Desert Enhanced | Standard Edition")
+        cfg = pc.merchant_config("https://store.playstation.com/es-es/product/X", "PS Store ES")
+        seen = []
+        with mock.patch.object(pc, "http_get", side_effect=lambda url, ua, follow=True, timeout=30: (seen.append(url), (200, None, page))[1]), \
+             mock.patch.object(pc, "REQUEST_DELAY", 0):
+            text, method = pc.merchant_page_text("https://store.playstation.com/es-es/product/EP9001-PPSA01316_00-GT7DDE0000000PS5", cfg)
+        self.assertEqual(seen, ["https://store.playstation.com/en-gb/product/EP9001-PPSA01316_00-GT7DDE0000000PS5"])
+        self.assertEqual(method, "page (HTTP)")
+
+    def test_accent_eaten_by_the_merchant(self):
+        # Dreamgame : « Pokémon » devient « pokmon »
+        self.assertEqual(self.reasons("Pokemon Legends: Z-A Mega Dimension Nintendo Switch 2",
+                                      "https://www.dreamgame.com/en/pokmon-legends-z-a-mega-dimension-dlc",
+                                      edition="DLC", region="EUROPE", platform="nintendo-eshop", page_dlc=True), [])
+
+    def test_one_letter_tolerance_is_narrow(self):
+        self.assertEqual(self.reasons("Portal 2", "https://shop.example/mortal-kombat-2-pc-steam"), ["nom du produit absent (URL)"])
+        self.assertEqual(self.reasons("Horizon Forbidden West Complete Edition", "https://shop.example/horizon-forbidden-west-complete-edition-pc-steam",
+                                      edition="Complete"), [])
+        self.assertFalse(pc.is_block_page("Horizon Forbidden West™ Complete Edition"))
+
+    def test_full_replay_regressions(self):
+        # rejeu des 920 offres en tête, 30/09/2026 : trois faux positifs créés par les nouvelles règles
+        self.assertEqual(self.reasons("STAR WARS Galactic Racer", "https://gameseal.com/star-wars-galactic-racer-pc-steam-key-eu-na",
+                                      region="EU/US", region_filter="EU/US"), [])
+        self.assertEqual(self.reasons("Euro Truck Simulator 2", "https://gameboost.com/euro-truck-simulator-2-vive-la-france-1-00-34663",
+                                      edition="Standard + DLC", region="GLOBAL", region_filter="STEAM GLOBAL"), [])
+        self.assertEqual(self.reasons("Fable Premium Upgrade Bundle Xbox Series",
+                                      "https://www.eneba.com/xbox-fable-premium-upgrade-dlc-windows-xbox-series-x-s-xbox-live-key-europe",
+                                      edition="DLC", region="XBOX/PC EU", region_filter="XBOX/PC  EUROPE", platform="xbox-play-anywhere", page_dlc=True), [])
+
+    def test_full_replay_new_catches(self):
+        # et trois vraies erreurs que les anciennes règles ne voyaient pas
+        self.assertEqual(self.reasons("Call of Duty Black Ops 6", "https://www.eneba.com/steam-call-of-duty-r-black-ops-6-pc-steam-key-europe",
+                                      region="EUROPE", region_filter="WINDOWS EU", platform="microsoft-windows"),
+                         ["plateforme : AllKeyShop microsoft-windows, marchand steam"])
+        self.assertEqual(self.reasons("The Witcher 3 Wild Hunt Xbox Series", "https://www.lootbar.com/game-key/the-witcher-3-wild-hunt-xbox",
+                                      region="ROW", region_filter="STEAM ROW", platform="steam"),
+                         ["plateforme : AllKeyShop steam, marchand xbox"])
+        # Splatoon Raiders : offre saisie Xbox (plateforme et région) sur la page Nintendo Switch 2
+        self.assertEqual(self.reasons("Splatoon Raiders Nintendo Switch 2", "https://www.gamingdragons.com/en/game/buy-splatoon-raiders-switch-2-code.html",
+                                      region="EU XBOX X|S", region_filter="XBOX X|S EUROPE", platform="xbox"),
+                         ["plateforme : AllKeyShop xbox, marchand nintendo"])
+
+    def test_european_title_alias(self):
+        self.assertEqual(self.reasons("Rhythm Heaven Groove Nintendo Switch 2", "https://www.loaded.com/rhythm-paradise-groove-switch-eu",
+                                      region="EUROPE", region_filter="EUROPE", platform="nintendo-eshop"), [])
+
+    def test_study_ok_cases(self):
+        self.assertEqual(self.reasons("Hunt Showdown", "https://www.kinguin.net/en/category/553797/hunt-showdown-1896-10-dlc-bundle-pc-steam-cd-key",
+                                      edition="Standard + DLC Bundle"), [])
+        self.assertEqual(self.reasons("Assetto Corsa Competizione",
+                                      "https://kinguin.net/category/193397/assetto-corsa-competizione-2023-gt-world-challenge-pack-dlc-steam-cd-key",
+                                      edition="Bonus"), [])
+        self.assertEqual(self.reasons("Among Us VR", "https://www.loaded.com/among-us-3d-vr-pc-steam"), [])
+        self.assertEqual(self.reasons("Diablo 4 Lord of Hatred Xbox Series",
+                                      "https://www.instant-gaming.com/en/21849-buy-diablo-iv-age-of-hatred-collection-xbox-one-xbox-series-x-s-microsoft-store/",
+                                      edition="Hatred Edition", region="XBOX X|S", region_filter="XBOX X|S GLOBAL", platform="xbox"), [])
+        self.assertEqual(self.reasons("Call of Duty Modern Warfare 4",
+                                      "https://www.dreamgame.com/en/call-of-duty-modern-warfare-4-standard-edition-pre-purchase",
+                                      edition="Preorder bonus", region="XBOX/PC", platform="xbox-play-anywhere",
+                                      page_editions=["Standard", "Vault Edition", "Preorder bonus"]), [])
+        ets2 = ["Bundle", "Collection Bundle", "Collectors Bundle Edition", "Gold", "Gold Bundle", "Mediterranean Bundle", "Standard"]
+        self.assertEqual(self.reasons("Euro Truck Simulator 2", "https://www.kinguin.net/category/2749/euro-truck-simulator-2-gold-bundle-steam-cd-key/",
+                                      edition="Bundle", page_editions=ets2), [])
+        self.assertEqual(self.reasons("Stellaris", "https://www.g2a.com/en/stellaris-ultimate-bundle-2024-edition-pc-steam-key-global-i10000253362006",
+                                      edition="2024 Edition", page_editions=["2024 Edition", "Ultimate Bundle", "Standard"]), [])
+        self.assertEqual(self.reasons("RimWorld", "https://www.gamivo.com/product/rimworld-stareter-pack-pc-steam-global-en-de-fr-it-pl-cs-nl-ja-ko-no-pt-ru-zh-es-sv-tr-standard",
+                                      edition="Starter Pack", page_editions=["Standard", "Starter Pack", "Deluxe"]), [])
+
+    def test_french_amazon_titles(self):
+        o = offer(region="BOX", region_filter="BOX", platform="physical-medium")
+        for product, title in (("Kirby and the Forgotten Land Nintendo Switch", "Amazon.fr : Kirby et le monde oublié (Nintendo Switch) : Jeux vidéo"),
+                               ("Pokemon Sword Nintendo Switch", "Pokémon Épée (Nintendo Switch) : Amazon.fr"),
+                               ("Pokémon Brilliant Diamond Nintendo Switch", "Pokémon Diamant Étincelant - Nintendo Switch : Amazon.fr")):
+            self.assertEqual(pc.analyze(product, o, title, "titre de la page")["reasons"], [], product)
+        # mais Épée n'est pas Bouclier
+        self.assertEqual(pc.analyze("Pokemon Sword Nintendo Switch", o, "Pokémon Bouclier (Nintendo Switch)", "titre de la page")["reasons"],
+                         ["nom du produit absent (titre de la page)"])
+
+    def test_block_pages(self):
+        for t in ("Just a moment...", "Blocked - Driffle", "Amazon.fr", "Tut uns Leid!", "Access Denied", ""):
+            self.assertTrue(pc.is_block_page(t), t)
+        self.assertFalse(pc.is_block_page("UFC® 5 | Access Denied"))
+        self.assertFalse(pc.is_block_page("Buy F1 25 2026 Season Edition Xbox Series Key Europe | GAMIVO"))
+
+
+@mock.patch.object(pc, "REQUEST_DELAY", 0)
+class TestConfirmOnMerchantPage(unittest.TestCase):
+    """Quand l'URL contredit AllKeyShop, la page marchand tranche avant l'alerte."""
+    INTERSTITIAL = sample("redirection_kinguin.html")
+
+    def page(self, url):
+        return self.INTERSTITIAL.replace(TestRedirection.KINGUIN, url).replace(
+            TestRedirection.KINGUIN.replace("/", "\\/"), url.replace("/", "\\/"))
+
+    def run_check(self, product, o, merchant, merchant_html):
+        with mock.patch.object(pc, "http_get", side_effect=[(200, None, self.page(merchant)), (200, None, merchant_html)]), \
+             mock.patch.object(pc, "page_title", return_value=None):
+            return pc.check_offer(product, o)
+
+    def test_url_contradicted_by_the_page(self):
+        # Gamingdragons : URL « steam-key », page « PC - EA App Download »
+        res = self.run_check("EA SPORTS FC 26", offer(edition="Ultimate", region="GLOBAL", region_filter="EA GLOBAL", platform="ea-app"),
+                             "https://www.gamingdragons.com/en/game/buy-ea-sports-fc-26-ultimate-edition-steam-key.html",
+                             "<title>Acheter EA SPORTS FC 26 Ultimate Edition Jeu PC | PC - EA App Download</title>")
+        self.assertEqual(res["verdict"], "OK")
+        self.assertTrue(any(n.startswith("URL contredite par la page") for n in res["notes"]))
+
+    def test_url_confirmed_by_the_page(self):
+        res = self.run_check("F1 25", offer(edition="2026 Season Edition", region="EU ENGLISH ONLY", region_filter="STEAM EU EN ONLY"),
+                             "https://www.gamivo.com/product/f1-25-xbox-xbox-series-eu-2026-season",
+                             "<title>Buy F1 25 2026 Season Edition Xbox Series Key Europe | GAMIVO</title>")
+        self.assertEqual((res["verdict"], res["reasons"]), ("SUSPECT", ["plateforme : AllKeyShop steam, marchand xbox"]))
+        self.assertTrue(any(n.startswith("confirmé par la page") for n in res["notes"]))
+        res = self.run_check("The Blood Of Dawnwalker", offer(edition="Deluxe", region="GLOBAL", region_filter="STEAM GLOBAL"),
+                             "https://www.eneba.com/steam-the-blood-of-dawnwalker-eclipse-edition-deluxe-steam-key-pc-europe",
+                             "<title>Buy The Blood of Dawnwalker Eclipse Edition (Deluxe) Steam key PC! Cheap price</title>"
+                             "<h1>The Blood of Dawnwalker Eclipse Edition (Deluxe) Steam Key (PC) EUROPE</h1>")
+        self.assertEqual(res["verdict"], "SUSPECT")
+
+    def test_blocked_page_keeps_the_url_evidence(self):
+        res = self.run_check("EA SPORTS FC 26", offer(edition="ICONS Edition", region="GLOBAL", region_filter="EA GLOBAL", platform="ea-app"),
+                             "https://www.driffle.com/ea-sports-fc-26-icons-edition-global-pc-steam-digital-key-p9990128",
+                             "<title>Blocked - Driffle</title>")
+        self.assertEqual((res["verdict"], res["reasons"]), ("SUSPECT", ["plateforme : AllKeyShop ea-app, marchand steam"]))
+
+    def test_localized_title_gives_manual_check(self):
+        url = "https://www.amazon.fr/gp/product/B09XXXXXXX/"
+        with mock.patch.object(pc, "http_get", side_effect=[(200, None, self.page(url)), (200, None, ""),
+                                                            (200, None, "<title>Amazon.fr : Le Jeu Inconnu (Nintendo Switch)</title>")]):
+            res = pc.check_offer("Some Game Nintendo Switch", offer(merchantName="Amazon.fr", region="BOX", platform="physical-medium"))
+        self.assertEqual(res["verdict"], "À VÉRIFIER")
+        self.assertTrue(res["reasons"][0].startswith("titre du marchand dans une autre langue"))
+
+    def test_silent_page_is_not_a_confirmation(self):
+        res = self.run_check("Stellaris", offer(edition="Bundle 1", region="GLOBAL", region_filter="STEAM GLOBAL"),
+                             "https://kinguin.net/category/172478/stellaris-starter-pack-eu-steam-cd-key",
+                             "<title>Stellaris: Starter Pack Bundle 2023 PC Steam CD Key | Buy cheap on Kinguin.net</title>")
+        self.assertEqual(res["verdict"], "SUSPECT")
+        self.assertTrue(any(n.startswith("la page ne dit rien sur ce point") for n in res["notes"]))
+
+    def test_name_unverifiable_but_wrong_console(self):
+        # Elden Ring Xbox Series chez Amazon : nom illisible, mais l'URL dit PlayStation
+        url = "https://www.amazon.fr/Bandai-Namco-Entertainment-3391892017632-PlayStation/dp/B0977LKSQ6/"
+        with mock.patch.object(pc, "http_get", side_effect=[(200, None, self.page(url)), (200, None, ""), (200, None, "<title>Amazon.fr</title>")]), \
+             mock.patch.object(pc, "page_title") as title:
+            res = pc.check_offer("Elden Ring Xbox Series", offer(merchantName="Amazon.fr", edition="Launch Edition", region="BOX",
+                                                                region_filter="BOX", platform="physical-medium"))
+        title.assert_not_called()
+        self.assertEqual((res["verdict"], res["reasons"]), ("SUSPECT", ["plateforme : page AllKeyShop Xbox, marchand PlayStation"]))
 
 
 @mock.patch.object(pc, "REQUEST_DELAY", 0)
@@ -518,21 +763,21 @@ class TestCheckOffer(unittest.TestCase):
 
     def test_page_fallback(self):
         page = self.interstitial("https://store.epicgames.com/p/fc-27-e149fb")
-        with mock.patch.object(pc, "http_get", side_effect=[(200, None, page), (200, None, "")]), \
+        with mock.patch.object(pc, "http_get", side_effect=[(200, None, page), (200, None, ""), (200, None, "")]), \
              mock.patch.object(pc, "page_title", return_value="EA SPORTS FC 27 | Download and Buy Today - Epic Games Store"):
             res = pc.check_offer("EA SPORTS FC 27", offer(platform="epic-store"))
         self.assertEqual((res["verdict"], res["method"]), ("OK", "page (Chromium)"))
 
     def test_page_fallback_wrong_product(self):
         page = self.interstitial("https://store.epicgames.com/p/abc-123")
-        with mock.patch.object(pc, "http_get", side_effect=[(200, None, page), (200, None, "")]), \
+        with mock.patch.object(pc, "http_get", side_effect=[(200, None, page), (200, None, ""), (200, None, "")]), \
              mock.patch.object(pc, "page_title", return_value="Sonic the Hedgehog - Epic Games Store"):
             res = pc.check_offer("Sonic Racing CrossWorlds", offer(platform="epic-store"))
         self.assertEqual((res["verdict"], res["reasons"]), ("SUSPECT", ["nom du produit absent (titre de la page)"]))
 
     def test_unreadable_page(self):
         page = self.interstitial("https://store.epicgames.com/p/abc-123")
-        with mock.patch.object(pc, "http_get", side_effect=[(200, None, page), (403, None, "")]), \
+        with mock.patch.object(pc, "http_get", side_effect=[(200, None, page), (403, None, ""), (403, None, "")]), \
              mock.patch.object(pc, "page_title", return_value=None):
             res = pc.check_offer("EA SPORTS FC 27", offer())
         self.assertEqual((res["verdict"], res["method"]), ("À VÉRIFIER", "aucune"))
@@ -580,7 +825,7 @@ class TestCycle(unittest.TestCase):
         self.assertEqual(len(checks), 4)  # 4 éditions, contrôlées une seule fois
         self.assertEqual(len(sent), 4)
         self.assertTrue(sent[0].startswith("🟢 **OK** · **EA SPORTS FC 27** (Popular #1) · Standard"))
-        self.assertIn("Mmoga · IN ENGLISH ONLY · ea-app · **54.99 €**", sent[0])
+        self.assertIn("Mmoga · IN ENGLISH ONLY (EA ENG/POL/RUS ONLY) · ea-app · **54.99 €**", sent[0])
         self.assertEqual(state["merchants"]["Mmoga"]["methods"], {"URL": 1})
         self.assertIn("| Mmoga | URL (1) | ", pc.coverage_table(state))
         self.assertEqual({v["verdict"] for v in state["checked"].values()}, {"OK"})
@@ -614,9 +859,34 @@ class TestCycle(unittest.TestCase):
             pc.run_cycle(self.TARGETS, sent.append, state, failing)
         self.assertEqual((sent, state["checked"]), ([], {}))
         pc.run_cycle(self.TARGETS, sent.append, state, failing)
-        self.assertEqual(len(sent), 4)
+        # seul le premier prix de la page (page d'un top « Popular ») part en À VÉRIFIER ; les autres éditions sont notées
+        self.assertEqual(len(sent), 1)
         self.assertIn("🟠 **À VÉRIFIER**", sent[0])
         self.assertIn("contrôle impossible : redirection AllKeyShop HTTP 503", sent[0])
+        self.assertEqual(sorted(v["verdict"] for v in state["checked"].values()), ["NON VÉRIFIABLE"] * 3 + ["À VÉRIFIER"])
+        self.assertIn("| EA SPORTS FC 27 |", pc.unverified_table(state))
+
+    def test_unverifiable_policy(self):
+        page = "https://www.allkeyshop.com/blog/x/"
+        with mock.patch.dict(pc.PAGE_LISTS, {page: {"Home · FPS", "TOP 50 · PC Popular"}}, clear=True):
+            self.assertEqual(pc.unverifiable_verdict({"page_first": True}, "Home · FPS", page), "À VÉRIFIER")
+            self.assertEqual(pc.unverifiable_verdict({"page_first": False}, "Home · FPS", page), "NON VÉRIFIABLE")
+            self.assertEqual(pc.unverifiable_verdict({"page_first": True}, "Home · FPS", page, "note"), "NON VÉRIFIABLE")
+        with mock.patch.dict(pc.PAGE_LISTS, {page: {"Home · RPG"}}, clear=True):
+            self.assertEqual(pc.unverifiable_verdict({"page_first": True}, "Home · RPG", page), "NON VÉRIFIABLE")
+        for label in ("Coming soon PC", "Home · Most anticipated", "TOP 50 · Xbox Coming soon", "Popular"):
+            self.assertTrue(pc.in_top_or_soon("https://www.allkeyshop.com/blog/other/", label), label)
+
+    def test_page_lists_memberships(self):
+        data = json.loads(sample("api_topclick_home.json"))
+        pc.PAGE_LISTS.clear()
+        targets = pc.parse_lists(data, pc.HOMEPAGE_LISTS)
+        multi = [u for u, labels in pc.PAGE_LISTS.items() if len(labels) > 1]
+        self.assertTrue(multi)  # des pages sont dans plusieurs listes : un widget de la home et un TOP 50
+        self.assertEqual(len(targets), len(pc.PAGE_LISTS))
+
+    def test_amazon_is_never_reported_when_unverifiable(self):
+        self.assertEqual(pc.merchant_config("https://www.amazon.fr/dp/B0/", "Amazon.fr").get("unverifiable"), "note")
 
     def test_discord_failure_retries_next_cycle(self):
         def flaky(msg):

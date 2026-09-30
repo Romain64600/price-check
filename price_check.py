@@ -82,11 +82,30 @@ SAVE_EVERY = 25  # pages entre deux sauvegardes de l'état pendant un passage
 
 # Mots d'URL ou de titre marchand, après normalisation (minuscules, tout ce qui
 # n'est pas lettre ou chiffre devient « - »). Un mot n'est reconnu qu'entier.
-REGION_FAMILIES = {
-    "GLOBAL": ("global", "worldwide", "ww"),
-    "EU": ("eu", "europe", "european"),
-    "ROW": ("row", "rest-of-world", "rest-of-the-world"),  # « rest of world » n'est pas GLOBAL
+# Zones : l'ensemble des pays que couvre chaque zone. Une offre est suspecte quand le marchand vend
+# pour une zone qui ne couvre pas toute la zone affichée par AllKeyShop (clé EU affichée GLOBAL,
+# Stellaris, formation du 30/09/2026) ; l'inverse (clé GLOBAL affichée EUROPE) est sans danger.
+EU_COUNTRIES = frozenset({"de", "fr", "it", "es", "pt", "be", "nl", "pl", "at", "ie", "eu-other"})
+ZONE_COVERAGE = {
+    "GLOBAL": EU_COUNTRIES | {"uk", "us", "row", "me"},
+    "EMEA": EU_COUNTRIES | {"uk", "me"},
+    "EUUS": EU_COUNTRIES | {"us"},
+    "EU": EU_COUNTRIES,
+    "ROW": frozenset({"row"}),  # « rest of world » : ni l'Europe, ni GLOBAL
+    "US": frozenset({"us"}), "UK": frozenset({"uk"}),
+    "DE": frozenset({"de"}), "FR": frozenset({"fr"}), "IT": frozenset({"it"}), "ES": frozenset({"es"}),
+    "PT": frozenset({"pt"}), "BE": frozenset({"be"}), "PL": frozenset({"pl"}),
 }
+# Mots marchands -> zone. Pas de noms de pays : ce sont aussi des noms de DLC (« Vive la France! »,
+# « Italia » pour Euro Truck Simulator 2, étude du 30/09/2026) ; pas de codes ambigus (de, it, us...).
+MERCHANT_ZONE_WORDS = {
+    "GLOBAL": ("global", "worldwide", "ww", "region-free"),
+    "EU": ("eu", "europe", "european"),
+    "EUUS": ("eu-na", "eu-us", "na-eu", "us-eu"),  # GAMESEAL « …-steam-key-eu-na » = région EU/US
+    "ROW": ("row", "rest-of-world", "rest-of-the-world"),
+    "EMEA": ("emea",),
+}
+REGION_FAMILIES = {z: MERCHANT_ZONE_WORDS[z] for z in ("GLOBAL", "EU", "ROW")}  # compatibilité
 FORBIDDEN_REGION_WORDS = ("ru", "russia", "russian", "cis", "asia", "sea", "latam", "latin-america",
                           "india", "tr", "turkey", "cn", "china", "ar", "argentina", "br", "brazil",
                           "jp", "japan", "kr", "korea", "mena", "africa", "za")
@@ -112,6 +131,23 @@ EDITION_WORDS = ("standard", "deluxe", "digital-deluxe", "ultimate", "gold", "pr
                  "enhanced", "anniversary", "directors-cut", "silver", "platinum")
 EDITION_SYNONYMS = {"goty": "game of the year", "collectors": "collector",
                     "digital-deluxe": "deluxe", "directors-cut": "director s cut"}
+# Éditions AllKeyShop génériques (« Bundle », « Bundle 2 », « Bonus », « DLC Bundle »...) : elles ne
+# désignent pas une édition précise, on ne les compare pas à celle du marchand (étude du 30/09/2026 :
+# Euro Truck Simulator 2 a 22 éditions qui se recoupent).
+GENERIC_EDITION_WORDS = {"bundle", "bonus", "pack", "collection", "dlc", "dlcs", "upgrade", "set", "edition", "and", "plus"}
+# Plateformes compatibles entre elles : un code Xbox, Xbox Play Anywhere ou Microsoft Store
+PLATFORM_GROUPS = {"xbox-play-anywhere": "xbox", "microsoft-store": "xbox"}
+CONSOLE_GROUPS = ("xbox", "playstation", "nintendo")
+CONSOLE_LABELS = {"xbox": "Xbox", "playstation": "PlayStation", "nintendo": "Nintendo"}
+# Plateforme d'après le nom de filtre de la région AllKeyShop (« EA GLOBAL », « STEAM GIFT EU »...)
+REGION_PLATFORMS = ((r"^STEAM\b", "steam"), (r"^EA\b", "ea-app"), (r"^ROCKSTAR\b", "rockstar"), (r"^GOG\b", "gog"),
+                    (r"^EPIC\b", "epic"), (r"^BATTLENET\b", "battle-net"), (r"^(UBISOFT|UPLAY)\b", "ubisoft"),
+                    (r"^WINDOWS\b", "microsoft-store"), (r"XBOX|X\|S", "xbox"), (r"\bPSN\b|PLAYSTATION", "playstation"),
+                    (r"NINTENDO", "nintendo"))
+# pas « forbidden » ni « blocked » seuls : « Horizon Forbidden West » est un vrai titre
+BLOCK_PAGE_MARKERS = ("just a moment", "access denied", "attention required", "blocked -", "- blocked", "captcha",
+                      "are you a robot", "are you human", "tut uns leid", "403 forbidden", "robot check", "security check",
+                      "pardon our interruption")
 BUNDLE_WORDS = ("bundle", "pack", "collection", "trilogy")  # éditions dont le nom diffère par nature
 EXTRA_CONTENT_WORDS = ("dlc", "bundle", "pack", "collection", "bonus", "season", "expansion", "soundtrack", "ost")  # éditions qui annoncent du contenu en plus
 NOT_A_LANGUAGE = {"pc", "eu", "us", "uk", "na", "ww", "vr", "hd", "ps", "cd", "dl", "xs"}  # codes de 2 lettres qui ne sont pas des langues
@@ -119,12 +155,15 @@ NOT_A_LANGUAGE = {"pc", "eu", "us", "uk", "na", "ww", "vr", "hd", "ps", "cd", "d
 PLATFORM_SUFFIXES = ("ps5", "ps4", "playstation 5", "playstation 4", "xbox series x s", "xbox series x", "xbox series",
                      "xbox one", "xbox", "nintendo switch 2", "switch 2", "nintendo switch", "switch", "pc", "vr")
 # Mots qui ne comptent pas pour reconnaître le nom du produit dans une URL
-SOFT_WORDS = {"the", "of", "a", "an", "and", "edition", "remastered", "remaster", "remake", "hd", "official", "game"} | set(EDITION_WORDS)
+SOFT_WORDS = {"the", "of", "a", "an", "and", "edition", "remastered", "remaster", "remake", "hd", "official", "game",
+              "bundle"} | set(EDITION_WORDS)  # « Fable Premium Upgrade Bundle » vendu « Fable Premium Upgrade »
 # Abréviations : un mot du nom AllKeyShop et son équivalent chez les marchands, valables dans les deux sens
 NAME_ALIASES = (
     ("gta", "grand theft auto"),
     ("cod", "call of duty"),
 )
+# Autres noms d'un produit (titre européen, titre localisé...), appris au fil de la formation : aliases.toml
+ALIASES_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "aliases.toml")
 ROMAN = {1: "i", 2: "ii", 3: "iii", 4: "iv", 5: "v", 6: "vi", 7: "vii", 8: "viii", 9: "ix", 10: "x",
          11: "xi", 12: "xii", 13: "xiii", 14: "xiv", 15: "xv", 16: "xvi", 17: "xvii", 18: "xviii", 19: "xix", 20: "xx"}
 ARABIC = {v: str(k) for k, v in ROMAN.items()}
@@ -153,12 +192,17 @@ def http_get(url, ua, follow=True, timeout=30):
 
 # ---- AllKeyShop : listes, page produit, redirection ---------------------------
 
+PAGE_LISTS = {}  # URL de page -> libellés de toutes les listes où elle figure (une page peut être dans plusieurs)
+# Listes où une offre invérifiable mérite quand même une alerte À VÉRIFIER, si elle est le premier prix de la page
+TOP_LIST_MARKERS = ("popular", "coming soon", "most anticipated")
+
+
 def parse_lists(data, lists):
     """Renvoie [(liste, rang, nom, url)] pour chaque liste de `lists`, une seule fois par page.
 
     `data` : réponse de l'API getLists, {widget: {liste: {items: [...]}}}.
     """
-    targets, seen = [], set()
+    targets, seen, memberships = [], set(), {}
     for list_id, label, top in lists:
         widget, name = list_id.split(".", 1)
         items = ((data.get(widget) or {}).get(name) or {}).get("items")
@@ -168,10 +212,28 @@ def parse_lists(data, lists):
         games = sorted((i for i in items if i.get("productType") == "game"), key=lambda i: i["index"])
         for rank, item in enumerate(games[:top], 1):
             url = item.get("urls", {}).get(SITE_KEY)
+            if url:
+                memberships.setdefault(url, set()).add(label)
             if url and url not in seen:
                 seen.add(url)
                 targets.append((label, rank, item["name"], url))
+    PAGE_LISTS.update(memberships)
     return targets
+
+
+def in_top_or_soon(page_url, label):
+    """La page figure-t-elle dans un top (Popular) ou un coming soon (Coming soon, Most anticipated) ?"""
+    labels = PAGE_LISTS.get(page_url) or {label}
+    return any(marker in l.lower() for l in labels for marker in TOP_LIST_MARKERS)
+
+
+def unverifiable_verdict(offer, label, page_url, policy="first-price"):
+    """Offre qu'on ne peut pas vérifier (ni l'URL ni la page ne donnent le nom) : on prend note, sans alerte
+    (formation du 30/09/2026), sauf si c'est vraiment le premier prix de la page, dans un top ou un coming
+    soon. `policy` vient de la config marchand : « note » (Amazon : jamais d'alerte), « first-price », « report »."""
+    if policy == "report" or (policy == "first-price" and offer.get("page_first") and in_top_or_soon(page_url, label)):
+        return "À VÉRIFIER"
+    return "NON VÉRIFIABLE"
 
 
 def fetch_lists(list_ids):
@@ -223,14 +285,20 @@ def first_prices(trans):
         edition = str(p["edition"])
         if edition not in best or p["priceCard"] < best[edition]["priceCard"]:
             best[edition] = p
+    page_editions = [e.get("name", "") for e in editions.values()]
     offers = []
     for edition, p in sorted(best.items(), key=lambda kv: kv[1]["priceCard"]):
+        region = regions.get(str(p["region"]), {})
         offers.append({
             "id": p["id"], "merchant": p["merchant"], "merchantName": p["merchantName"],
             "edition": editions.get(edition, {}).get("name", edition),
-            "region": regions.get(str(p["region"]), {}).get("region_name", str(p["region"])),
+            "region": region.get("region_name", str(p["region"])),
+            # le vrai sens de la région : « GERMANY » peut être STEAM GIFT GERMANY (étude du 30/09/2026)
+            "region_filter": region.get("filter_name") or "",
+            "region_desc": region.get("region_short_description") or "",
             "platform": p.get("activationPlatform") or "",
             "price": p["priceCard"], "account": bool(p.get("account")),
+            "page_editions": page_editions,
         })
     return offers
 
@@ -281,6 +349,26 @@ def load_merchant_configs(directory=MERCHANTS_DIR):
 MERCHANT_CONFIGS = load_merchant_configs()
 
 
+def load_product_aliases(path=ALIASES_PATH):
+    """aliases.toml, section [products] : « nom AllKeyShop » = [« autre nom », ...]."""
+    try:
+        with open(path, "rb") as f:
+            data = tomllib.load(f)
+    except OSError:
+        return {}
+    return {norm(k): tuple(v) for k, v in (data.get("products") or {}).items()}
+
+
+_PRODUCT_ALIASES = None
+
+
+def product_aliases():
+    global _PRODUCT_ALIASES
+    if _PRODUCT_ALIASES is None:
+        _PRODUCT_ALIASES = load_product_aliases()
+    return _PRODUCT_ALIASES
+
+
 def merchant_config(url, merchant_name):
     """La config du marchand (par hôte de l'URL ou par nom AllKeyShop), ou {} sans exception."""
     host = urllib.parse.urlparse(url or "").netloc.lower()
@@ -306,8 +394,9 @@ def region_text(url, cfg):
 
 def norm(text):
     """« EA SPORTS FC 27 » -> « ea-sports-fc-27 » ; « S.T.A.L.K.E.R. 2 » -> « stalker-2 »."""
+    text = re.sub(r"[\u2122\u00ae\u00a9\u2120]", " ", text)  # ™ ® © ℠ (NFKD ferait de ™ les lettres « TM »)
     text = unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode()
-    text = re.sub(r"\b(\w)\.", r"\1", text)  # sigle pointé : S.T.A.L.K.E.R. -> STALKER
+    text = re.sub(r"\b(\w)\.", r"\1", text)  # sigle pointé : S.T.A.L.K.E.R. -> STALKER, A.O.T. -> AOT
     return re.sub(r"[^a-z0-9]+", "-", text.lower().replace("&", " and ")).strip("-")
 
 
@@ -344,13 +433,37 @@ def name_variants(product):
                 if " %s " % a in spaced:
                     names.append(spaced.replace(" %s " % a, " %s " % b).strip())
     for name in list(names):
+        names.extend(product_aliases().get(norm(name), ()))
+    for name in list(names):
         words = norm(name).split("-")
         roman = " ".join(ROMAN[int(w)] if w.isdigit() and int(w) in ROMAN else w for w in words)
         arabic = " ".join(ARABIC.get(w, w) for w in words)
         for variant in (roman, arabic):
             if norm(variant) != norm(name) and variant not in names:
                 names.append(variant)
+    for name in list(names):
+        # sigle des premiers mots : « Attack on Titan 3 » -> « AOT 3 » (PS Store : « A.O.T. 3 »)
+        words = norm(name).split("-")
+        run = 0
+        while run < len(words) and words[run].isalpha() and words[run] not in ARABIC:  # pas de chiffre romain
+            run += 1
+        for k in range(3, run + 1):
+            names.append(" ".join(["".join(w[0] for w in words[:k])] + words[k:]))
     return tuple(dict.fromkeys(names))
+
+
+def near(a, b):
+    """Deux mots à une lettre près (« pokmon » pour « pokemon » : l'accent mangé par Dreamgame)."""
+    if abs(len(a) - len(b)) > 1 or a == b:
+        return a == b
+    if len(a) == len(b):
+        return sum(x != y for x, y in zip(a, b)) == 1
+    short, long = (a, b) if len(a) < len(b) else (b, a)
+    return any(long[:i] + long[i + 1:] == short for i in range(len(long)))
+
+
+def has_word(word, tokens):
+    return word in tokens or (len(word) >= 6 and not word.isdigit() and any(len(t) >= 5 and near(word, t) for t in tokens))
 
 
 def name_match(names, normed):
@@ -368,11 +481,21 @@ def name_match(names, normed):
     for name in names:
         significant = [w for w in norm(name).split("-") if w and w not in SOFT_WORDS]
         missing = [w for w in significant if w not in tokens]
+        if len(significant) >= 3 and len(missing) == 1 and has_word(missing[0], tokens):
+            missing = []  # un seul mot à une lettre près, sur un nom d'au moins 3 mots (« pokmon ») ; pas « Portal 2 » / « mortal »
         if significant and not missing:
             return "partial"
-        if len(significant) >= 4 and len(missing) == 1 and not (missing[0].isdigit() or missing[0] in ARABIC):
+        if (len(significant) >= 4 and len(missing) == 1 and not (missing[0].isdigit() or missing[0] in ARABIC)
+                and not has_platform_suffix(name)):
+            # la tolérance vaut pour le nom sans « Nintendo Switch » : sinon « Pokémon Bouclier »
+            # passerait pour « Pokemon Sword Nintendo Switch » (étude du 30/09/2026)
             return "partial"
     return None
+
+
+def has_platform_suffix(name):
+    n = norm(name)
+    return any(n.endswith("-" + norm(sfx)) for sfx in PLATFORM_SUFFIXES)
 
 
 def title_match(names, text):
@@ -411,15 +534,49 @@ def drop_language_lists(tokens):
     return out
 
 
-def region_family(region_name):
-    n = region_name.upper()
-    if re.search(r"\bROW\b|REST OF (THE )?WORLD", n):
+def region_text_of(offer):
+    return " ".join(x for x in (offer.get("region_filter"), offer.get("region")) if x).upper()
+
+
+def is_gift_region(offer):
+    return "GIFT" in region_text_of(offer)
+
+
+def aks_zone(offer):
+    """Zone de la région AllKeyShop, d'après son nom de filtre (« STEAM EU », « XBOX GERMANY CODE »...).
+    Un gift n'a pas de zone comparée (formation du 30/09/2026, K4G Screamer 2026). None = inconnue."""
+    t = region_text_of(offer)
+    if not t or "GIFT" in t:
+        return None
+    if re.search(r"\bROW\b|REST OF", t):
         return "ROW"
-    if re.search(r"\bEU\b|EUROPE", n):
+    if "EMEA" in t:
+        return "EMEA"
+    if "EU/US" in t:
+        return "EUUS"
+    if re.search(r"\bEU\b|EUROPE", t):
         return "EU"
-    if "GLOBAL" in n or "WORLDWIDE" in n or n == "XBOX/PC":
+    for pattern, zone in ((r"GERMAN|\bWALLET DE\b", "DE"), (r"FRANCE|\bWALLET FR\b", "FR"), (r"ITALY|\bWALLET IT\b", "IT"),
+                          (r"SPAIN|SPANISH|\bWALLET SP\b", "ES"), (r"PORTUGAL|\bWALLET PT\b", "PT"), (r"BELGIUM", "BE"),
+                          (r"POLAND", "PL"), (r"\bUSA\b|\bWALLET US\b", "US"), (r"\bUK\b|UNITED KINGDOM", "UK")):
+        if re.search(pattern, t):
+            return zone
+    # « IN ENGLISH ONLY », « EN/FR » : restriction de langue, clé mondiale (formation du 30/09/2026)
+    if re.search(r"GLOBAL|WORLDWIDE|REGION FREE|ENGLISH|ENG ONLY|EN ONLY|EN/FR|^XBOX/PC$|^XBOX X\|S$", t):
         return "GLOBAL"
-    return None  # « GIFT » seul : pas de zone géographique, le marchand peut dire EU ou GLOBAL
+    return None
+
+
+def merchant_zones(words):
+    return {z for z, ws in MERCHANT_ZONE_WORDS.items() if any(re.search(r"(^|-)%s(-|$)" % re.escape(w), words) for w in ws)}
+
+
+def zone_coverage(zones):
+    return frozenset().union(*(ZONE_COVERAGE[z] for z in zones)) if zones else frozenset()
+
+
+def region_family(region_name):  # compatibilité (anciens appels)
+    return aks_zone({"region": region_name})
 
 
 def platform_family(platform):
@@ -428,6 +585,41 @@ def platform_family(platform):
     for key in sorted(PLATFORM_FAMILIES, key=len, reverse=True):
         if platform.startswith(key):
             return key
+    return None
+
+
+def platform_group(family):
+    return PLATFORM_GROUPS.get(family, family)
+
+
+def aks_platform_groups(offer):
+    """Plateformes de l'offre AllKeyShop : activationPlatform et nom de filtre de la région."""
+    groups = set()
+    fam = platform_family(offer.get("platform") or "")
+    if fam:
+        groups.add(platform_group(fam))
+    t = " ".join(x for x in (offer.get("region_filter"), offer.get("region_desc")) if x).upper()
+    for pattern, fam in REGION_PLATFORMS:
+        if re.search(pattern, t):
+            groups.add(platform_group(fam))
+            break
+    return groups
+
+
+def text_platform_groups(normed):
+    return {platform_group(f) for f, ws in PLATFORM_FAMILIES.items()
+            if any(re.search(r"(^|-)%s(-|$)" % re.escape(w), normed) for w in ws)}
+
+
+def page_console(product):
+    """Console de la page AllKeyShop, d'après le suffixe de son nom (« Elden Ring Xbox Series »)."""
+    n = norm(product)
+    if re.search(r"-(ps5|ps4|playstation-[45])$", n):
+        return "playstation"
+    if re.search(r"-xbox(-series(-x(-s)?)?|-one)?$", n):
+        return "xbox"
+    if re.search(r"-(nintendo-)?switch(-2)?$", n):
+        return "nintendo"
     return None
 
 
@@ -440,12 +632,45 @@ def canonical_edition(text):
 
 
 def edition_matches(edition_name, url_editions):
-    """Faux seulement si l'édition AllKeyShop est connue (standard, deluxe, GOTY...) et que le
-    marchand en nomme une autre. « Preorder bonus », « Early Access »... ne se comparent pas."""
+    """Vrai si une édition nommée par le marchand est celle d'AllKeyShop (« deluxe » dans « Deluxe + Bonus »)."""
     aks = canonical_edition(edition_name)
-    if not any(canonical_edition(w) in aks for w in EDITION_WORDS):
-        return True
     return any(canonical_edition(w) in aks for w in url_editions)
+
+
+def is_generic_edition(edition_name):
+    tokens = [t for t in norm(edition_name).split("-") if t]
+    return bool(tokens) and all(t in GENERIC_EDITION_WORDS or t.isdigit() for t in tokens)
+
+
+def is_base_edition(edition_name):
+    """Édition de base : sans mot d'édition supérieure (« Standard », « Preorder bonus », « Early Access »)."""
+    aks = canonical_edition(edition_name)
+    return not any(canonical_edition(w) in aks for w in EDITION_WORDS if w != "standard")
+
+
+def edition_reason(offer, merchant_editions, words):
+    """Raison de SUSPECT sur l'édition, ou None. L'écart compte quand l'offre aurait pu être rangée
+    dans une autre édition de la page (GTA 4 : la Complete Edition de Steam rangée en Standard alors
+    que la page a une édition Complete), ou quand l'édition affichée est supérieure à celle vendue."""
+    aks = offer["edition"]
+    if not merchant_editions or edition_matches(aks, merchant_editions):
+        return None
+    # un mot propre à l'édition AllKeyShop présent chez le marchand : « 2024 Edition », « Mediterranean Bundle »
+    own = [t for t in norm(aks).split("-") if t and t not in GENERIC_EDITION_WORDS and t not in EDITION_WORDS
+           and (len(t) >= 3 or (t.isdigit() and len(t) == 4))]
+    if any(re.search(r"(^|-)%s(-|$)" % re.escape(t), words) for t in own):
+        return None
+    if is_generic_edition(aks):
+        return None
+    if is_base_edition(aks) and set(merchant_editions) <= {"standard"}:
+        return None  # « Preorder bonus » vendu « standard pre-purchase »
+    others = [e for e in offer.get("page_editions") or [] if e != aks and edition_matches(e, merchant_editions)]
+    if others:
+        return "édition : rangée en %s, le marchand vend %s (la page a une édition %s)" % (
+            aks, ", ".join(merchant_editions), others[0])
+    if not is_base_edition(aks):
+        return "édition : AllKeyShop %s, marchand %s" % (aks, ", ".join(merchant_editions))
+    return None
 
 
 def announces_extra_content(edition_name):
@@ -462,8 +687,8 @@ def analyze(product, offer, text, source, region=None):
     """Confronte un texte marchand (chemin d'URL ou titre de page) à l'offre AllKeyShop.
 
     `region` : texte où lire la région à la place de `text` (config marchand), « » = inconnue.
-    Renvoie {"match": "exact" | "partial" | None, "reasons": [...], "notes": [...]}.
-    Chaque raison est un motif de SUSPECT.
+    Renvoie {"match": "exact" | "partial" | None, "reasons": [...], "kinds": [...], "notes": [...]}.
+    Chaque raison est un motif de SUSPECT ; « kinds » donne sa nature (name, zone, platform...).
     """
     names = name_variants(product)
     normed = norm(text)
@@ -471,13 +696,17 @@ def analyze(product, offer, text, source, region=None):
     # Le reste s'analyse sans les mots du nom du produit (« Complete Edition Remastered »...)
     product_words = {w for name in names for w in norm(name).split("-")}
     words = "-".join(drop_language_lists([w for w in normed.split("-") if w and w not in product_words]))
-
     region_words = words if region is None else "-".join(drop_language_lists(norm(region).split("-")))
 
     def has(word, where=None):
         return re.search(r"(^|-)%s(-|$)" % re.escape(word), words if where is None else where) is not None
 
-    reasons, notes = [], []
+    reasons, kinds, notes = [], [], []
+
+    def reason(kind, message):
+        reasons.append(message)
+        kinds.append(kind)
+
     if match is None and source == "titre de la page":
         match = title_match(names, text)
         if match:
@@ -485,34 +714,74 @@ def analyze(product, offer, text, source, region=None):
     if match is None and is_bundle(offer["edition"]):
         notes.append("édition %s : nom non contrôlé" % offer["edition"])  # un bundle porte un autre nom
     elif match is None:
-        reasons.append("nom du produit absent (%s)" % source)
+        reason("name", "nom du produit absent (%s)" % source)
     elif match == "partial":
         notes.append("nom partiel")
     if not offer["account"] and any(has(w) for w in ACCOUNT_WORDS):
-        reasons.append("compte chez le marchand, saisi en clé")
+        reason("account", "compte chez le marchand, saisi en clé")
     forbidden = [w for w in FORBIDDEN_REGION_WORDS if has(w, region_words)]
     if forbidden:
-        reasons.append("région interdite : " + ", ".join(forbidden))
-    url_regions = {f for f, ws in REGION_FAMILIES.items() if any(has(w, region_words) for w in ws)}
-    aks_region = region_family(offer["region"])
-    if aks_region and url_regions and aks_region not in url_regions:
-        reasons.append("région : AllKeyShop %s, marchand %s" % (offer["region"], "/".join(sorted(url_regions))))
-    if any(has(w) for w in GIFT_WORDS) and "GIFT" not in offer["region"].upper():
-        reasons.append("gift chez le marchand, affiché en clé %s" % offer["region"])
+        reason("zone", "région interdite : " + ", ".join(forbidden))
+    zone = aks_zone(offer)
+    found = merchant_zones(region_words)
+    if zone and found and not ZONE_COVERAGE[zone] <= zone_coverage(found):
+        reason("zone", "région : AllKeyShop %s, marchand %s" % (offer["region"], "/".join(sorted(found))))
+    if any(has(w) for w in GIFT_WORDS) and not is_gift_region(offer):
+        reason("gift", "gift chez le marchand, affiché en clé %s" % offer["region"])
     # plateforme : sur tous les mots, car « Xbox Series » fait partie du nom AllKeyShop et de l'URL
-    aks_platform = platform_family(offer["platform"])
-    url_platforms = {f for f, ws in PLATFORM_FAMILIES.items() if any(has(w, normed) for w in ws)}
-    if aks_platform and url_platforms and aks_platform not in url_platforms:
-        reasons.append("plateforme : AllKeyShop %s, marchand %s" % (offer["platform"], "/".join(sorted(url_platforms))))
-    url_editions = [w for w in EDITION_WORDS if has(w)]
-    if url_editions and not edition_matches(offer["edition"], url_editions):
-        reasons.append("édition : AllKeyShop %s, marchand %s" % (offer["edition"], ", ".join(url_editions)))
+    aks_groups = aks_platform_groups(offer)
+    url_groups = text_platform_groups(normed)
+    if aks_groups and url_groups and not aks_groups & url_groups:
+        reason("platform", "plateforme : AllKeyShop %s, marchand %s" % (
+            offer["platform"] or "/".join(sorted(aks_groups)), "/".join(sorted(url_groups))))
+    else:
+        console = page_console(product)
+        url_consoles = url_groups & set(CONSOLE_GROUPS)
+        if console and url_consoles and console not in url_consoles:
+            reason("console", "plateforme : page AllKeyShop %s, marchand %s" % (
+                CONSOLE_LABELS[console], "/".join(CONSOLE_LABELS[c] for c in sorted(url_consoles))))
+    merchant_editions = [w for w in EDITION_WORDS if has(w)]
+    er = edition_reason(offer, merchant_editions, words)
+    if er:
+        reason("edition", er)
     dlc = [w for w in DLC_WORDS if has(w)]
     # « pre-order-bonus-dlc » est le bonus vendu avec le jeu ; « Standard + DLC Bundle » l'annonce ;
     # sur la page d'un DLC (édition « DLC » présente), le mot est attendu
     if dlc and not has("bonus") and not announces_extra_content(offer["edition"]) and not offer.get("page_dlc"):
-        reasons.append("contenu additionnel : " + ", ".join(dlc))
-    return {"match": match, "reasons": reasons, "notes": notes}
+        reason("dlc", "contenu additionnel : " + ", ".join(dlc))
+    return {"match": match, "reasons": reasons, "kinds": kinds, "notes": notes}
+
+
+def confirmed(kind, product, offer, page_text):
+    """La page marchand dit-elle elle aussi ce que disait l'URL (autre plateforme, zone plus étroite) ?"""
+    normed = norm(page_text)
+    if kind == "platform":
+        return bool(text_platform_groups(normed) - aks_platform_groups(offer))
+    if kind == "console":
+        return bool((text_platform_groups(normed) & set(CONSOLE_GROUPS)) - {page_console(product)})
+    if kind == "zone":
+        zone = aks_zone(offer)
+        found = merchant_zones(normed)
+        return bool(zone and found) and not ZONE_COVERAGE[zone] <= zone_coverage(found)
+    return False
+
+
+def contradicted(kind, product, offer, page_text):
+    """La page marchand contredit-elle l'URL sur ce point ? Il faut qu'elle dise explicitement ce
+    qu'affiche AllKeyShop (Gamingdragons : URL « steam-key », page « PC - EA App ») ; une page muette
+    ne contredit rien."""
+    normed = norm(page_text)
+    if kind == "platform":
+        page_groups = text_platform_groups(normed)
+        return bool(page_groups) and page_groups <= aks_platform_groups(offer)
+    if kind == "console":
+        page_consoles = text_platform_groups(normed) & set(CONSOLE_GROUPS)
+        return page_consoles == {page_console(product)}
+    if kind == "zone":
+        zone = aks_zone(offer)
+        found = merchant_zones(normed)
+        return bool(zone and found) and ZONE_COVERAGE[zone] <= zone_coverage(found)
+    return False
 
 
 # ---- Page marchand (dernier repli) -------------------------------------------
@@ -535,6 +804,47 @@ def page_title_from_html(dom):
             if part and part not in parts:
                 parts.append(part)
     return " | ".join(parts) or None
+
+
+def is_block_page(text):
+    """Page anti-robot (Cloudflare, Akamai, captcha Amazon) : le titre ne dit rien du produit."""
+    first = (text or "").split(" | ")[0].strip().lower()
+    return not first or len(norm(first)) < 4 or any(m in first for m in BLOCK_PAGE_MARKERS) or first in ("amazon.fr", "amazon.de", "amazon.it", "amazon.es")
+
+
+def playstation_text(page_html, url):
+    """PS Store : nom du produit et libellé d'édition, dans le JSON de la page
+    (« Crimson Desert Enhanced » + « Standard Edition »)."""
+    product_id = urllib.parse.urlparse(url).path.rstrip("/").split("/")[-1]
+    m = re.search(r'"Product:%s":\{.*?"edition":\{"__typename":"ProductEdition","name":"([^"]*)"\},"name":"([^"]*)"' % re.escape(product_id),
+                  page_html, re.DOTALL)
+    if not m:
+        return None
+    edition, name = (json.loads('"%s"' % x) for x in m.groups())
+    return "%s | %s" % (name, edition) if edition else name
+
+
+def merchant_page_text(url, cfg):
+    """Titre de la page marchand : HTTP simple d'abord (UA navigateur), puis Chromium si la config le
+    permet. La config peut réécrire l'URL (PS Store : version en-gb, pour un titre en anglais).
+    Renvoie (texte, méthode), ou (None, None) si la page est illisible."""
+    page_cfg = cfg.get("page") or {}
+    if page_cfg.get("locale_from"):
+        url = re.sub(page_cfg["locale_from"], page_cfg.get("locale_to", ""), url)
+    try:
+        status, _, body = http_get(url, BROWSER_UA)
+    except OSError:
+        status, body = None, ""
+    time.sleep(REQUEST_DELAY)
+    if status == 200 and body:
+        text = (playstation_text(body, url) if page_cfg.get("parser") == "playstation" else None) or page_title_from_html(body)
+        if text and not is_block_page(text):
+            return text, "page (HTTP)"
+    if cfg.get("browser", True):
+        text = page_title(url)
+        if text and not is_block_page(text):
+            return text, "page (Chromium)"
+    return None, None
 
 
 def page_title(url):
@@ -610,13 +920,41 @@ def check_offer(product, offer):
             if result2["match"]:
                 result, method, url = result2, "URL après 301 marchand", url2
 
+    page_text = None
     if result["match"] is None:
-        # 2e repli : ouvrir la page marchand, sauf si sa config dit qu'elle bloque les navigateurs
-        title = page_title(url) if cfg.get("browser", True) else None
-        if title is None:
+        # 2e repli : lire la page marchand (HTTP simple, puis Chromium si la config le permet)
+        page_text, page_method = merchant_page_text(url, cfg)
+        if page_text is None:
+            others = [r for r, k in zip(result["reasons"], result["kinds"]) if k != "name"]
+            if others:  # le nom ne se vérifie pas, mais l'URL montre déjà un autre problème (Elden Ring : « PlayStation »)
+                return {"verdict": "SUSPECT", "url": url, "method": method, "reasons": others,
+                        "notes": result["notes"] + ["nom du produit non vérifiable (page marchand illisible)"]}
             return {"verdict": "À VÉRIFIER", "url": url, "method": "aucune", "notes": [],
-                    "reasons": ["URL sans nom du produit et page marchand illisible"]}
-        result, method = analyze(product, offer, title, "titre de la page"), "page (Chromium)"
+                    "reasons": ["URL sans nom du produit et page marchand illisible"],
+                    "unverifiable": cfg.get("unverifiable", "first-price")}
+        result, method = analyze(product, offer, page_text, "titre de la page"), page_method
+        if cfg.get("localized") and result["kinds"] == ["name"]:
+            # boutique au titre traduit (Amazon.fr : « Kirby et le monde oublié ») : un nom introuvable
+            # n'est pas une preuve, un humain vérifie ; la réponse enrichit aliases.toml
+            return {"verdict": "À VÉRIFIER", "url": url, "method": method, "notes": result["notes"],
+                    "reasons": ["titre du marchand dans une autre langue, nom non reconnu : %s" % page_text[:120]],
+                    "unverifiable": cfg.get("unverifiable", "first-price")}
+
+    confirmable = [k for k in result["kinds"] if k in ("platform", "console", "zone")]
+    if confirmable and method.startswith("URL") and not (cfg.get("region") or {}).get("from") == "query":
+        # l'URL contredit AllKeyShop : avant d'alerter, on regarde la page (URL trompeuse chez Gamingdragons)
+        page_text, _ = merchant_page_text(url, cfg)
+        if page_text:
+            kept = [(r, k) for r, k in zip(result["reasons"], result["kinds"])
+                    if not (k in confirmable and contradicted(k, product, offer, page_text))]
+            if len(kept) < len(result["reasons"]):
+                result["notes"].append("URL contredite par la page : %s" % page_text[:120])
+            elif any(k in confirmable and confirmed(k, product, offer, page_text) for _, k in kept):
+                result["notes"].append("confirmé par la page : %s" % page_text[:120])
+            elif kept:
+                result["notes"].append("la page ne dit rien sur ce point : %s" % page_text[:120])
+            result["reasons"] = [r for r, _ in kept]
+            result["kinds"] = [k for _, k in kept]
 
     return {"verdict": "SUSPECT" if result["reasons"] else "OK", "url": url, "method": method,
             "reasons": result["reasons"], "notes": result["notes"]}
@@ -624,13 +962,16 @@ def check_offer(product, offer):
 
 # ---- Alertes, état, boucle ---------------------------------------------------
 
-ICONS = {"OK": "🟢", "SUSPECT": "🔴", "À VÉRIFIER": "🟠"}
+ICONS = {"OK": "🟢", "SUSPECT": "🔴", "À VÉRIFIER": "🟠", "NON VÉRIFIABLE": "⚪"}
+NOT_SENT = ("OK", "NON VÉRIFIABLE")  # verdicts gardés dans le journal et l'état, sans alerte (OK : sauf NOTIFY_OK)
 
 
 def format_alert(label, rank, product, page_url, offer, res):
     lines = [
         f"{ICONS[res['verdict']]} **{res['verdict']}** · **{product}** ({label} #{rank}) · {offer['edition']}",
-        f"{offer['merchantName']} · {offer['region']} · {offer['platform'] or 'plateforme ?'} · "
+        f"{offer['merchantName']} · {offer['region']}"
+        + (f" ({offer['region_filter']})" if offer.get("region_filter") and offer["region_filter"] != offer["region"] else "")
+        + f" · {offer['platform'] or 'plateforme ?'} · "
         f"**{offer['price']:.2f} €** · offre {offer['id']} · contrôle : {res['method']}",
     ]
     lines += ["Raison : " + r for r in res["reasons"]]
@@ -724,8 +1065,9 @@ def run_cycle(targets, notify, state, checker=check_offer, save=None):
         finally:
             time.sleep(PAGE_DELAY)
         page_dlc = is_dlc_page(trans, product)
-        for offer in first_prices(trans):
+        for position, offer in enumerate(first_prices(trans)):
             offer["page_dlc"] = page_dlc
+            offer["page_first"] = position == 0  # le premier prix de toute la page (toutes éditions)
             key = str(offer["id"])
             if key in state["checked"]:
                 state["checked"][key]["seen"] = now
@@ -740,9 +1082,11 @@ def run_cycle(targets, notify, state, checker=check_offer, save=None):
                 res = {"verdict": "À VÉRIFIER", "url": None, "method": "aucune", "notes": [],
                        "reasons": ["contrôle impossible : %s" % e]}
             FAILURES.pop(key, None)
+            if res["verdict"] == "À VÉRIFIER":
+                res = dict(res, verdict=unverifiable_verdict(offer, label, page_url, res.get("unverifiable", "first-price")))
             msg = format_alert(label, rank, product, page_url, offer, res)
             log.info("%s", msg.replace("\n", " | "))
-            if res["verdict"] != "OK" or NOTIFY_OK:
+            if res["verdict"] not in NOT_SENT or (res["verdict"] == "OK" and NOTIFY_OK):
                 try:
                     notify(msg)
                 except Exception as e:
@@ -759,6 +1103,17 @@ def run_cycle(targets, notify, state, checker=check_offer, save=None):
                 m["methods"][res["method"]] = m["methods"].get(res["method"], 0) + 1
                 m.update(url=res["url"], at=stamp)
     prune_state(state, now)
+
+
+def unverified_table(state):
+    """Table Markdown des offres en tête qu'on n'a pas pu vérifier (NON VÉRIFIABLE), pour la doc."""
+    rows = ["| Jeu | Édition | Marchand | Prix | Pourquoi | URL marchand | Vu le |", "|---|---|---|---|---|---|---|"]
+    for key, e in sorted(state["checked"].items(), key=lambda kv: (kv[1].get("merchant", ""), kv[1].get("product", ""))):
+        if e.get("verdict") == "NON VÉRIFIABLE":
+            rows.append("| %s | %s | %s | %.2f € | %s | `%s` | %s |" % (
+                e.get("product"), e.get("edition"), e.get("merchant"), e.get("price") or 0, "; ".join(e.get("reasons") or []),
+                re.sub(r"[?#].*", "", e.get("url") or ""), e.get("at")))
+    return "\n".join(rows)
 
 
 def coverage_table(state):
@@ -779,6 +1134,7 @@ def main():
     ap.add_argument("--once", action="store_true", help="un seul passage puis arrêt")
     ap.add_argument("--state", default="state.json", help="fichier des offres déjà contrôlées")
     ap.add_argument("--coverage", action="store_true", help="affiche la table de couverture des marchands et sort")
+    ap.add_argument("--unverified", action="store_true", help="affiche la table des offres NON VÉRIFIABLE et sort")
     ap.add_argument("--check", nargs=2, metavar=("PRODUIT", "URL"), help="analyse une URL marchand et sort")
     ap.add_argument("--edition", default="Standard", help="avec --check : édition affichée")
     ap.add_argument("--region", default="GLOBAL", help="avec --check : région affichée")
@@ -789,6 +1145,9 @@ def main():
 
     if args.coverage:
         print(coverage_table(load_state(args.state)))
+        return
+    if args.unverified:
+        print(unverified_table(load_state(args.state)))
         return
     if args.check:
         product, url = args.check

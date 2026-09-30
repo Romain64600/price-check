@@ -1,0 +1,15 @@
+# PlayStation Store (store.playstation.com). Étude du 30/09/2026 :
+# - l'URL ne contient qu'un code produit (« EP9001-PPSA01316_00-GT7DDE0000000PS5 ») ;
+# - la page se lit en HTTP simple (UA navigateur) : son JSON donne le nom du produit et le libellé
+#   d'édition (« Crimson Desert Enhanced » + « Standard Edition ») ; Chromium, lui, tombe souvent
+#   sur « Access Denied » ;
+# - les boutiques européennes (es-es, fr-fr, de-de, it-it...) donnent un titre traduit
+#   (« El reino marchito ») : on lit la même page en en-gb, pour un titre en anglais.
+name = "PlayStation Store"
+hosts = ["store.playstation.com"]
+browser = false
+
+[page]
+parser = "playstation"
+locale_from = "/(es-es|fr-fr|de-de|it-it|pt-pt|nl-nl|be-fr|be-nl|at-de|ch-de|ch-fr|pl-pl)/"
+locale_to = "/en-gb/"
