@@ -12,11 +12,11 @@ Une offre peut être ajoutée sur une page produit alors qu'elle ne devrait pas 
 
 - **Région non affichable** : c'est bien le produit, mais dans une région qu'on n'est pas censé afficher sur notre marché.
 - **Compte saisi comme clé** : sur la page du marchand, c'est un compte, mais nous l'avons saisi en tant que clé normale.
-- **Autre produit ou autre édition** : l'offre ne correspond pas au produit de la page.
+- **Autre produit** : l'offre ne correspond pas au produit de la page, par exemple Sonic 1 ou un vieux Mario sur la page du dernier Sonic. **C'est surtout ce cas qui fait peur.**
 
 Si cette offre est la moins chère, elle devient le premier prix affiché, et ce premier prix est faux. **L'écart avec l'offre suivante n'est pas un critère** : il peut être de 30 %, comme d'un centime. Il faut donc contrôler l'offre elle-même, pas son écart de prix.
 
-> **État actuel** : la version en place ne détecte qu'un écart d'au moins 30 % entre les deux offres les moins chères. Elle ne répond pas à l'objectif et doit être revue. Voir les questions ouvertes dans [docs/detection.md](docs/detection.md#questions-ouvertes).
+> **État actuel** : la version en place ne détecte qu'un écart d'au moins 30 % entre les deux offres les moins chères. Elle ne répond pas à l'objectif et doit être revue. La règle proposée et les questions ouvertes sont dans [docs/detection.md](docs/detection.md#règle-proposée). Point clé : seul wp-admin donne le titre du produit chez le marchand, la détection automatique d'un mauvais produit passe donc par un accès staff.
 
 ## Démarrage rapide
 
@@ -43,7 +43,7 @@ Le moniteur ne fait que des GET en lecture seule et n'appelle jamais les liens `
 
 | Document | Contenu |
 |---|---|
-| [docs/detection.md](docs/detection.md) | Objectif de détection, règle actuelle, questions ouvertes |
+| [docs/detection.md](docs/detection.md) | Objectif, sources disponibles, règle proposée, règle actuelle, questions ouvertes |
 | [docs/exploitation.md](docs/exploitation.md) | Installation, options, réglages, systemd, journaux, tests |
 | [docs/reconnaissance.md](docs/reconnaissance.md) | Analyse du site : API des listes, cache, structure des offres |
 

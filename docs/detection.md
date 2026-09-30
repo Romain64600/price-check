@@ -20,12 +20,36 @@ Attention à ne pas confondre région et langue. Sur EA SPORTS FC 27 (échantill
 |---|---|---|
 | `IN ENGLISH ONLY` | `EA ENG/POL/RUS ONLY` | Autorisée : restriction de langue, pas de région |
 
+## Cas principal : mauvais produit
+
+C'est surtout ce cas qui fait peur : sur la page du dernier Sonic, un marchand ajoute une offre qui est en fait Sonic 1, ou un vieux Mario. Elle est moins chère, donc elle devient le premier prix du comparateur.
+
+Une offre ne dit pas, côté public, quel produit le marchand vend réellement. Vérifié le 30/09/2026 :
+
+| Source | Ce qu'on y trouve | Titre marchand ? |
+|---|---|---|
+| Page produit (`gamePageTrans.prices[]`) | id d'offre, marchand, édition, région, plateforme, prix | Non |
+| API publique CatalogV2 (`vaks.php?action=CatalogV2`) | nom canonique du produit, `offers_count`, une seule offre (la meilleure) avec `buy_url` = lien `/redirection/` | Non |
+| Lien `/redirection/offer/<id>` | la page du marchand | Oui, mais **compte un clic**, interdit |
+| wp-admin, `admin.php?page=aks-merchant-feeds-9&search[field]=productId&search[search]=<legacyId>&list=all&store=all` | lignes `tr[data-offer]` avec `{id, name, url, storeId, price}` : `name` est le titre du produit chez le marchand, `url` sa page | **Oui** |
+| API historique de prix (`price_history_api.php`) | répond `{"error":"400-2"}` avec l'id ou le slug, paramètres à retrouver | Non |
+
+Seul wp-admin donne donc le titre marchand. La détection automatique d'un mauvais produit passe par là.
+
+## Règle proposée
+
+Trois niveaux, du plus sûr au plus automatique :
+
+1. **Nouveau premier prix → alerte « à vérifier ».** À chaque passage, si l'offre en tête d'une page (id d'offre) change, on alerte avec marchand, région, édition, plateforme, prix et id. Une offre jamais vue sur la page est marquée **NOUVELLE OFFRE** : c'est le scénario redouté, une offre fraîchement ajoutée qui passe devant. Un humain vérifie. Rien ne peut être raté, mais chaque changement de tête alerte.
+2. **Titre marchand ≠ produit → « SUSPECT : produit différent ».** Si le moniteur dispose d'un accès wp-admin, il récupère le titre marchand de l'offre en tête (recherche par `productId`), le normalise (minuscules, `&` → `and`, ponctuation retirée, édition retirée en fin de titre, mêmes règles que la saisie des offres) et le compare **strictement** au nom canonique du produit. En cas de différence, l'alerte est marquée suspecte et affiche les deux titres : « Sonic the Hedgehog » contre « Sonic Racing CrossWorlds » se voit d'un coup d'œil.
+3. **Signaux automatiques sans wp-admin**, ajoutés en marque « suspect » sur l'alerte : région dans une liste interdite (à définir) ; prix très en dessous des autres offres de la même édition (par exemple sous la moitié de la médiane). Ce dernier signal n'est qu'une aide : une offre fautive peut n'être qu'un centime sous la suivante.
+
 ## Questions ouvertes
 
-1. **Régions** : quelles régions sont autorisées sur notre marché (allkeyshop.com, EUR) ? Régions vues dans les échantillons, en plus de `IN ENGLISH ONLY` : `GLOBAL`, `EUROPE`, `GIFT`, `GIFT EU`, `XBOX/PC`, `XBOX/PC EU`. Une liste des régions interdites suffirait.
-2. **Compte ou clé** : pour le vérifier, il faut voir la page produit du marchand. Son URL n'apparaît pas dans la page publique, seulement via `/redirection/offer/...`, qui compte des clics. Existe-t-il un accès staff à l'URL marchand de chaque offre (wp-admin, flux marchands) ?
-3. **Premier prix** : lequel contrôle-t-on ? Le premier prix global de la page (en haut du tableau), ou le premier prix de chaque édition ?
-4. **Alerte** : alerte-t-on à chaque changement de premier prix, pour vérification humaine, ou seulement quand une règle automatique juge l'offre suspecte ?
+1. **Accès wp-admin pour le moniteur.** Peut-on lui donner une session staff (compte dédié ou cookie) utilisable depuis le serveur, pour lire `merchant_feeds` ? Et cette liste couvre-t-elle toutes les offres en ligne d'un produit, ou seulement celles venues des flux marchands ?
+2. **Régions interdites** sur allkeyshop.com en EUR : lesquelles ? Une liste suffirait.
+3. **Quel premier prix ?** Celui de la page (haut du tableau), ou celui de chaque édition ?
+4. **Volume d'alertes acceptable.** Alerter à chaque changement de tête, ou seulement sur NOUVELLE OFFRE et SUSPECT ?
 
 ## Règle actuelle (à remplacer)
 
