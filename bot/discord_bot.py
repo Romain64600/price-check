@@ -24,6 +24,8 @@ import re
 import sys
 import time
 
+import shutil
+
 import discord
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -126,14 +128,29 @@ def progress_line(event):
 
 # ---- Claude Code en sous-processus ---------------------------------------------
 
+def find_claude():
+    """L'exécutable Claude Code : CLAUDE_BIN, sinon le PATH, sinon les emplacements habituels
+    (sous systemd, le PATH est minimal)."""
+    candidates = [os.environ.get("CLAUDE_BIN") or "claude", "/root/.local/bin/claude", "/usr/local/bin/claude",
+                  os.path.expanduser("~/.claude/local/claude"), os.path.expanduser("~/.npm-global/bin/claude")]
+    for c in candidates:
+        found = shutil.which(c) if os.sep not in c else (c if os.access(c, os.X_OK) else None)
+        if found:
+            return found
+    return None
+
+
 class ClaudeRunner:
     def __init__(self, cwd, permission_mode, timeout):
         self.cwd, self.permission_mode, self.timeout = cwd, permission_mode, timeout
         self.process = None
+        self.binary = find_claude()
 
     async def run(self, prompt, session_id, on_progress):
         """Lance `claude -p`, suit la progression, renvoie (texte, session_id, erreur)."""
-        cmd = [os.environ.get("CLAUDE_BIN", "claude"), "-p", "--output-format", "stream-json", "--verbose",
+        if not self.binary:
+            return "", session_id, "exécutable claude introuvable (CLAUDE_BIN dans .env)"
+        cmd = [self.binary, "-p", "--output-format", "stream-json", "--verbose",
                "--permission-mode", self.permission_mode, "--permission-prompts", "none",
                "--append-system-prompt", SYSTEM_PROMPT]
         if session_id:
@@ -333,8 +350,15 @@ class Bot(discord.Client):
 
         started = time.monotonic()
         prompt = "[%s] %s" % (message.author.display_name, text)  # signé : Claude sait qui parle
-        async with message.channel.typing():
-            text, session_id, error = await self.runner.run(prompt, self.state.get("session_id"), on_progress)
+        try:
+            async with message.channel.typing():
+                text, session_id, error = await self.runner.run(prompt, self.state.get("session_id"), on_progress)
+        except Exception:
+            try:
+                await status.delete()  # pas de « je réfléchis… » orphelin
+            except discord.HTTPException:
+                pass
+            raise
         if session_id:
             self.state["session_id"] = session_id
             save_state(self.state)
@@ -375,6 +399,7 @@ def main():
     runner = ClaudeRunner(cwd=os.environ.get("CLAUDE_CWD", "/root/price-checker"),
                           permission_mode=os.environ.get("CLAUDE_PERMISSION_MODE", "auto"),
                           timeout=int(os.environ.get("CLAUDE_TIMEOUT", "1800")))
+    log.info("claude : %s ; répertoire : %s ; mode : %s", runner.binary or "INTROUVABLE", runner.cwd, runner.permission_mode)
     Bot(int(channel_id), int(os.environ.get("DISCORD_OWNER_ID", "0") or 0), runner).run(token, log_handler=None)
 
 
