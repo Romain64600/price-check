@@ -162,6 +162,9 @@ NAME_ALIASES = (
     ("gta", "grand theft auto"),
     ("cod", "call of duty"),
 )
+# Mots qui distinguent un produit d'un autre : jamais tolérés comme « le mot manquant » d'un nom long
+# (le titre du jeu de base ne passe pas pour « Forza Horizon 6 Premium Upgrade Bundle », étude du 30/09/2026)
+NEVER_MISSING = {"upgrade", "dlc", "expansion", "season", "pass", "soundtrack", "ost", "demo", "vr", "remake", "remastered"}
 # Autres noms d'un produit (titre européen, titre localisé...), appris au fil de la formation : aliases.toml
 ALIASES_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "aliases.toml")
 ROMAN = {1: "i", 2: "ii", 3: "iii", 4: "iv", 5: "v", 6: "vi", 7: "vii", 8: "viii", 9: "ix", 10: "x",
@@ -486,7 +489,7 @@ def name_match(names, normed):
         if significant and not missing:
             return "partial"
         if (len(significant) >= 4 and len(missing) == 1 and not (missing[0].isdigit() or missing[0] in ARABIC)
-                and not has_platform_suffix(name)):
+                and missing[0] not in NEVER_MISSING and not has_platform_suffix(name)):
             # la tolérance vaut pour le nom sans « Nintendo Switch » : sinon « Pokémon Bouclier »
             # passerait pour « Pokemon Sword Nintendo Switch » (étude du 30/09/2026)
             return "partial"

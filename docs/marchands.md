@@ -80,6 +80,22 @@ Testé sur les pages EA SPORTS FC 27 (Popular #1) et Dynasty Warriors 3 Complete
 - **EA.com** : l'analyseur reconnaît le nom en partie (`ea-sports-fc` + `fc-27`), verdict OK avec la note « nom partiel ».
 - **Marchands qui n'ont pas encore eu d'offre en tête** sur les 9 pages : non vérifiés. Le moniteur note la méthode utilisée pour chaque marchand rencontré (`--coverage`) ; compléter cette table quand un nouveau marchand apparaît.
 
+## Offres non vérifiables
+
+Offres en premier prix que le moniteur n'a pas pu vérifier : ni l'URL ni la page ne donnent le nom. Elles sont notées `NON VÉRIFIABLE`, sans alerte (formation du 30/09/2026), sauf premier prix d'une page d'un top ou d'un coming soon. Liste générée par `python3 price_check.py --unverified`, état au 30/09/2026 :
+
+| Jeu | Édition | Marchand | Prix | Pourquoi | URL marchand | Vu le |
+|---|---|---|---|---|---|---|
+| Animal Crossing New Horizons Nintendo Switch | Bundle | Amazon.de | 70.41 € | URL sans nom du produit et page marchand illisible | `https://www.amazon.de/-/en/dp/B09L2P3Y3H/` | 2026-09-30 16:05 |
+| Animal Crossing New Horizons Nintendo Switch | Bonus | Amazon.de | 84.98 € | URL sans nom du produit et page marchand illisible | `https://www.amazon.de/-/en/dp/B09LDDSP33/` | 2026-09-30 16:05 |
+| Kirby and the Forgotten Land Nintendo Switch | Standard | Amazon.fr | 44.99 € | URL sans nom du produit et page marchand illisible | `https://www.amazon.fr/Kirby-monde-oubli%C3%A9-Nintendo-Switch/dp/B09QH87JC3/` | 2026-09-30 16:05 |
+| Mario Kart 8 Deluxe Nintendo Switch | Standard | Amazon.fr | 43.99 € | URL sans nom du produit et page marchand illisible | `https://www.amazon.fr/gp/product/B01N223WHL/ref=as_li_tl` | 2026-09-30 16:05 |
+| Pokemon Lets Go Pikachu Nintendo Switch | Standard | Amazon.fr | 43.19 € | URL sans nom du produit et page marchand illisible | `https://www.amazon.fr/gp/product/B07DF4HGBY/ref=as_li_tl` | 2026-09-30 16:05 |
+| Super Mario Odyssey Nintendo Switch | Standard | Amazon.fr | 44.49 € | URL sans nom du produit et page marchand illisible | `https://www.amazon.fr/gp/product/B072KJWYL9/ref=as_li_tl` | 2026-09-30 16:05 |
+| Super Smash Bros Ultimate Nintendo Switch | Limited | Amazon.fr | 281.29 € | URL sans nom du produit et page marchand illisible | `https://www.amazon.fr/gp/product/B07GBTDS57/ref=as_li_tl` | 2026-09-30 16:05 |
+
+Toutes chez Amazon, dont la page renvoie un captcha et dont l'URL ne porte souvent qu'un code produit (`gp/product/B01N223WHL`).
+
 ## Lecture des pages marchand (étude du 30/09/2026)
 
 | Marchand | HTTP simple (UA navigateur) | Chromium sans écran |

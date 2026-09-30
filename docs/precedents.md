@@ -27,6 +27,8 @@ Chaque cas réel jugé, avec sa décision, sa preuve et la règle qui en découl
 | 30/09 | EA SPORTS FC 26 · ICONS Edition | Driffle | Clé **Steam** affichée `EA GLOBAL` (44,81 € contre 53,83 € pour l'offre suivante) | URL `…-global-pc-steam-digital-key` ; page bloquée | étude |
 | 30/09 | Farming Simulator 25 · Year 1 Edition | Loaded | **Season pass seul** rangé en « Year 1 Edition » (jeu + pass), la page a aussi « Year 1 Bundle » | URL `…-year-1-season-pass-pc-steam` ; 29,19 € contre 40,45 € chez GAMIVO pour le jeu + pass | étude (formation en attente) |
 | 30/09 | Elden Ring Xbox Series · Launch Edition | Amazon.fr | Version **PlayStation** sur la page Xbox | URL `…-3391892017632-PlayStation` ; page Amazon illisible | étude |
+| 30/09 | Splatoon Raiders Nintendo Switch 2 · Standard | Gamingdragons | Offre saisie **Xbox** (plateforme et région `XBOX X|S EUROPE`) sur la page Switch 2 | page : « … Switch 2 - Nintendo Switch eStore » | étude (rejeu complet) |
+| 30/09 | The Witcher 3 Wild Hunt Xbox Series · Standard | Lootbar | Offre saisie `STEAM ROW` sur la page Xbox, le marchand vend une clé Xbox | URL `…/the-witcher-3-wild-hunt-xbox` ; page muette | étude (rejeu complet) |
 | 30/09 | GTA 4 · Standard | Steam | **Complete Edition** rangée en Standard, la page a une édition Complete | titre Steam « Grand Theft Auto IV: The Complete Edition » | étude (gravité faible, à trancher) |
 | 30/09 | STAR WARS Zero Company Xbox Series · Standard + DLC | GAMIVO | **Deluxe + bonus** rangée en « Standard + DLC », la page a « Deluxe + Bonus » | URL `…-global-deluxe-pre-order-bonus` | étude (gravité faible, à trancher) |
 
@@ -60,6 +62,11 @@ Chaque cas réel jugé, avec sa décision, sa preuve et la règle qui en découl
 | 30/09 | ETS2, Stellaris, RimWorld (bundles) | divers | noms de bundles | éditions génériques non comparées ; mot propre à l'édition (`2024`, `mediterranean`, `starter`) | étude |
 | 30/09 | Hunt Showdown · Standard + DLC Bundle | Kinguin | `10-dlc-bundle` | page : « Hunt: Showdown 1896 +10 DLC Bundle » (jeu + DLC) | étude |
 
+| 30/09 | Call of Duty Black Ops 6 · Standard | Eneba | URL `steam-…-steam-key`, page « (PC) **Windows Store** Key » = région `WINDOWS EU` | confirmation sur la page (faux positif évité au rejeu) | étude |
+| 30/09 | STAR WARS Galactic Racer, KCD2, Castlevania | GAMESEAL | `…-steam-key-eu-na` pris pour EU seul, la région est EU/US | `eu-na` = EU/US | étude (rejeu complet) |
+| 30/09 | Euro Truck Simulator 2 · Standard + DLC | GameBoost | « Vive la **France** » (un DLC) pris pour une zone | pas de noms de pays comme mots de zone | étude (rejeu complet) |
+| 30/09 | Fable Premium Upgrade Bundle Xbox · DLC | Eneba | « bundle » absent de l'URL | « bundle » facultatif dans un nom | étude (rejeu complet) |
+
 ## Faux négatifs évités
 
 | Date | Cas | Règle |
@@ -67,7 +74,25 @@ Chaque cas réel jugé, avec sa décision, sa preuve et la règle qui en découl
 | 30/09 | « Pokémon **Bouclier** » passait pour « Pokemon **Sword** Nintendo Switch » : la tolérance d'un mot manquant comptait « Nintendo Switch » | tolérance calculée sur le nom sans suffixe de plateforme |
 | 30/09 | Elden Ring Xbox chez Amazon : nom illisible, donc « À VÉRIFIER » sans mentionner la PlayStation | console de la page comparée à l'URL ; le problème vu dans l'URL reste une alerte même si le nom est invérifiable |
 
+| 30/09 | Forza Horizon 6 **Premium Upgrade Bundle** : le titre du jeu de base passait avec la tolérance d'un mot manquant (« upgrade ») | les mots distinctifs (upgrade, DLC, season pass, VR…) ne sont jamais le mot toléré |
+
+Rejeu complet du 30/09/2026 : les 920 offres en tête des 415 pages, repassées dans les nouvelles règles avec leur URL marchand. 12 anciens OK changeaient : 3 vraies erreurs nouvelles (Splatoon Raiders, The Witcher 3 Xbox, Call of Duty Black Ops 6 — ce dernier contredit ensuite par la page), 5 régressions corrigées (ci-dessus), 4 cas normaux (eShop localisés, Amazon : lecture de page).
+
 Revue des 202 offres jugées OK sur une base fragile (nom partiel, titre court, nom non contrôlé) : aucune erreur manquée. Vérifiés un par un : GTA The Trilogy (Switch et Xbox, chacune sur sa page), Among Us VR (Loaded `among-us-3d-vr` : le jeu s'appelle désormais « Among Us 3D: VR » sur Steam, prix au niveau des autres offres).
+
+## Ce qui est parti sur Discord le 30/09/2026 : bilan
+
+35 reports (31 automatiques, 4 envoyés à la main) :
+
+- **11 vraies erreurs** : DREDGE (DOOM), TORO 2 (Metal Garden), Stellaris, The Blood Of Dawnwalker, Crusader Kings 3 (clés EU affichées GLOBAL), F1 25 (Xbox affichée Steam), EA SPORTS FC 26 ICONS (Steam affichée EA App), Farming Simulator 25 (season pass seul), Elden Ring Xbox (version PlayStation), GTA 4 et STAR WARS Zero Company (éditions mal rangées, gravité faible).
+- **1 incertain** : Forza Horizon 6 Premium Upgrade Bundle chez LDShop.
+- **23 faux positifs**, tous corrigés par une règle ci-dessus : Minecraft Dungeons 2 ×2, Screamer 2026 (K4G), GTA 5 (Wyrel), Diablo 4 (Driffle), Big Walk, EA SPORTS FC 26 Ultimate (Gamingdragons), Crimson Desert, Gran Turismo 7, Dragon Quest Monsters, Attack on Titan 3 ×2, Mario Kart World (K4G), et 10 À VÉRIFIER (9 Amazon, Rhythm Heaven chez Loaded).
+
+Rejoués avec les règles du soir, les 11 vraies erreurs sortent toujours et les 23 faux positifs ne sortent plus. Deux nouvelles vraies erreurs trouvées au rejeu (Splatoon Raiders, The Witcher 3 Xbox) ont été envoyées.
+
+## Offres non vérifiables (formation du 30/09/2026)
+
+« Quand on n'a ni dans l'URL ni sur la page, tu prends note » : une offre invérifiable est notée `NON VÉRIFIABLE` (journal, `state.json`, `python3 price_check.py --unverified`), **sans alerte**, sauf si c'est le premier prix de toute la page sur une page d'un top ou d'un coming soon (listes Popular, Coming soon, Most anticipated) : là, À VÉRIFIER. Amazon : jamais d'alerte pour une offre invérifiable (« ne t'embête pas avec Amazon »), mais un problème vu dans l'URL reste une alerte (Elden Ring). Liste à jour : voir [marchands.md](marchands.md#offres-non-vérifiables).
 
 ## Cas à trancher
 
@@ -75,7 +100,6 @@ Revue des 202 offres jugées OK sur une base fragile (nom partiel, titre court, 
 |---|---|
 | Forza Horizon 6 Premium Upgrade Bundle Xbox · Upgrade, LDShop (42,54 €) | La page LDShop regroupe plusieurs produits (Standard, Deluxe, Premium Upgrade…) et le lien `skuId=16560` ne dit pas lequel. Est-ce bien l'upgrade ? |
 | GTA 4 (Complete en Standard), Zero Company (Deluxe + bonus en Standard + DLC) | L'acheteur reçoit plus que ce qui est affiché. Alerter ces offres mal rangées, ou seulement celles où il reçoit moins ? |
-| Amazon, URL sans nom (`gp/product/B01N223WHL`) | Page captcha : impossible à contrôler. Garder l'alerte À VÉRIFIER (une fois par offre), ou taire Amazon et le lister comme non monitoré ? |
 | Euro Truck Simulator 2 · Collection Bundle, Driffle (« Collector's Bundle ») | La page a aussi « Collectors Bundle Edition ». Éditions génériques non comparées pour l'instant : faut-il les comparer ? |
 
 ## Ce que l'étude a appris sur AllKeyShop

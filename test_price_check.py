@@ -622,6 +622,12 @@ class TestStudy20260930(unittest.TestCase):
                                       region="EU XBOX X|S", region_filter="XBOX X|S EUROPE", platform="xbox"),
                          ["plateforme : AllKeyShop xbox, marchand nintendo"])
 
+    def test_distinctive_word_never_missing(self):
+        # LDShop : page du jeu de base pour l'offre de l'upgrade (cas à trancher, doit rester signalé)
+        res = pc.analyze("Forza Horizon 6 Premium Upgrade Bundle Xbox Series", offer(edition="Upgrade", region="XBOX/PC", platform="xbox-play-anywhere"),
+                         "Forza Horizon 6 CD-Key for Xbox & PC – Safe & Fast | Forza Horizon 6 Global Key (Xbox/PC)", "titre de la page")
+        self.assertEqual(res["reasons"], ["nom du produit absent (titre de la page)"])
+
     def test_european_title_alias(self):
         self.assertEqual(self.reasons("Rhythm Heaven Groove Nintendo Switch 2", "https://www.loaded.com/rhythm-paradise-groove-switch-eu",
                                       region="EUROPE", region_filter="EUROPE", platform="nintendo-eshop"), [])

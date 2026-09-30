@@ -37,9 +37,13 @@ Python 3 seulement, aucune dépendance. Chromium (déjà sur le serveur) sert de
 1. Toutes les 30 min, il relit les listes de chaque mode via l'API JSON `getLists`, en ne gardant que les jeux, une seule fois par page.
 2. À chaque passage du mode, il lit les offres de chaque page produit (`var gamePageTrans` dans le HTML, user agent `AKS/Staff`) et prend, pour chaque édition, l'offre de clé la moins chère (`priceCard`, sans les offres compte ni les offres « sans prix » à `0.02`).
 3. Toute offre en tête **jamais contrôlée** est contrôlée une fois : redirection AllKeyShop (`AKS/Staff`) → URL marchand → le nom du produit doit y être, et les mots de région, plateforme et édition doivent être compatibles avec l'offre. Si l'URL ne dit rien : le 301 du marchand, puis en dernier recours sa page ouverte avec Chromium (user agent Chrome).
-4. Verdict : 🟢 `OK`, 🔴 `SUSPECT` (avec la raison), 🟠 `À VÉRIFIER` (impossible de conclure). SUSPECT et À VÉRIFIER partent sur Discord ; les OK ne sont que dans le journal (`NOTIFY_OK=0` en production depuis le 30/09/2026).
+4. Verdict : 🟢 `OK`, 🔴 `SUSPECT` (avec la raison), 🟠 `À VÉRIFIER` (impossible de conclure, sur le premier prix d'une page d'un top ou d'un coming soon), ⚪ `NON VÉRIFIABLE` (impossible de conclure ailleurs : noté, sans alerte). SUSPECT et À VÉRIFIER partent sur Discord ; OK et NON VÉRIFIABLE restent dans le journal et l'état (`--unverified` pour la liste).
 
 Détails et exemple d'alerte : [docs/detection.md](docs/detection.md). Le moniteur ne fait que des GET, jamais de wp-admin ; `AKS/Staff` n'est utilisé que sur AllKeyShop.
+
+## Formation
+
+Chaque report jugé (par Romain ou par l'étude) est consigné dans le [registre des précédents](docs/precedents.md), avec sa preuve, la règle qui en découle et un test. Étude du 30/09/2026 : sur les 35 reports envoyés sur Discord, 11 vraies erreurs et 23 faux positifs, tous corrigés sans perdre une vraie erreur ; rejeu des 920 offres en tête : 2 vraies erreurs de plus trouvées.
 
 ## Couverture des marchands
 

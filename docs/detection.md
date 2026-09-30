@@ -81,7 +81,8 @@ Toutes ces règles et leurs cas réels sont dans le [registre des précédents](
 |---|---|---|
 | 🟢 `OK` | Nom trouvé, aucune raison | Envoyé si `NOTIFY_OK` (oui par défaut, à couper une fois l'outil rodé) |
 | 🔴 `SUSPECT` | Au moins une raison | Toujours |
-| 🟠 `À VÉRIFIER` | Impossible de conclure : URL sans nom et page illisible, ou redirection AllKeyShop en échec 3 fois | Toujours |
+| 🟠 `À VÉRIFIER` | Impossible de conclure (URL sans nom et page illisible, titre traduit, redirection AllKeyShop en échec 3 fois) **et** l'offre est le premier prix de toute la page, sur une page d'un top ou d'un coming soon | Toujours |
+| ⚪ `NON VÉRIFIABLE` | Impossible de conclure, dans les autres cas (autre édition, page hors top/coming soon, Amazon toujours) : on prend note, liste par `--unverified` | Jamais (formation du 30/09/2026) |
 
 Format d'une alerte :
 
