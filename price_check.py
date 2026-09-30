@@ -66,6 +66,9 @@ BROWSER_UA = ("Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like G
 CHROMIUM = os.environ.get("CHROMIUM_BIN", "chromium")  # dernier repli : ouvrir la page marchand
 NO_BROWSER_HOSTS = ("amazon.",)  # hôtes qui bloquent Chromium : inutile d'y perdre 90 s
 NOTIFY_OK = os.environ.get("NOTIFY_OK", "1") != "0"  # envoyer aussi les verdicts OK sur Discord
+# Pause Discord : jusqu'à cette date locale « AAAA-MM-JJ HH:MM », les alertes sont mises en attente
+# dans l'état (et journalisées), puis envoyées automatiquement à la fin de la pause.
+MUTE_UNTIL = os.environ.get("DISCORD_MUTE_UNTIL", "")
 
 NO_PRICE = 0.02  # sentinelle « pas de prix »
 LISTS_REFRESH = 1800  # max-age de l'API getLists
@@ -539,6 +542,29 @@ def send_discord(webhook, content):
     urllib.request.urlopen(req, timeout=30).close()
 
 
+def muted():
+    return bool(MUTE_UNTIL) and time.strftime("%Y-%m-%d %H:%M") < MUTE_UNTIL
+
+
+def make_notifier(webhook, state):
+    """Envoie sur Discord, ou met en attente pendant une pause (`DISCORD_MUTE_UNTIL`)."""
+    def notify(msg):
+        if muted():
+            state["queued"].append(msg)
+            log.info("Discord en pause jusqu'au %s : alerte mise en attente (%d)", MUTE_UNTIL, len(state["queued"]))
+        else:
+            send_discord(webhook, msg)
+    return notify
+
+
+def flush_queue(state, send):
+    """Envoie les alertes mises en attente pendant la pause, dans l'ordre."""
+    while state["queued"]:
+        send(state["queued"][0])
+        state["queued"].pop(0)
+        time.sleep(1)
+
+
 def load_state(path):
     try:
         with open(path) as f:
@@ -547,6 +573,7 @@ def load_state(path):
         state = {}
     state.setdefault("checked", {})  # id d'offre -> verdict rendu
     state.setdefault("merchants", {})  # marchand -> méthodes de contrôle qui ont marché
+    state.setdefault("queued", [])  # alertes en attente pendant une pause Discord
     for m in state["merchants"].values():  # ancien format : une seule méthode
         if "methods" not in m:
             m["methods"] = {m.pop("method", "URL"): 1}
@@ -661,19 +688,26 @@ def main():
         return
 
     webhook = os.environ.get("DISCORD_WEBHOOK_URL")
+    state = load_state(args.state)
     if args.dry_run:
         notify = lambda msg: None  # le journal affiche déjà chaque verdict sur une ligne
     elif webhook:
-        notify = lambda msg: send_discord(webhook, msg)
+        notify = make_notifier(webhook, state)
     else:
         sys.exit("DISCORD_WEBHOOK_URL manquant (ou utiliser --dry-run)")
 
-    state = load_state(args.state)
     modes = [m for m in MODES if args.mode in (m, "both")]
     targets = {m: [] for m in modes}
     lists_at = {m: 0.0 for m in modes}
     due = {m: 0.0 for m in modes}  # prochain passage de chaque mode (time.monotonic)
     while True:
+        if state["queued"] and not muted() and not args.dry_run:
+            try:
+                flush_queue(state, lambda msg: send_discord(webhook, msg))
+                log.info("fin de la pause Discord : alertes en attente envoyées")
+            except Exception as e:
+                log.error("Envoi des alertes en attente impossible, nouvel essai plus tard : %s", e)
+            save_state(args.state, state)
         for mode in modes:
             now = time.monotonic()
             if now < due[mode]:

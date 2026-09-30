@@ -495,6 +495,22 @@ class TestCycle(unittest.TestCase):
         pc.run_cycle(targets, lambda m: None, pc.load_state("/nonexistent"), self.ok, save=lambda: saves.append(1))
         self.assertEqual(len(saves), 2)
 
+    def test_discord_pause_queues_alerts_then_flushes(self):
+        state = pc.load_state("/nonexistent")
+        with mock.patch.object(pc, "MUTE_UNTIL", "2999-01-01 00:00"), mock.patch.object(pc, "send_discord") as send:
+            pc.make_notifier("https://hook", state)("alerte 1")
+            pc.make_notifier("https://hook", state)("alerte 2")
+        send.assert_not_called()
+        self.assertEqual(state["queued"], ["alerte 1", "alerte 2"])
+        sent = []
+        with mock.patch.object(pc.time, "sleep"):
+            pc.flush_queue(state, sent.append)
+        self.assertEqual((sent, state["queued"]), (["alerte 1", "alerte 2"], []))
+        with mock.patch.object(pc, "MUTE_UNTIL", "2000-01-01 00:00"), mock.patch.object(pc, "send_discord") as send:
+            pc.make_notifier("https://hook", state)("alerte 3")
+        send.assert_called_once_with("https://hook", "alerte 3")
+        self.assertEqual(state["queued"], [])
+
     def test_state_roundtrip_and_prune(self):
         state = pc.load_state("/nonexistent")
         pc.run_cycle(self.TARGETS, lambda m: None, state, self.ok)
