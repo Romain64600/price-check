@@ -783,7 +783,8 @@ def contradicted(kind, product, offer, page_text):
     if kind == "zone":
         zone = aks_zone(offer)
         found = merchant_zones(normed)
-        return bool(zone and found) and ZONE_COVERAGE[zone] <= zone_coverage(found)
+        # une seule zone, sans ambiguïté : un menu « Global / Europe / ROW » ne contredit rien
+        return bool(zone) and len(found) == 1 and ZONE_COVERAGE[zone] <= zone_coverage(found)
     return False
 
 
@@ -797,8 +798,25 @@ TITLE_RES = (
 )
 
 
+# Champs « Région / Plateforme » du corps de la page marchand (K4G : « PLATFORM Steam REGION Global »,
+# alors que son slug dit « playstation-5-europe », étude du 30/09/2026) : en majuscules, ou suivis de « : »
+PAGE_FACT_RE = re.compile(r"(?:\b(REGION|PLATFORM)\b|\b(Region|Platform)\s*:)\s*(?:Loading\.\.\.\s*)?([^|]{1,24})")
+
+
+def page_facts(dom):
+    """« REGION Global | PLATFORM Steam » : les champs région et plateforme lus dans le corps de la page."""
+    text = re.sub(r"<script.*?</script>|<style.*?</style>", " ", dom, flags=re.DOTALL | re.IGNORECASE)
+    text = re.sub(r"\s+", " ", html.unescape(re.sub(r"<[^>]+>", " ", text)))
+    facts = []
+    for upper, colon, value in PAGE_FACT_RE.findall(text):
+        fact = "%s %s" % ((upper or colon).upper(), value.strip())
+        if fact not in facts:
+            facts.append(fact)
+    return facts[:4]
+
+
 def page_title_from_html(dom):
-    """« <title> | og:title | h1 » de la page, chaque partie séparée par « | »."""
+    """« <title> | og:title | h1 » de la page, chaque partie séparée par « | », puis ses champs région et plateforme."""
     parts = []
     for rx in TITLE_RES:
         m = rx.search(dom)
@@ -806,6 +824,8 @@ def page_title_from_html(dom):
             part = re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", html.unescape(m.group(1)))).strip()
             if part and part not in parts:
                 parts.append(part)
+    if parts:
+        parts += page_facts(dom)
     return " | ".join(parts) or None
 
 

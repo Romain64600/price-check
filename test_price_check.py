@@ -609,6 +609,12 @@ class TestStudy20260930(unittest.TestCase):
                                       "https://www.eneba.com/xbox-fable-premium-upgrade-dlc-windows-xbox-series-x-s-xbox-live-key-europe",
                                       edition="DLC", region="XBOX/PC EU", region_filter="XBOX/PC  EUROPE", platform="xbox-play-anywhere", page_dlc=True), [])
 
+    def test_steam_offer_on_a_switch_page(self):
+        # Eneba, 30/09/2026 : Persona 5 Royal, offre saisie STEAM EU sur la page Nintendo Switch
+        self.assertEqual(self.reasons("Persona 5 Royal Nintendo Switch", "https://www.eneba.com/nintendo-persona-5-royal-nintendo-switch-eshop-key-europe",
+                                      region="EUROPE", region_filter="STEAM EU", platform="steam"),
+                         ["plateforme : AllKeyShop steam, marchand nintendo"])
+
     def test_full_replay_new_catches(self):
         # et trois vraies erreurs que les anciennes règles ne voyaient pas
         self.assertEqual(self.reasons("Call of Duty Black Ops 6", "https://www.eneba.com/steam-call-of-duty-r-black-ops-6-pc-steam-key-europe",
@@ -703,6 +709,24 @@ class TestConfirmOnMerchantPage(unittest.TestCase):
                              "https://www.eneba.com/steam-the-blood-of-dawnwalker-eclipse-edition-deluxe-steam-key-pc-europe",
                              "<title>Buy The Blood of Dawnwalker Eclipse Edition (Deluxe) Steam key PC! Cheap price</title>"
                              "<h1>The Blood of Dawnwalker Eclipse Edition (Deluxe) Steam Key (PC) EUROPE</h1>")
+        self.assertEqual(res["verdict"], "SUSPECT")
+
+    def test_region_field_in_the_page_body(self):
+        # K4G, 30/09/2026 : slug « playstation-5-europe », page « Steam CD Key », champs PLATFORM Steam / REGION Global
+        dom = sample("k4g_spider-man-2_deluxe.html")
+        text = pc.page_title_from_html(dom)
+        self.assertTrue(text.startswith("Buy Marvel's Spider-Man 2 Deluxe Edition Steam CD Key"))
+        self.assertIn("REGION Global", text)
+        res = self.run_check("Marvel’s Spider-Man 2", offer(edition="Deluxe", region="GLOBAL", region_filter="STEAM GLOBAL"),
+                             "https://k4g.com/product/marvel-s-spider-man-2-playstation-5-europe-cd-key-83338621", dom)
+        self.assertEqual((res["verdict"], res["reasons"]), ("OK", []))
+        self.assertTrue(any(n.startswith("URL contredite par la page") for n in res["notes"]))
+
+    def test_region_menu_does_not_contradict(self):
+        # une page qui liste plusieurs zones (menu de filtres) ne lève pas une vraie clé EU affichée GLOBAL
+        res = self.run_check("Stellaris", offer(edition="Bundle 1", region="GLOBAL", region_filter="STEAM GLOBAL"),
+                             "https://kinguin.net/category/172478/stellaris-starter-pack-eu-steam-cd-key",
+                             "<title>Stellaris Starter Pack | Shop</title><div>REGION Global Europe North America</div><p>Region: EUROPE</p>")
         self.assertEqual(res["verdict"], "SUSPECT")
 
     def test_blocked_page_keeps_the_url_evidence(self):

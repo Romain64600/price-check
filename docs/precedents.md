@@ -27,6 +27,7 @@ Chaque cas réel jugé, avec sa décision, sa preuve et la règle qui en découl
 | 30/09 | EA SPORTS FC 26 · ICONS Edition | Driffle | Clé **Steam** affichée `EA GLOBAL` (44,81 € contre 53,83 € pour l'offre suivante) | URL `…-global-pc-steam-digital-key` ; page bloquée | étude |
 | 30/09 | Farming Simulator 25 · Year 1 Edition | Loaded | **Season pass seul** rangé en « Year 1 Edition » (jeu + pass), la page a aussi « Year 1 Bundle » | URL `…-year-1-season-pass-pc-steam` ; 29,19 € contre 40,45 € chez GAMIVO pour le jeu + pass | étude (formation en attente) |
 | 30/09 | Elden Ring Xbox Series · Launch Edition | Amazon.fr | Version **PlayStation** sur la page Xbox | URL `…-3391892017632-PlayStation` ; page Amazon illisible | étude |
+| 30/09 | Persona 5 Royal Nintendo Switch · Standard | Eneba | Offre saisie `STEAM EU` (plateforme Steam) sur la page Switch | page : « Persona 5 Royal Nintendo key » | étude (alerte du 30/09 au soir) |
 | 30/09 | Splatoon Raiders Nintendo Switch 2 · Standard | Gamingdragons | Offre saisie **Xbox** (plateforme et région `XBOX X|S EUROPE`) sur la page Switch 2 | page : « … Switch 2 - Nintendo Switch eStore » | étude (rejeu complet) |
 | 30/09 | The Witcher 3 Wild Hunt Xbox Series · Standard | Lootbar | Offre saisie `STEAM ROW` sur la page Xbox, le marchand vend une clé Xbox | URL `…/the-witcher-3-wild-hunt-xbox` ; page muette | étude (rejeu complet) |
 | 30/09 | GTA 4 · Standard | Steam | **Complete Edition** rangée en Standard, la page a une édition Complete | titre Steam « Grand Theft Auto IV: The Complete Edition » | étude (gravité faible, à trancher) |
@@ -62,6 +63,7 @@ Chaque cas réel jugé, avec sa décision, sa preuve et la règle qui en découl
 | 30/09 | ETS2, Stellaris, RimWorld (bundles) | divers | noms de bundles | éditions génériques non comparées ; mot propre à l'édition (`2024`, `mediterranean`, `starter`) | étude |
 | 30/09 | Hunt Showdown · Standard + DLC Bundle | Kinguin | `10-dlc-bundle` | page : « Hunt: Showdown 1896 +10 DLC Bundle » (jeu + DLC) | étude |
 
+| 30/09 | Marvel's Spider-Man 2 · Deluxe | K4G | slug `…-playstation-5-europe-cd-key`, page « Deluxe Edition Steam CD Key », champs `PLATFORM Steam · REGION Global` | champs Région / Plateforme du corps de la page lus pour la confirmation ; une page qui nomme plusieurs zones ne contredit rien | question de Romain (« c'est toi qui m'as reporté… ? ») |
 | 30/09 | Call of Duty Black Ops 6 · Standard | Eneba | URL `steam-…-steam-key`, page « (PC) **Windows Store** Key » = région `WINDOWS EU` | confirmation sur la page (faux positif évité au rejeu) | étude |
 | 30/09 | STAR WARS Galactic Racer, KCD2, Castlevania | GAMESEAL | `…-steam-key-eu-na` pris pour EU seul, la région est EU/US | `eu-na` = EU/US | étude (rejeu complet) |
 | 30/09 | Euro Truck Simulator 2 · Standard + DLC | GameBoost | « Vive la **France** » (un DLC) pris pour une zone | pas de noms de pays comme mots de zone | étude (rejeu complet) |
