@@ -1,8 +1,12 @@
-"""Moniteur du premier prix des pages produit du top AllKeyShop, avec alertes Discord.
+"""Moniteur du premier prix des pages produit des top clics AllKeyShop, avec alertes Discord.
 
-Boucle sans fin :
-- relit les listes (top 5 All Popular, top 4 Coming soon PC) toutes les 30 min ;
-- lit les offres de chaque page produit (UA AKS/Staff) toutes les 2 min 30 ;
+Boucle sans fin, deux modes (--mode) :
+- top-games : top 5 All Popular + top 4 Coming soon PC, un passage toutes les 2 min 30 ;
+- homepage : tous les jeux des top clics de la home (10 widgets + TOP 50 par plateforme,
+  ~415 pages), un passage toutes les 15 min.
+Pour chaque passage :
+- relit les listes toutes les 30 min ;
+- lit les offres de chaque page produit (UA AKS/Staff) ;
 - pour toute nouvelle offre en premier prix d'une édition, suit son lien de
   redirection AllKeyShop (UA AKS/Staff) pour obtenir l'URL marchand, puis vérifie
   que cette URL (à défaut : l'URL après le 301 du marchand, puis le titre de sa
@@ -30,16 +34,30 @@ import urllib.request
 
 # ---- Réglages ----------------------------------------------------------------
 
-# (id de liste sidebar.<id>, libellé, nombre de jeux suivis)
-LISTS = (
-    ("all.popular", "Popular", 5),
-    ("pc.soon", "Coming soon PC", 4),
-)
-LISTS_URL = (
-    "https://api.allkeyshop.com/videogame/api/topClick/getLists/eur/allkeyshop.com?"
-    + "&".join(f"lists[]=sidebar.{key}" for key, _, _ in LISTS)
-)
+LISTS_API = "https://api.allkeyshop.com/videogame/api/topClick/getLists/eur/allkeyshop.com"
+LISTS_PER_CALL = 6  # l'API répond 503 à tout l'appel si un id de liste est inconnu : petits lots
 SITE_KEY = "allkeyshop.com.eur"
+
+# Listes top clics : (id de liste <widget>.<liste>, libellé, nombre de jeux suivis, None = toute la liste)
+TOP_GAMES_LISTS = (
+    ("sidebar.all.popular", "Popular", 5),
+    ("sidebar.pc.soon", "Coming soon PC", 4),
+)
+HOMEPAGE_LISTS = tuple(
+    [(f"{widget}.default", f"Home · {label}", None) for widget, label in (
+        ("mostAnticipated", "Most anticipated"), ("recentlyReleased", "Recently released"),
+        ("fps", "FPS"), ("rpg", "RPG"), ("strategy", "Strategy"), ("action", "Action"),
+        ("adventure", "Adventure"), ("management", "Management"), ("racing", "Racing"), ("vr", "VR"))]
+    + [(f"sidebar.{platform}.{tab}", f"TOP 50 · {platform_label} {tab_label}", None)
+       for platform, platform_label in (("all", "All"), ("pc", "PC"), ("xbox", "Xbox"),
+                                        ("playstation", "PlayStation"), ("nintendo", "Nintendo"))
+       for tab, tab_label in (("popular", "Popular"), ("soon", "Coming soon"))]
+)
+# Modes de surveillance : listes suivies et intervalle entre deux passages (s)
+MODES = {
+    "top-games": {"lists": TOP_GAMES_LISTS, "interval": 150},  # 9 pages ; le cache des pages est de 120 s
+    "homepage": {"lists": HOMEPAGE_LISTS, "interval": 900},  # ~415 pages, un passage dure plusieurs minutes
+}
 REDIRECTION_URL = "https://www.allkeyshop.com/redirection/offer/eur/%s?locale=en&merchant=%s"
 
 AKS_UA = "AKS/Staff"  # pages AllKeyShop seulement, jamais chez le marchand
@@ -50,8 +68,8 @@ NOTIFY_OK = os.environ.get("NOTIFY_OK", "1") != "0"  # envoyer aussi les verdict
 
 NO_PRICE = 0.02  # sentinelle « pas de prix »
 LISTS_REFRESH = 1800  # max-age de l'API getLists
-CYCLE_INTERVAL = 150  # le cache des pages produit est de 120 s
-REQUEST_DELAY = 2  # pause entre deux requêtes
+PAGE_DELAY = 1  # pause entre deux pages produit AllKeyShop
+REQUEST_DELAY = 2  # pause entre deux requêtes d'un contrôle (redirection, marchand)
 MAX_CHECK_FAILURES = 3  # échecs de contrôle avant de conclure « À VÉRIFIER »
 STATE_TTL_DAYS = 30  # oubli des offres plus vues en premier prix depuis ce délai
 
@@ -121,18 +139,44 @@ def http_get(url, ua, follow=True, timeout=30):
 
 # ---- AllKeyShop : listes, page produit, redirection ---------------------------
 
-def parse_lists(data, lists=LISTS):
-    """Renvoie [(liste, rang, nom, url)] pour le haut de chaque liste de `lists`."""
-    sidebar = data["sidebar"]
-    targets = []
-    for key, label, top in lists:
-        games = [i for i in sidebar[key]["items"] if i.get("productType") == "game"]
-        games.sort(key=lambda i: i["index"])
+def parse_lists(data, lists):
+    """Renvoie [(liste, rang, nom, url)] pour chaque liste de `lists`, une seule fois par page.
+
+    `data` : réponse de l'API getLists, {widget: {liste: {items: [...]}}}.
+    """
+    targets, seen = [], set()
+    for list_id, label, top in lists:
+        widget, name = list_id.split(".", 1)
+        items = ((data.get(widget) or {}).get(name) or {}).get("items")
+        if items is None:
+            log.warning("liste %s absente de la réponse de l'API", list_id)
+            continue
+        games = sorted((i for i in items if i.get("productType") == "game"), key=lambda i: i["index"])
         for rank, item in enumerate(games[:top], 1):
             url = item.get("urls", {}).get(SITE_KEY)
-            if url:
+            if url and url not in seen:
+                seen.add(url)
                 targets.append((label, rank, item["name"], url))
     return targets
+
+
+def fetch_lists(list_ids):
+    """Réponse de l'API getLists pour ces listes, par lots : un lot en erreur ne bloque pas les autres."""
+    data = {}
+    for i in range(0, len(list_ids), LISTS_PER_CALL):
+        batch = list_ids[i:i + LISTS_PER_CALL]
+        status, _, body = http_get(LISTS_API + "?" + "&".join("lists[]=" + lid for lid in batch), AKS_UA)
+        if status == 200:
+            for widget, lists in json.loads(body).items():
+                data.setdefault(widget, {}).update(lists or {})
+        else:
+            log.warning("API des listes HTTP %s pour %s", status, ", ".join(batch))
+        time.sleep(PAGE_DELAY)
+    return data
+
+
+def fetch_targets(lists):
+    return parse_lists(fetch_lists([lid for lid, _, _ in lists]), lists)
 
 
 GAME_PAGE_RE = re.compile(r"var gamePageTrans = (\{.*?\});\n", re.DOTALL)
@@ -482,7 +526,7 @@ def run_cycle(targets, notify, state, checker=check_offer):
             log.warning("%s : %s", product, e)
             continue
         finally:
-            time.sleep(REQUEST_DELAY)
+            time.sleep(PAGE_DELAY)
         for offer in first_prices(trans):
             key = str(offer["id"])
             if key in state["checked"]:
@@ -529,6 +573,9 @@ def coverage_table(state):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--mode", choices=("top-games", "homepage", "both"), default=os.environ.get("PRICE_CHECK_MODE", "both"),
+                    help="top-games : top 5 Popular + top 4 Coming soon PC ; homepage : tous les jeux des top clics "
+                         "de la home ; both (défaut, ou variable PRICE_CHECK_MODE)")
     ap.add_argument("--dry-run", action="store_true", help="affiche les alertes sans les envoyer")
     ap.add_argument("--once", action="store_true", help="un seul passage puis arrêt")
     ap.add_argument("--state", default="state.json", help="fichier des offres déjà contrôlées")
@@ -562,22 +609,29 @@ def main():
         sys.exit("DISCORD_WEBHOOK_URL manquant (ou utiliser --dry-run)")
 
     state = load_state(args.state)
-    targets, lists_at = [], 0
+    modes = [m for m in MODES if args.mode in (m, "both")]
+    targets = {m: [] for m in modes}
+    lists_at = {m: 0.0 for m in modes}
+    due = {m: 0.0 for m in modes}  # prochain passage de chaque mode (time.monotonic)
     while True:
-        start = time.monotonic()
-        try:
-            if not targets or start - lists_at >= LISTS_REFRESH:
-                _, _, body = http_get(LISTS_URL, AKS_UA)
-                targets = parse_lists(json.loads(body))
-                lists_at = start
-                log.info("%d pages suivies : %s", len(targets), ", ".join(t[2] for t in targets))
-            run_cycle(targets, notify, state)
-            save_state(args.state, state)
-        except Exception:
-            log.exception("Passage en échec, nouvel essai au prochain cycle")
+        for mode in modes:
+            now = time.monotonic()
+            if now < due[mode]:
+                continue
+            due[mode] = now + MODES[mode]["interval"]
+            try:
+                if not targets[mode] or now - lists_at[mode] >= LISTS_REFRESH:
+                    targets[mode] = fetch_targets(MODES[mode]["lists"])
+                    lists_at[mode] = now
+                    names = ", ".join(t[2] for t in targets[mode]) if len(targets[mode]) <= 20 else ""
+                    log.info("%s : %d pages suivies %s", mode, len(targets[mode]), names)
+                run_cycle(targets[mode], notify, state)
+                save_state(args.state, state)
+            except Exception:
+                log.exception("%s : passage en échec, nouvel essai au prochain cycle", mode)
         if args.once:
             return
-        time.sleep(max(0, CYCLE_INTERVAL - (time.monotonic() - start)))
+        time.sleep(max(1, min(due.values()) - time.monotonic()))
 
 
 if __name__ == "__main__":

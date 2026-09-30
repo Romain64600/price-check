@@ -3,6 +3,7 @@
 import copy
 import json
 import os
+import re
 import unittest
 from unittest import mock
 
@@ -25,7 +26,7 @@ def offer(**kw):
 
 class TestAllKeyShopParsing(unittest.TestCase):
     def test_lists(self):
-        targets = pc.parse_lists(json.loads(sample("api_topclick_all-popular_pc-soon.json")))
+        targets = pc.parse_lists(json.loads(sample("api_topclick_all-popular_pc-soon.json")), pc.TOP_GAMES_LISTS)
         popular = [t[2] for t in targets if t[0] == "Popular"]
         soon = [t[2] for t in targets if t[0] == "Coming soon PC"]
         self.assertEqual(popular, ["EA SPORTS FC 27", "The Witcher 3 Wild Hunt", "CONTROL Resonant",
@@ -35,10 +36,49 @@ class TestAllKeyShopParsing(unittest.TestCase):
 
     def test_lists_skip_non_games(self):
         data = json.loads(sample("api_topclick_sidebar.json"))
-        targets = pc.parse_lists(data, [("all.popular", "Popular", 60)])
+        targets = pc.parse_lists(data, [("sidebar.all.popular", "Popular", None)])
         self.assertTrue(targets)
         software = {i["name"] for i in data["sidebar"]["all.popular"]["items"] if i["productType"] != "game"}
         self.assertFalse(software & {t[2] for t in targets})
+
+    def test_homepage_lists(self):
+        data = json.loads(sample("api_topclick_home.json"))
+        targets = pc.parse_lists(data, pc.HOMEPAGE_LISTS)
+        self.assertEqual(len(targets), 415)
+        self.assertEqual(len({t[3] for t in targets}), 415)  # une seule fois par page
+        self.assertEqual(targets[0][:3], ("Home · Most anticipated", 1, "GTA 6 PS5"))
+        self.assertEqual({t[0] for t in targets} - {label for _, label, _ in pc.HOMEPAGE_LISTS}, set())
+        self.assertTrue(all(t[2] and t[3].startswith("https://www.allkeyshop.com/") for t in targets))
+
+    def test_missing_list_is_skipped(self):
+        data = json.loads(sample("api_topclick_all-popular_pc-soon.json"))
+        with self.assertLogs(pc.log, level="WARNING"):
+            targets = pc.parse_lists(data, [("sidebar.xbox.popular", "Xbox", 5)] + list(pc.TOP_GAMES_LISTS))
+        self.assertEqual(len(targets), 9)
+
+    def test_fetch_lists_in_batches_tolerates_a_failed_batch(self):
+        full = json.loads(sample("api_topclick_home.json"))
+        calls = []
+
+        def fake_get(url, ua, follow=True, timeout=30):
+            ids = re.findall(r"lists\[\]=([^&]+)", url)
+            calls.append(ids)
+            if "sidebar.xbox.popular" in ids:
+                return 503, None, ""
+            data = {}
+            for lid in ids:
+                w, n = lid.split(".", 1)
+                data.setdefault(w, {})[n] = full[w][n]
+            return 200, None, json.dumps(data)
+
+        with mock.patch.object(pc, "http_get", side_effect=fake_get), mock.patch.object(pc, "PAGE_DELAY", 0), \
+             self.assertLogs(pc.log, level="WARNING"):
+            data = pc.fetch_lists([lid for lid, _, _ in pc.HOMEPAGE_LISTS])
+        self.assertEqual(len(calls), 4)  # 20 listes par lots de 6
+        self.assertTrue(all(len(c) <= pc.LISTS_PER_CALL for c in calls))
+        self.assertIn("mostAnticipated", data)
+        self.assertIn("all.popular", data["sidebar"])
+        self.assertNotIn("xbox.popular", data["sidebar"])
 
     def test_game_page_matches_saved_json(self):
         trans = pc.parse_game_page(sample("prod_popular1_ea-fc-27.html"))
@@ -294,6 +334,7 @@ class TestCheckOffer(unittest.TestCase):
 
 
 @mock.patch.object(pc, "REQUEST_DELAY", 0)
+@mock.patch.object(pc, "PAGE_DELAY", 0)
 class TestCycle(unittest.TestCase):
     PAGE = sample("prod_popular1_ea-fc-27.html")
     TARGETS = [("Popular", 1, "EA SPORTS FC 27", "https://www.allkeyshop.com/blog/buy-ea-sports-fc-27-key-compare-prices/")]

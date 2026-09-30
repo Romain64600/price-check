@@ -2,9 +2,12 @@
 
 Surveille en continu le **premier prix** des pages produit du top AllKeyShop, et alerte sur Discord quand l'offre en tête ne correspond pas au produit, à la région, à la plateforme ou à l'édition affichées.
 
-Pages suivies (widget top clics de la barre de droite) :
-- top 5 **All Popular** (`sidebar.all.popular`)
-- top 4 **Coming soon PC** (`sidebar.pc.soon`)
+Deux modes, qui tournent dans le même processus avec la même mémoire des offres contrôlées (`--mode`, ou `PRICE_CHECK_MODE`) :
+
+| Mode | Pages suivies | Passage |
+|---|---|---|
+| `top-games` | top 5 **All Popular** + top 4 **Coming soon PC** du widget TOP 50 (9 pages) | toutes les 2 min 30 |
+| `homepage` | **tous les jeux des top clics de la home** : les 10 widgets de jeux (Most anticipated, Recently released, FPS, RPG, Strategy, Action, Adventure, Management, Racing, VR) et les 10 listes du TOP 50 (Popular et Coming soon × All, PC, Xbox, PlayStation, Nintendo), soit ~415 pages le 30/09/2026 | toutes les 15 min |
 
 ## Objectif
 
@@ -31,8 +34,8 @@ Python 3 seulement, aucune dépendance. Chromium (déjà sur le serveur) sert de
 
 ## Fonctionnement
 
-1. Toutes les 30 min, il relit les listes via l'API JSON `getLists`, en ne gardant que les jeux.
-2. Toutes les 2 min 30, il lit les offres de chaque page produit (`var gamePageTrans` dans le HTML, user agent `AKS/Staff`) et prend, pour chaque édition, l'offre de clé la moins chère (`priceCard`, sans les offres compte ni les offres « sans prix » à `0.02`).
+1. Toutes les 30 min, il relit les listes de chaque mode via l'API JSON `getLists`, en ne gardant que les jeux, une seule fois par page.
+2. À chaque passage du mode, il lit les offres de chaque page produit (`var gamePageTrans` dans le HTML, user agent `AKS/Staff`) et prend, pour chaque édition, l'offre de clé la moins chère (`priceCard`, sans les offres compte ni les offres « sans prix » à `0.02`).
 3. Toute offre en tête **jamais contrôlée** est contrôlée une fois : redirection AllKeyShop (`AKS/Staff`) → URL marchand → le nom du produit doit y être, et les mots de région, plateforme et édition doivent être compatibles avec l'offre. Si l'URL ne dit rien : le 301 du marchand, puis en dernier recours sa page ouverte avec Chromium (user agent Chrome).
 4. Verdict : 🟢 `OK`, 🔴 `SUSPECT` (avec la raison), 🟠 `À VÉRIFIER` (impossible de conclure). SUSPECT et À VÉRIFIER partent sur Discord ; les OK ne sont que dans le journal (`NOTIFY_OK=0` en production depuis le 30/09/2026).
 

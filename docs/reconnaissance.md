@@ -10,8 +10,9 @@ Les listes Popular et Coming soon sont les onglets du widget top clics de la bar
 GET https://api.allkeyshop.com/videogame/api/topClick/getLists/eur/allkeyshop.com?lists[]=sidebar.all.popular&lists[]=sidebar.pc.soon
 ```
 
-- Id de liste : `sidebar.<all|pc|xbox|playstation|nintendo>.<popular|soon>`. On peut en demander plusieurs dans un seul appel en répétant `lists[]=`.
-- Réponse : `{sidebar: {"<id>": {items: [...], data: {listId, legacyIds, ...}}}}`.
+- Id de liste : `<widget>.<liste>`. Barre latérale (widget « TOP 50 ») : `sidebar.<all|pc|xbox|playstation|nintendo>.<popular|soon>`. Widgets de la home : `<nom>.default` avec `nom` ∈ mostAnticipated, recentlyReleased, subscription, giftCard, fps, rpg, strategy, action, adventure, management, racing, vr (8 éléments chacun ; les onglets plateforme de ces widgets n'existent pas côté API). On peut demander plusieurs listes dans un seul appel en répétant `lists[]=`, mais **un seul id inconnu fait répondre 503 « Backend fetch failed » à tout l'appel**.
+- Réponse : `{<widget>: {"<liste>": {items: [...], data: {listId, legacyIds, ...}}}}`.
+- Le 30/09/2026, les 22 listes de la home totalisent 415 pages produit de jeux uniques (`samples/api_topclick_home.json`).
 
 | Liste | `listId` | Éléments (30/09/2026) |
 |---|---|---|
