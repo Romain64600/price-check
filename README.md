@@ -52,7 +52,7 @@ Détails et exemple d'alerte : [docs/detection.md](docs/detection.md). Le monite
 
 Premier passage réel du 30/09/2026 sur les 9 pages : 31 offres en tête contrôlées, 31 OK, 0 alerte.
 
-Table détaillée, méthode par méthode : [docs/marchands.md](docs/marchands.md). Elle doit être mise à jour à chaque marchand qui oblige à ouvrir sa page, pour qu'on sache toujours qui est monitoré et qui ne l'est pas encore. `python3 price_check.py --coverage` affiche ce que le moniteur a constaté.
+Table détaillée, méthode par méthode, et configs marchands : [docs/marchands.md](docs/marchands.md). Elle doit être mise à jour à chaque marchand qui oblige à ouvrir sa page, pour qu'on sache toujours qui est monitoré et qui ne l'est pas encore. `python3 price_check.py --coverage` affiche ce que le moniteur a constaté.
 
 ## Documentation
 
@@ -69,6 +69,7 @@ Table détaillée, méthode par méthode : [docs/marchands.md](docs/marchands.md
 |---|---|
 | `price_check.py` | Le moniteur (réglages et listes de mots en tête de fichier) |
 | `test_price_check.py` | Tests hors ligne : `python3 -m unittest -v` |
+| `merchants/` | Une exception par marchand (TOML) : Wyrel (région dans le paramètre `region=`), Amazon (pas de Chromium). Voir [docs/marchands.md](docs/marchands.md#configs-marchands-merchantstoml) |
 | `price-check.service` | Service systemd |
 | `docs/` | Documentation |
 | `samples/` | Réponses brutes du site, utilisées par les tests |

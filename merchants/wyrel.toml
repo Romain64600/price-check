@@ -1,0 +1,16 @@
+# Wyrel — exception validée par formation le 30/09/2026.
+# Le slug de l'URL est générique (« ...-starter-pack-bundle-eu-37543 ») et ne dit rien de l'offre :
+# la région affichée sur la page est celle du paramètre « region » de l'URL. La page elle-même est
+# derrière Cloudflare, illisible pour le moniteur (curl et Chromium).
+name = "Wyrel"
+hosts = ["wyrel.com"]
+browser = false
+
+[region]
+from = "query"
+param = "region"
+# valeur du paramètre -> région, avec les mots que l'analyseur reconnaît (global, eu, row...).
+# Relevé le 30/09/2026 sur 38 offres Wyrel de 8 pages, sans contradiction :
+#   1 -> GLOBAL (et gifts globaux), 4 -> EUROPE et GIFT EU, 5 -> ROW, 19 -> ROCKSTAR GERMANY.
+# Une valeur absente de la table = région inconnue, pas de contrôle de région.
+map = { "1" = "global", "4" = "eu", "5" = "row", "19" = "germany" }

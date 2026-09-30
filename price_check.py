@@ -18,6 +18,7 @@ Voir docs/detection.md et docs/marchands.md.
 """
 
 import argparse
+import glob
 import html
 import json
 import logging
@@ -27,6 +28,7 @@ import shutil
 import subprocess
 import sys
 import time
+import tomllib
 import unicodedata
 import urllib.error
 import urllib.parse
@@ -64,7 +66,7 @@ AKS_UA = "AKS/Staff"  # pages AllKeyShop seulement, jamais chez le marchand
 BROWSER_UA = ("Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) "
               "Chrome/150.0.0.0 Safari/537.36")  # chez le marchand
 CHROMIUM = os.environ.get("CHROMIUM_BIN", "chromium")  # dernier repli : ouvrir la page marchand
-NO_BROWSER_HOSTS = ("amazon.",)  # hôtes qui bloquent Chromium : inutile d'y perdre 90 s
+MERCHANTS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "merchants")  # une exception par marchand
 NOTIFY_OK = os.environ.get("NOTIFY_OK", "1") != "0"  # envoyer aussi les verdicts OK sur Discord
 # Pause Discord : jusqu'à cette date locale « AAAA-MM-JJ HH:MM », les alertes sont mises en attente
 # dans l'état (et journalisées), puis envoyées automatiquement à la fin de la pause.
@@ -81,8 +83,9 @@ SAVE_EVERY = 25  # pages entre deux sauvegardes de l'état pendant un passage
 # Mots d'URL ou de titre marchand, après normalisation (minuscules, tout ce qui
 # n'est pas lettre ou chiffre devient « - »). Un mot n'est reconnu qu'entier.
 REGION_FAMILIES = {
-    "GLOBAL": ("global", "worldwide", "ww", "row"),
+    "GLOBAL": ("global", "worldwide", "ww"),
     "EU": ("eu", "europe", "european"),
+    "ROW": ("row", "rest-of-world", "rest-of-the-world"),  # « rest of world » n'est pas GLOBAL
 }
 FORBIDDEN_REGION_WORDS = ("ru", "russia", "russian", "cis", "asia", "sea", "latam", "latin-america",
                           "india", "tr", "turkey", "cn", "china", "ar", "argentina", "br", "brazil",
@@ -252,6 +255,44 @@ def unwrap_affiliate(url):
     return url
 
 
+# ---- Configs marchands (merchants/*.toml) ------------------------------------
+
+def load_merchant_configs(directory=MERCHANTS_DIR):
+    """Un fichier TOML par marchand qui demande une exception. Clés : voir docs/marchands.md."""
+    configs = []
+    for path in sorted(glob.glob(os.path.join(directory, "*.toml"))):
+        with open(path, "rb") as f:
+            cfg = tomllib.load(f)
+        cfg.setdefault("name", os.path.splitext(os.path.basename(path))[0])
+        cfg.setdefault("hosts", [])
+        configs.append(cfg)
+    return configs
+
+
+MERCHANT_CONFIGS = load_merchant_configs()
+
+
+def merchant_config(url, merchant_name):
+    """La config du marchand (par hôte de l'URL ou par nom AllKeyShop), ou {} sans exception."""
+    host = urllib.parse.urlparse(url or "").netloc.lower()
+    for cfg in MERCHANT_CONFIGS:
+        if any(h in host for h in cfg["hosts"]) or (merchant_name and norm(cfg["name"]) == norm(merchant_name)):
+            return cfg
+    return {}
+
+
+def region_text(url, cfg):
+    """Texte où lire la région selon la config : None = le chemin de l'URL (défaut),
+    « » = région inconnue (pas de contrôle), sinon le texte à analyser à la place."""
+    rc = cfg.get("region") or {}
+    if rc.get("from") == "query":
+        value = urllib.parse.parse_qs(urllib.parse.urlparse(url).query).get(rc.get("param", "region"), [""])[0]
+        return rc.get("map", {}).get(value, "")
+    if rc.get("from") == "none":
+        return ""
+    return None
+
+
 # ---- Analyse d'une URL ou d'un titre marchand --------------------------------
 
 def norm(text):
@@ -336,6 +377,8 @@ def drop_language_lists(tokens):
 
 def region_family(region_name):
     n = region_name.upper()
+    if re.search(r"\bROW\b|REST OF (THE )?WORLD", n):
+        return "ROW"
     if re.search(r"\bEU\b|EUROPE", n):
         return "EU"
     if "GLOBAL" in n or "WORLDWIDE" in n or n in ("GIFT", "XBOX/PC"):
@@ -379,9 +422,10 @@ def is_bundle(edition_name):
     return any(w in words for w in BUNDLE_WORDS)
 
 
-def analyze(product, offer, text, source):
+def analyze(product, offer, text, source, region=None):
     """Confronte un texte marchand (chemin d'URL ou titre de page) à l'offre AllKeyShop.
 
+    `region` : texte où lire la région à la place de `text` (config marchand), « » = inconnue.
     Renvoie {"match": "exact" | "partial" | None, "reasons": [...], "notes": [...]}.
     Chaque raison est un motif de SUSPECT.
     """
@@ -392,8 +436,10 @@ def analyze(product, offer, text, source):
     product_words = {w for name in names for w in norm(name).split("-")}
     words = "-".join(drop_language_lists([w for w in normed.split("-") if w and w not in product_words]))
 
-    def has(word):
-        return re.search(r"(^|-)%s(-|$)" % re.escape(word), words) is not None
+    region_words = words if region is None else "-".join(drop_language_lists(norm(region).split("-")))
+
+    def has(word, where=None):
+        return re.search(r"(^|-)%s(-|$)" % re.escape(word), words if where is None else where) is not None
 
     reasons, notes = [], []
     if match is None and is_bundle(offer["edition"]):
@@ -404,10 +450,10 @@ def analyze(product, offer, text, source):
         notes.append("nom partiel")
     if not offer["account"] and any(has(w) for w in ACCOUNT_WORDS):
         reasons.append("compte chez le marchand, saisi en clé")
-    forbidden = [w for w in FORBIDDEN_REGION_WORDS if has(w)]
+    forbidden = [w for w in FORBIDDEN_REGION_WORDS if has(w, region_words)]
     if forbidden:
         reasons.append("région interdite : " + ", ".join(forbidden))
-    url_regions = {f for f, ws in REGION_FAMILIES.items() if any(has(w) for w in ws)}
+    url_regions = {f for f, ws in REGION_FAMILIES.items() if any(has(w, region_words) for w in ws)}
     aks_region = region_family(offer["region"])
     if aks_region and url_regions and aks_region not in url_regions:
         reasons.append("région : AllKeyShop %s, marchand %s" % (offer["region"], "/".join(sorted(url_regions))))
@@ -449,7 +495,7 @@ def page_title_from_html(dom):
 
 def page_title(url):
     """Titre, og:title et h1 de la page marchand, via Chromium sans écran. None si impossible."""
-    if not shutil.which(CHROMIUM) or any(h in urllib.parse.urlparse(url).netloc for h in NO_BROWSER_HOSTS):
+    if not shutil.which(CHROMIUM):
         return None
     cmd = [CHROMIUM, "--headless=new", "--no-sandbox", "--disable-gpu", "--disable-dev-shm-usage",
            "--user-agent=" + BROWSER_UA, "--virtual-time-budget=20000", "--dump-dom", url]
@@ -486,7 +532,10 @@ def check_offer(product, offer):
     if not url:
         raise CheckError("URL marchand introuvable dans la page de redirection")
     url = unwrap_affiliate(url)
-    result, method = analyze(product, offer, url_text(url), "URL"), "URL"
+    cfg = merchant_config(url, offer["merchantName"])
+    result, method = analyze(product, offer, url_text(url), "URL", region=region_text(url, cfg)), "URL"
+    if (cfg.get("region") or {}).get("from") == "query":
+        result["notes"].append("région lue dans le paramètre %s de l'URL" % (cfg["region"].get("param", "region")))
 
     if result["match"] is None:
         # 1er repli : le marchand redirige peut-être vers l'URL complète (Instant Gaming, Fanatical)
@@ -497,13 +546,13 @@ def check_offer(product, offer):
         time.sleep(REQUEST_DELAY)
         if location:
             url2 = unwrap_affiliate(urllib.parse.urljoin(url, location))
-            result2 = analyze(product, offer, url_text(url2), "URL après redirection du marchand")
+            result2 = analyze(product, offer, url_text(url2), "URL après redirection du marchand", region=region_text(url2, cfg))
             if result2["match"]:
                 result, method, url = result2, "URL après 301 marchand", url2
 
     if result["match"] is None:
-        # 2e repli : ouvrir la page marchand
-        title = page_title(url)
+        # 2e repli : ouvrir la page marchand, sauf si sa config dit qu'elle bloque les navigateurs
+        title = page_title(url) if cfg.get("browser", True) else None
         if title is None:
             return {"verdict": "À VÉRIFIER", "url": url, "method": "aucune", "notes": [],
                     "reasons": ["URL sans nom du produit et page marchand illisible"]}
@@ -639,7 +688,8 @@ def run_cycle(targets, notify, state, checker=check_offer, save=None):
                     continue
             state["checked"][key] = {
                 "verdict": res["verdict"], "reasons": res["reasons"], "product": product,
-                "edition": offer["edition"], "merchant": offer["merchantName"], "price": offer["price"],
+                "edition": offer["edition"], "region": offer["region"], "platform": offer["platform"],
+                "merchant": offer["merchantName"], "price": offer["price"],
                 "url": res["url"], "method": res["method"], "at": stamp, "seen": now,
             }
             if res["method"] != "aucune":

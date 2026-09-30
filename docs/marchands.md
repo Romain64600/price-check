@@ -12,6 +12,25 @@ Méthodes, de la moins coûteuse à la plus coûteuse :
 | **URL après le 301 du marchand** | L'URL marchand n'a qu'un numéro ; une requête chez le marchand (UA Chrome) **sans suivre la redirection** donne, dans `Location`, l'URL complète avec le slug | + 1 requête marchand, sans page |
 | **Page à ouvrir** | L'URL ne contient pas le nom : il faut charger la page marchand (Chromium sans écran, UA Chrome) et lire `<title>` / `og:title` / `h1` | + 1 page complète |
 
+## Configs marchands (`merchants/*.toml`)
+
+Toute exception propre à un marchand vit dans un fichier `merchants/<marchand>.toml`, jamais dans le code. Le fichier est trouvé par l'hôte de l'URL marchand (`hosts`) ou par le nom AllKeyShop (`name`). Clés :
+
+| Clé | Défaut | Rôle |
+|---|---|---|
+| `name` | nom du fichier | Nom AllKeyShop du marchand |
+| `hosts` | `[]` | Morceaux d'hôte qui identifient ses URL (`["wyrel.com"]`, `["amazon."]`) |
+| `browser` | `true` | `false` : ne jamais ouvrir sa page avec Chromium (elle bloque les robots) ; une URL sans nom sort en À VÉRIFIER |
+| `[region] from` | `url` | Où lire la région : `url` (mots du chemin), `query` (un paramètre de l'URL, traduit par `map`), `none` (région inconnue, pas de contrôle) |
+| `[region] param`, `map` | | Avec `from = "query"` : nom du paramètre et table valeur → mots de région (`global`, `eu`, `row`…) |
+
+Exceptions en place :
+
+- **`wyrel.toml`** (formation du 30/09/2026) : le slug de l'URL est générique (`...-starter-pack-bundle-eu-37543` pour une offre Global) ; la région affichée par la page est celle du paramètre `region=` de l'URL : 1 → global, 4 → eu, 5 → row, 19 → germany (relevé sur 38 offres, sans contradiction). Page derrière Cloudflare, `browser = false`.
+- **`amazon.toml`** : éditions physiques (région BOX), nom tronqué dans l'URL, page qui bloque Chromium : `browser = false`.
+
+Pour ajouter un marchand : copier un fichier, ajuster `name`/`hosts`, et ajouter le cas réel dans `test_price_check.py` (`TestMerchantConfigs`).
+
 ## État au 30/09/2026
 
 Testé sur les pages EA SPORTS FC 27 (Popular #1) et Dynasty Warriors 3 Complete Edition Remastered (Coming soon PC #1), une offre par marchand, puis complété par le premier passage réel sur les 9 pages (31 offres en tête, 31 OK) : **29 marchands contrôlables par l'URL seule, 1 pas encore couvert**. Les packs et bundles (`/sub/` Steam, trilogie G2A) passent par la page avec Chromium.
@@ -42,7 +61,7 @@ Testé sur les pages EA SPORTS FC 27 (Popular #1) et Dynasty Warriors 3 Complete
 | Mmoga | URL directe | oui | ea-app, english-only | `www.mmoga.com/EA-Games/EA-SPORTS-FC-27-EA-App-English-Only.html` | `English-Only` dans l'URL = restriction de langue, autorisée. |
 | Steam | URL directe pour `/app/`, **page à ouvrir** pour `/sub/` | oui pour `/app/` | — | `store.steampowered.com/app/4080220/EA_SPORTS_FC_27/` | Nom avec des `_` : `EA_SPORTS_FC_27`. Les packs (`/sub/1675064/`, AION 2 Founder's Pack) n'ont qu'un numéro : Chromium lit le titre, OK au passage réel. |
 | YUPLAY | URL directe | oui | xbox | `www.yuplay.com/product/minecraft-dungeons-ii-xbox-series-xs-and-xbox-on-pc/` | Vu au passage réel du 30/09/2026. Écrit « II » pour « 2 » : équivalence gérée depuis. |
-| Wyrel | URL directe | oui | — | `wyrel.com/en/buy-cheap-ea-sports-fc-27-pc-196673` |  |
+| Wyrel | URL directe, région dans le paramètre `region=` (`merchants/wyrel.toml`) | oui | — | `wyrel.com/en/buy-cheap-ea-sports-fc-27-pc-196673` |  |
 | Fanatical | URL après le 301 du marchand | oui | — | `www.fanatical.com/en/game/dynasty-warriors-3-complete-edition-remastered` | 301 du marchand vers l'URL avec le slug. |
 | Lootbar | URL directe | oui | — | `www.lootbar.com/game-key/ace-combat-8-wings-of-theve-emea` | Vu au passage réel du 30/09/2026 (Ace Combat 8 Deluxe). |
 | Instant Gaming | URL après le 301 du marchand | oui | ea-app | `www.instant-gaming.com/en/21656-buy-ea-sports-fc-27-pc-ea-app/` | `/en/21656-/` → 301 vers l'URL avec le slug. Page lisible en HTTP simple. |

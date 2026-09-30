@@ -341,10 +341,50 @@ class TestPageTitle(unittest.TestCase):
         with mock.patch.object(pc.shutil, "which", return_value=None):
             self.assertIsNone(pc.page_title("https://shop.example/"))
 
-    def test_page_title_skips_hosts_that_block_browsers(self):
-        with mock.patch.object(pc.subprocess, "run") as run:
-            self.assertIsNone(pc.page_title("https://www.amazon.fr/Nintendo-Legend-Zelda/dp/B0BVW3SJMF/"))
-        run.assert_not_called()
+class TestMerchantConfigs(unittest.TestCase):
+    def test_repo_configs_load(self):
+        names = {c["name"] for c in pc.load_merchant_configs()}
+        self.assertTrue({"Wyrel", "Amazon"} <= names)
+
+    def test_matching_by_host_or_name(self):
+        self.assertEqual(pc.merchant_config("https://wyrel.com/en/buy-cheap-x-1?region=1", "Wyrel")["name"], "Wyrel")
+        self.assertEqual(pc.merchant_config("https://www.amazon.fr/dp/B0/", "Amazon.fr")["name"], "Amazon")
+        self.assertEqual(pc.merchant_config("https://shop.example/x", "Wyrel")["name"], "Wyrel")  # par nom AllKeyShop
+        self.assertEqual(pc.merchant_config("https://www.kinguin.net/x", "Kinguin"), {})
+
+    def test_wyrel_region_from_query(self):
+        # Formation du 30/09/2026 : le slug dit « -eu- », la page (paramètre region=1) dit Global
+        url = ("https://wyrel.com/en/buy-cheap-grand-theft-auto-v-and-criminal-enterprise-starter-pack-bundle-eu-37543"
+               "?referal=allkeyshop&marketplace_id=11&edition_id=780&region=1")
+        cfg = pc.merchant_config(url, "Wyrel")
+        o = offer(merchantName="Wyrel", edition="Standard + DLC", region="GLOBAL", platform="rockstar")
+        res = pc.analyze("GTA 5", o, pc.url_text(url), "URL", region=pc.region_text(url, cfg))
+        self.assertEqual(res["reasons"], [])
+        res = pc.analyze("GTA 5", o, pc.url_text(url.replace("region=1", "region=4")), "URL",
+                         region=pc.region_text(url.replace("region=1", "region=4"), cfg))
+        self.assertEqual(res["reasons"], ["région : AllKeyShop GLOBAL, marchand EU"])
+        url2 = "https://wyrel.com/en/buy-cheap-ea-sports-fc-27-pc-196673?referal=allkeyshop&marketplace_id=2&edition_id=780&region=4"
+        res = pc.analyze("EA SPORTS FC 27", offer(merchantName="Wyrel", region="GIFT EU"), pc.url_text(url2), "URL",
+                         region=pc.region_text(url2, cfg))
+        self.assertEqual(res["reasons"], [])
+        self.assertEqual(pc.region_text(url.replace("region=1", "region=9"), cfg), "")  # inconnue : pas de contrôle
+        # region=5 = ROW : normal pour une offre affichée ROW, suspect pour une offre affichée GLOBAL
+        url5 = "https://wyrel.com/en/buy-cheap-kingdom-come-deliverance-ii-pc-146507?referal=allkeyshop&region=5"
+        for region, expected in (("ROW", []), ("GLOBAL", ["région : AllKeyShop GLOBAL, marchand ROW"])):
+            res = pc.analyze("Kingdom Come Deliverance 2", offer(merchantName="Wyrel", region=region), pc.url_text(url5), "URL",
+                             region=pc.region_text(url5, cfg))
+            self.assertEqual(res["reasons"], expected, region)
+
+    @mock.patch.object(pc, "REQUEST_DELAY", 0)
+    def test_amazon_never_opens_a_browser(self):
+        page = TestCheckOffer.INTERSTITIAL.replace(TestRedirection.KINGUIN, "https://www.amazon.fr/Nintendo-Zelda/dp/B0BVW3SJMF/").replace(
+            TestRedirection.KINGUIN.replace("/", "\\/"), "https://www.amazon.fr/Nintendo-Zelda/dp/B0BVW3SJMF/".replace("/", "\\/"))
+        with mock.patch.object(pc, "http_get", side_effect=[(200, None, page), (200, None, "")]), \
+             mock.patch.object(pc, "page_title") as title:
+            res = pc.check_offer("The Legend of Zelda Tears of the Kingdom Nintendo Switch",
+                                 offer(merchantName="Amazon.fr", region="BOX", platform="physical-medium"))
+        title.assert_not_called()
+        self.assertEqual(res["verdict"], "À VÉRIFIER")
 
 
 @mock.patch.object(pc, "REQUEST_DELAY", 0)

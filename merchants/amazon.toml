@@ -1,0 +1,6 @@
+# Amazon (.fr, .de, ...) — éditions physiques, région BOX sur AllKeyShop.
+# L'URL porte un nom tronqué (« Nintendo-Legend-Zelda-Kingdom-Collector ») et la page bloque
+# Chromium : inutile d'y perdre 90 s, une URL sans nom exploitable sort en À VÉRIFIER.
+name = "Amazon"
+hosts = ["amazon."]
+browser = false
