@@ -1,18 +1,34 @@
-"""Moniteur des pages produit du top AllKeyShop, avec alertes Discord.
+"""Moniteur du premier prix des pages produit du top AllKeyShop, avec alertes Discord.
 
-Boucle sans fin : récupère le top 5 All Popular et le top 4 PC Coming soon, lit les
-offres de chaque page produit et alerte sur Discord quand une offre est au moins
-30 % moins chère que la suivante dans la même édition.
+Boucle sans fin :
+- relit les listes (top 5 All Popular, top 4 Coming soon PC) toutes les 30 min ;
+- lit les offres de chaque page produit (UA AKS/Staff) toutes les 2 min 30 ;
+- pour toute nouvelle offre en premier prix d'une édition, suit son lien de
+  redirection AllKeyShop (UA AKS/Staff) pour obtenir l'URL marchand, puis vérifie
+  que cette URL (à défaut : l'URL après le 301 du marchand, puis le titre de sa
+  page ouverte avec Chromium) correspond au produit, à la région, à la
+  plateforme et à l'édition affichées ;
+- envoie le verdict (OK, SUSPECT, À VÉRIFIER) sur Discord.
+
+Voir docs/detection.md et docs/marchands.md.
 """
 
 import argparse
+import html
 import json
 import logging
 import os
 import re
+import shutil
+import subprocess
 import sys
 import time
+import unicodedata
+import urllib.error
+import urllib.parse
 import urllib.request
+
+# ---- Réglages ----------------------------------------------------------------
 
 # (id de liste sidebar.<id>, libellé, nombre de jeux suivis)
 LISTS = (
@@ -23,26 +39,84 @@ LISTS_URL = (
     "https://api.allkeyshop.com/videogame/api/topClick/getLists/eur/allkeyshop.com?"
     + "&".join(f"lists[]=sidebar.{key}" for key, _, _ in LISTS)
 )
-USER_AGENT = "AKS/Staff"
 SITE_KEY = "allkeyshop.com.eur"
+REDIRECTION_URL = "https://www.allkeyshop.com/redirection/offer/eur/%s?locale=en&merchant=%s"
+
+AKS_UA = "AKS/Staff"  # pages AllKeyShop seulement, jamais chez le marchand
+BROWSER_UA = ("Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) "
+              "Chrome/150.0.0.0 Safari/537.36")  # chez le marchand
+CHROMIUM = os.environ.get("CHROMIUM_BIN", "chromium")  # dernier repli : ouvrir la page marchand
+NOTIFY_OK = os.environ.get("NOTIFY_OK", "1") != "0"  # envoyer aussi les verdicts OK sur Discord
 
 NO_PRICE = 0.02  # sentinelle « pas de prix »
-THRESHOLD = 0.30
-
 LISTS_REFRESH = 1800  # max-age de l'API getLists
 CYCLE_INTERVAL = 150  # le cache des pages produit est de 120 s
-REQUEST_DELAY = 2  # pause entre deux GET
+REQUEST_DELAY = 2  # pause entre deux requêtes
+MAX_CHECK_FAILURES = 3  # échecs de contrôle avant de conclure « À VÉRIFIER »
+STATE_TTL_DAYS = 30  # oubli des offres plus vues en premier prix depuis ce délai
 
-GAME_PAGE_RE = re.compile(r"var gamePageTrans = (\{.*?\});\n", re.DOTALL)
+# Mots d'URL ou de titre marchand, après normalisation (minuscules, tout ce qui
+# n'est pas lettre ou chiffre devient « - »). Un mot n'est reconnu qu'entier.
+REGION_FAMILIES = {
+    "GLOBAL": ("global", "worldwide", "ww", "row"),
+    "EU": ("eu", "europe", "european"),
+}
+FORBIDDEN_REGION_WORDS = ("ru", "russia", "russian", "cis", "asia", "sea", "latam", "latin-america",
+                          "india", "tr", "turkey", "cn", "china", "ar", "argentina", "br", "brazil",
+                          "jp", "japan", "kr", "korea", "mena", "africa", "za")
+GIFT_WORDS = ("gift", "altergift")
+ACCOUNT_WORDS = ("account", "accounts", "offline-account", "shared-account")
+DLC_WORDS = ("dlc", "season-pass", "expansion", "soundtrack", "upgrade")
+PLATFORM_FAMILIES = {  # clé = activationPlatform AllKeyShop, ou son début
+    "steam": ("steam",),
+    "ea-app": ("ea-app", "eaapp", "ea-play", "origin"),
+    "epic": ("epic", "epic-games"),
+    "gog": ("gog",),
+    "ubisoft": ("ubisoft", "ubisoft-connect", "uplay"),
+    "battle-net": ("battle-net", "battlenet", "blizzard"),
+    "rockstar": ("rockstar",),
+    "microsoft-store": ("microsoft-store", "windows-store", "microsoft"),
+    "xbox-play-anywhere": ("xbox-play-anywhere", "play-anywhere", "xbox", "windows"),
+    "xbox": ("xbox", "xbox-live"),
+    "playstation": ("playstation", "psn", "ps5", "ps4"),
+    "nintendo": ("nintendo", "switch"),
+}
+EDITION_WORDS = ("standard", "deluxe", "digital-deluxe", "ultimate", "gold", "premium", "complete",
+                 "definitive", "goty", "game-of-the-year", "collector", "collectors", "legendary",
+                 "enhanced", "anniversary", "directors-cut", "silver", "platinum")
+EDITION_SYNONYMS = {"goty": "game of the year", "collectors": "collector",
+                    "digital-deluxe": "deluxe", "directors-cut": "director s cut"}
+BUNDLE_WORDS = ("bundle", "pack", "collection", "trilogy")  # éditions dont le nom diffère par nature
+# Mots qui ne comptent pas pour reconnaître le nom du produit dans une URL
+SOFT_WORDS = {"the", "of", "a", "an", "and", "edition", "remastered", "remaster", "remake", "hd"} | set(EDITION_WORDS)
+# Noms que les marchands écrivent autrement qu'AllKeyShop
+NAME_ALIASES = {
+    "GTA 6": ("Grand Theft Auto VI", "Grand Theft Auto 6"),
+}
 
 log = logging.getLogger("price-check")
 
 
-def http_get(url, timeout=30):
-    req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
-    with urllib.request.urlopen(req, timeout=timeout) as resp:
-        return resp.read().decode("utf-8")
+# ---- HTTP --------------------------------------------------------------------
 
+class NoRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, *args, **kwargs):
+        return None
+
+
+def http_get(url, ua, follow=True, timeout=30):
+    """Renvoie (statut HTTP, en-tête Location, corps). Un statut d'erreur ne lève pas."""
+    req = urllib.request.Request(url, headers={
+        "User-Agent": ua, "Accept": "text/html,*/*;q=0.8", "Accept-Language": "en-GB,en;q=0.9"})
+    opener = urllib.request.build_opener() if follow else urllib.request.build_opener(NoRedirect)
+    try:
+        with opener.open(req, timeout=timeout) as resp:
+            return resp.status, resp.headers.get("Location"), resp.read().decode("utf-8", "replace")
+    except urllib.error.HTTPError as e:
+        return e.code, e.headers.get("Location"), ""
+
+
+# ---- AllKeyShop : listes, page produit, redirection ---------------------------
 
 def parse_lists(data, lists=LISTS):
     """Renvoie [(liste, rang, nom, url)] pour le haut de chaque liste de `lists`."""
@@ -58,57 +132,287 @@ def parse_lists(data, lists=LISTS):
     return targets
 
 
-def parse_game_page(html):
-    m = GAME_PAGE_RE.search(html)
+GAME_PAGE_RE = re.compile(r"var gamePageTrans = (\{.*?\});\n", re.DOTALL)
+
+
+def parse_game_page(page_html):
+    m = GAME_PAGE_RE.search(page_html)
     if not m:
         raise ValueError("gamePageTrans introuvable")
     return json.loads(m.group(1))
 
 
-def find_anomalies(trans, threshold=THRESHOLD):
-    """Offres de clés au moins `threshold` moins chères que la suivante de la même édition.
-
-    Même périmètre que le tableau affiché : priceCard, offres de clés seulement.
-    """
+def first_prices(trans):
+    """Offre de clé la moins chère de chaque édition (priceCard), hors offres compte et « sans prix »."""
     editions = trans.get("editions") or {}
     regions = trans.get("regions") or {}
-    groups = {}
+    best = {}
     for p in trans.get("prices") or []:
         if p.get("price") == NO_PRICE or p.get("account") or not p.get("dispo"):
             continue
-        groups.setdefault(str(p["edition"]), []).append(p)
-
-    anomalies = []
-    for edition_id, offers in groups.items():
-        if len(offers) < 2:
-            continue
-        offers.sort(key=lambda p: p["priceCard"])
-        cheapest, runner_up = offers[0], offers[1]
-        if runner_up["priceCard"] <= 0:
-            continue
-        gap = 1 - cheapest["priceCard"] / runner_up["priceCard"]
-        if gap >= threshold:
-            anomalies.append({
-                "offer_id": cheapest["id"],
-                "edition": editions.get(edition_id, {}).get("name", edition_id),
-                "merchant": cheapest["merchantName"],
-                "region": regions.get(str(cheapest["region"]), {}).get("region_name", cheapest["region"]),
-                "platform": cheapest.get("activationPlatform"),
-                "price": cheapest["priceCard"],
-                "next_price": runner_up["priceCard"],
-                "next_merchant": runner_up["merchantName"],
-                "gap": gap,
-            })
-    return anomalies
+        edition = str(p["edition"])
+        if edition not in best or p["priceCard"] < best[edition]["priceCard"]:
+            best[edition] = p
+    offers = []
+    for edition, p in sorted(best.items(), key=lambda kv: kv[1]["priceCard"]):
+        offers.append({
+            "id": p["id"], "merchant": p["merchant"], "merchantName": p["merchantName"],
+            "edition": editions.get(edition, {}).get("name", edition),
+            "region": regions.get(str(p["region"]), {}).get("region_name", str(p["region"])),
+            "platform": p.get("activationPlatform") or "",
+            "price": p["priceCard"], "account": bool(p.get("account")),
+        })
+    return offers
 
 
-def format_alert(label, rank, name, url, a):
-    return (
-        f"**{name}** ({label} #{rank}) - {a['edition']}\n"
-        f"{a['merchant']} ({a['region']}, {a['platform']}) : **{a['price']:.2f} €**, "
-        f"soit -{a['gap']:.0%} face à {a['next_merchant']} à {a['next_price']:.2f} €\n"
-        f"Offre {a['offer_id']} - <{url}>"
-    )
+APP_DATA_RE = re.compile(r'<script[^>]*id="appData"[^>]*>(.*?)</script>', re.DOTALL)
+META_REFRESH_RE = re.compile(r'http-equiv="refresh"\s+content="\d+;\s*URL=([^"]+)"', re.IGNORECASE)
+
+
+def merchant_url(interstitial):
+    """URL marchand de la page « Redirecting... » d'AllKeyShop (JSON appData, sinon meta refresh)."""
+    m = APP_DATA_RE.search(interstitial)
+    if m:
+        try:
+            url = json.loads(m.group(1)).get("redirectionUrl")
+        except ValueError:
+            url = None
+        if url:
+            return url
+    m = META_REFRESH_RE.search(interstitial)
+    # pas html.unescape : « &currency=EUR » y deviendrait « ¤cy=EUR » (entité &curren)
+    return m.group(1).replace("&amp;", "&") if m else None
+
+
+def unwrap_affiliate(url):
+    """Lien affilié (go.loaded.com/...?u=https://www.loaded.com/...) : la cible est en paramètre."""
+    query = urllib.parse.parse_qs(urllib.parse.urlparse(url).query)
+    for key in ("u", "url", "dest", "destination", "redirect", "target", "link", "r"):
+        for value in query.get(key, ()):
+            if value.startswith("http"):
+                return unwrap_affiliate(value)
+    return url
+
+
+# ---- Analyse d'une URL ou d'un titre marchand --------------------------------
+
+def norm(text):
+    """« EA SPORTS FC 27 » -> « ea-sports-fc-27 »."""
+    text = unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode()
+    return re.sub(r"[^a-z0-9]+", "-", text.lower().replace("&", " and ")).strip("-")
+
+
+def compact(text):
+    return norm(text).replace("-", "")
+
+
+LOCALE_SEGMENT_RE = re.compile(r"^[a-z]{2}([-_][a-zA-Z]{2})?$")
+
+
+def url_text(url):
+    """Le chemin de l'URL, sans les segments de langue (/en/, /en-us/)."""
+    segments = [s for s in urllib.parse.urlparse(url).path.split("/") if s and not LOCALE_SEGMENT_RE.match(s)]
+    return " ".join(urllib.parse.unquote(s) for s in segments)
+
+
+def name_match(names, normed):
+    """« exact » si un des noms est dans le texte, « partial » si tous ses mots significatifs y sont."""
+    compact_text = normed.replace("-", "")
+    for name in names:
+        c = compact(name)
+        if c and c in compact_text:
+            return "exact"
+    tokens = set(normed.split("-"))
+    for name in names:
+        significant = [w for w in norm(name).split("-") if w and w not in SOFT_WORDS]
+        if significant and all(w in tokens for w in significant):
+            return "partial"
+    return None
+
+
+def region_family(region_name):
+    n = region_name.upper()
+    if re.search(r"\bEU\b|EUROPE", n):
+        return "EU"
+    if "GLOBAL" in n or "WORLDWIDE" in n or n in ("GIFT", "XBOX/PC"):
+        return "GLOBAL"
+    return None
+
+
+def platform_family(platform):
+    if platform in PLATFORM_FAMILIES:
+        return platform
+    for key in sorted(PLATFORM_FAMILIES, key=len, reverse=True):
+        if platform.startswith(key):
+            return key
+    return None
+
+
+def canonical_edition(text):
+    """« GOTY » et « Game of the Year » -> « gameoftheyear »."""
+    c = compact(text)
+    for word, full in EDITION_SYNONYMS.items():
+        c = c.replace(compact(word), compact(full))
+    return c
+
+
+def edition_matches(edition_name, url_editions):
+    aks = canonical_edition(edition_name)
+    return any(canonical_edition(w) in aks for w in url_editions)
+
+
+def is_bundle(edition_name):
+    words = set(norm(edition_name).split("-"))
+    return any(w in words for w in BUNDLE_WORDS)
+
+
+def analyze(product, offer, text, source):
+    """Confronte un texte marchand (chemin d'URL ou titre de page) à l'offre AllKeyShop.
+
+    Renvoie {"match": "exact" | "partial" | None, "reasons": [...], "notes": [...]}.
+    Chaque raison est un motif de SUSPECT.
+    """
+    names = (product,) + tuple(NAME_ALIASES.get(product, ()))
+    normed = norm(text)
+    match = name_match(names, normed)
+    # Le reste s'analyse sans les mots du nom du produit (« Complete Edition Remastered »...)
+    product_words = {w for name in names for w in norm(name).split("-")}
+    words = "-".join(w for w in normed.split("-") if w and w not in product_words)
+
+    def has(word):
+        return re.search(r"(^|-)%s(-|$)" % re.escape(word), words) is not None
+
+    reasons, notes = [], []
+    if match is None and is_bundle(offer["edition"]):
+        notes.append("édition %s : nom non contrôlé" % offer["edition"])  # un bundle porte un autre nom
+    elif match is None:
+        reasons.append("nom du produit absent (%s)" % source)
+    elif match == "partial":
+        notes.append("nom partiel")
+    if not offer["account"] and any(has(w) for w in ACCOUNT_WORDS):
+        reasons.append("compte chez le marchand, saisi en clé")
+    forbidden = [w for w in FORBIDDEN_REGION_WORDS if has(w)]
+    if forbidden:
+        reasons.append("région interdite : " + ", ".join(forbidden))
+    url_regions = {f for f, ws in REGION_FAMILIES.items() if any(has(w) for w in ws)}
+    aks_region = region_family(offer["region"])
+    if aks_region and url_regions and aks_region not in url_regions:
+        reasons.append("région : AllKeyShop %s, marchand %s" % (offer["region"], "/".join(sorted(url_regions))))
+    if any(has(w) for w in GIFT_WORDS) and "GIFT" not in offer["region"].upper():
+        reasons.append("gift chez le marchand, affiché en clé %s" % offer["region"])
+    aks_platform = platform_family(offer["platform"])
+    url_platforms = {f for f, ws in PLATFORM_FAMILIES.items() if any(has(w) for w in ws)}
+    if aks_platform and url_platforms and aks_platform not in url_platforms:
+        reasons.append("plateforme : AllKeyShop %s, marchand %s" % (offer["platform"], "/".join(sorted(url_platforms))))
+    url_editions = [w for w in EDITION_WORDS if has(w)]
+    if url_editions and not edition_matches(offer["edition"], url_editions):
+        reasons.append("édition : AllKeyShop %s, marchand %s" % (offer["edition"], ", ".join(url_editions)))
+    dlc = [w for w in DLC_WORDS if has(w)]
+    if dlc and not has("bonus"):  # « pre-order-bonus-dlc » : le bonus vendu avec le jeu
+        reasons.append("contenu additionnel : " + ", ".join(dlc))
+    return {"match": match, "reasons": reasons, "notes": notes}
+
+
+# ---- Page marchand (dernier repli) -------------------------------------------
+
+TITLE_RES = (
+    re.compile(r"<title[^>]*>(.*?)</title>", re.DOTALL | re.IGNORECASE),
+    re.compile(r'property="og:title"\s+content="([^"]*)"', re.IGNORECASE),
+    re.compile(r'content="([^"]*)"\s+property="og:title"', re.IGNORECASE),
+    re.compile(r"<h1[^>]*>(.*?)</h1>", re.DOTALL | re.IGNORECASE),
+)
+
+
+def page_title_from_html(dom):
+    parts = []
+    for rx in TITLE_RES:
+        m = rx.search(dom)
+        if m:
+            parts.append(re.sub(r"<[^>]+>", " ", html.unescape(m.group(1))))
+    text = re.sub(r"\s+", " ", " ".join(parts)).strip()
+    return text or None
+
+
+def page_title(url):
+    """Titre, og:title et h1 de la page marchand, via Chromium sans écran. None si impossible."""
+    if not shutil.which(CHROMIUM):
+        return None
+    cmd = [CHROMIUM, "--headless=new", "--no-sandbox", "--disable-gpu", "--disable-dev-shm-usage",
+           "--user-agent=" + BROWSER_UA, "--virtual-time-budget=20000", "--dump-dom", url]
+    try:
+        dom = subprocess.run(cmd, capture_output=True, timeout=90).stdout.decode("utf-8", "replace")
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    return page_title_from_html(dom)
+
+
+# ---- Contrôle d'une offre ----------------------------------------------------
+
+class CheckError(Exception):
+    """Contrôle impossible pour l'instant (réseau, redirection AllKeyShop en erreur) : à réessayer."""
+
+
+def check_offer(product, offer):
+    """Suit la redirection AllKeyShop de l'offre et confronte l'URL marchand au produit.
+
+    Renvoie {"verdict", "reasons", "notes", "url", "method"}.
+    """
+    try:
+        status, _, body = http_get(REDIRECTION_URL % (offer["id"], offer["merchant"]), AKS_UA)
+    except OSError as e:
+        raise CheckError("redirection AllKeyShop : %s" % e)
+    time.sleep(REQUEST_DELAY)
+    if status != 200:
+        raise CheckError("redirection AllKeyShop HTTP %s" % status)
+    url = merchant_url(body)
+    if not url:
+        raise CheckError("URL marchand introuvable dans la page de redirection")
+    url = unwrap_affiliate(url)
+    result, method = analyze(product, offer, url_text(url), "URL"), "URL"
+
+    if result["match"] is None:
+        # 1er repli : le marchand redirige peut-être vers l'URL complète (Instant Gaming, Fanatical)
+        try:
+            _, location, _ = http_get(url, BROWSER_UA, follow=False)
+        except OSError:
+            location = None
+        time.sleep(REQUEST_DELAY)
+        if location:
+            url2 = unwrap_affiliate(urllib.parse.urljoin(url, location))
+            result2 = analyze(product, offer, url_text(url2), "URL après redirection du marchand")
+            if result2["match"]:
+                result, method, url = result2, "URL après 301 marchand", url2
+
+    if result["match"] is None:
+        # 2e repli : ouvrir la page marchand
+        title = page_title(url)
+        if title is None:
+            return {"verdict": "À VÉRIFIER", "url": url, "method": "aucune", "notes": [],
+                    "reasons": ["URL sans nom du produit et page marchand illisible"]}
+        result, method = analyze(product, offer, title, "titre de la page"), "page (Chromium)"
+
+    return {"verdict": "SUSPECT" if result["reasons"] else "OK", "url": url, "method": method,
+            "reasons": result["reasons"], "notes": result["notes"]}
+
+
+# ---- Alertes, état, boucle ---------------------------------------------------
+
+ICONS = {"OK": "🟢", "SUSPECT": "🔴", "À VÉRIFIER": "🟠"}
+
+
+def format_alert(label, rank, product, page_url, offer, res):
+    lines = [
+        f"{ICONS[res['verdict']]} **{res['verdict']}** · **{product}** ({label} #{rank}) · {offer['edition']}",
+        f"{offer['merchantName']} · {offer['region']} · {offer['platform'] or 'plateforme ?'} · "
+        f"**{offer['price']:.2f} €** · offre {offer['id']} · contrôle : {res['method']}",
+    ]
+    lines += ["Raison : " + r for r in res["reasons"]]
+    if res["notes"]:
+        lines.append("Note : " + ", ".join(res["notes"]))
+    if res.get("url"):
+        lines.append(f"Marchand : <{res['url']}>")
+    lines.append(f"Page : <{page_url}>")
+    return "\n".join(lines)
 
 
 def send_discord(webhook, content):
@@ -123,59 +427,119 @@ def send_discord(webhook, content):
 def load_state(path):
     try:
         with open(path) as f:
-            return json.load(f)
+            state = json.load(f)
     except (OSError, ValueError):
-        return {}
+        state = {}
+    state.setdefault("checked", {})  # id d'offre -> verdict rendu
+    state.setdefault("merchants", {})  # marchand -> méthodes de contrôle qui ont marché
+    for m in state["merchants"].values():  # ancien format : une seule méthode
+        if "methods" not in m:
+            m["methods"] = {m.pop("method", "URL"): 1}
+    return state
 
 
 def save_state(path, state):
     tmp = path + ".tmp"
     with open(tmp, "w") as f:
-        json.dump(state, f)
+        json.dump(state, f, ensure_ascii=False, indent=1)
     os.replace(tmp, path)
 
 
-def run_cycle(targets, notify, state):
-    """Vérifie chaque page produit. `state` retient les offres déjà alertées (id -> prix)."""
-    seen = set()
-    for label, rank, name, url in targets:
+def prune_state(state, now):
+    limit = now - STATE_TTL_DAYS * 86400
+    for key in [k for k, v in state["checked"].items() if v.get("seen", now) < limit]:
+        del state["checked"][key]
+
+
+FAILURES = {}  # id d'offre -> contrôles ratés d'affilée
+
+
+def run_cycle(targets, notify, state, checker=check_offer):
+    """Lit chaque page suivie et contrôle toute offre en premier prix pas encore contrôlée."""
+    now = time.time()
+    stamp = time.strftime("%Y-%m-%d %H:%M", time.localtime(now))
+    for label, rank, product, page_url in targets:
         try:
-            anomalies = find_anomalies(parse_game_page(http_get(url)))
+            _, _, page_html = http_get(page_url, AKS_UA)
+            trans = parse_game_page(page_html)
         except Exception as e:
-            log.warning("%s : %s", name, e)
+            log.warning("%s : %s", product, e)
             continue
         finally:
             time.sleep(REQUEST_DELAY)
-        for a in anomalies:
-            key = str(a["offer_id"])
-            seen.add(key)
-            if state.get(key) == a["price"]:
+        for offer in first_prices(trans):
+            key = str(offer["id"])
+            if key in state["checked"]:
+                state["checked"][key]["seen"] = now
                 continue
-            msg = format_alert(label, rank, name, url, a)
-            log.info("ALERTE %s", msg.replace("\n", " | "))
             try:
-                notify(msg)
-                state[key] = a["price"]
-            except Exception as e:
-                log.error("Envoi Discord impossible : %s", e)
-    # Une offre qui n'est plus anormale pourra de nouveau alerter plus tard.
-    for key in list(state):
-        if key not in seen:
-            del state[key]
+                res = checker(product, offer)
+            except CheckError as e:
+                FAILURES[key] = FAILURES.get(key, 0) + 1
+                log.warning("%s / %s : %s (%s) : %s", product, offer["edition"], offer["merchantName"], key, e)
+                if FAILURES[key] < MAX_CHECK_FAILURES:
+                    continue
+                res = {"verdict": "À VÉRIFIER", "url": None, "method": "aucune", "notes": [],
+                       "reasons": ["contrôle impossible : %s" % e]}
+            FAILURES.pop(key, None)
+            msg = format_alert(label, rank, product, page_url, offer, res)
+            log.info("%s", msg.replace("\n", " | "))
+            if res["verdict"] != "OK" or NOTIFY_OK:
+                try:
+                    notify(msg)
+                except Exception as e:
+                    log.error("Envoi Discord impossible, nouvel essai au prochain passage : %s", e)
+                    continue
+            state["checked"][key] = {
+                "verdict": res["verdict"], "reasons": res["reasons"], "product": product,
+                "edition": offer["edition"], "merchant": offer["merchantName"], "price": offer["price"],
+                "url": res["url"], "method": res["method"], "at": stamp, "seen": now,
+            }
+            if res["method"] != "aucune":
+                m = state["merchants"].setdefault(offer["merchantName"], {"methods": {}})
+                m["methods"][res["method"]] = m["methods"].get(res["method"], 0) + 1
+                m.update(url=res["url"], at=stamp)
+    prune_state(state, now)
+
+
+def coverage_table(state):
+    """Table Markdown des marchands rencontrés et de la méthode qui a marché, pour docs/marchands.md."""
+    rows = ["| Marchand | Méthodes (nombre de contrôles) | Dernier contrôle | Exemple d'URL |", "|---|---|---|---|"]
+    for name, m in sorted(state["merchants"].items(), key=lambda kv: kv[0].lower()):
+        methods = ", ".join(f"{k} ({v})" for k, v in sorted(m["methods"].items(), key=lambda kv: -kv[1]))
+        rows.append(f"| {name} | {methods} | {m['at']} | `{re.sub(r'[?#].*', '', m['url'])}` |")
+    return "\n".join(rows)
 
 
 def main():
-    ap = argparse.ArgumentParser(description=__doc__)
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--dry-run", action="store_true", help="affiche les alertes sans les envoyer")
     ap.add_argument("--once", action="store_true", help="un seul passage puis arrêt")
-    ap.add_argument("--state", default="alerted.json", help="fichier des offres déjà alertées")
+    ap.add_argument("--state", default="state.json", help="fichier des offres déjà contrôlées")
+    ap.add_argument("--coverage", action="store_true", help="affiche la table de couverture des marchands et sort")
+    ap.add_argument("--check", nargs=2, metavar=("PRODUIT", "URL"), help="analyse une URL marchand et sort")
+    ap.add_argument("--edition", default="Standard", help="avec --check : édition affichée")
+    ap.add_argument("--region", default="GLOBAL", help="avec --check : région affichée")
+    ap.add_argument("--platform", default="", help="avec --check : plateforme d'activation affichée")
     args = ap.parse_args()
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 
+    if args.coverage:
+        print(coverage_table(load_state(args.state)))
+        return
+    if args.check:
+        product, url = args.check
+        offer = {"account": False, "edition": args.edition, "region": args.region, "platform": args.platform}
+        res = analyze(product, offer, url_text(unwrap_affiliate(url)), "URL")
+        print("nom :", res["match"] or "absent", "| verdict :", "SUSPECT" if res["reasons"] else "OK")
+        for r in res["reasons"]:
+            print("raison :", r)
+        return
+
     webhook = os.environ.get("DISCORD_WEBHOOK_URL")
     if args.dry_run:
-        notify = print
+        notify = lambda msg: None  # le journal affiche déjà chaque verdict sur une ligne
     elif webhook:
         notify = lambda msg: send_discord(webhook, msg)
     else:
@@ -187,7 +551,8 @@ def main():
         start = time.monotonic()
         try:
             if not targets or start - lists_at >= LISTS_REFRESH:
-                targets = parse_lists(json.loads(http_get(LISTS_URL)))
+                _, _, body = http_get(LISTS_URL, AKS_UA)
+                targets = parse_lists(json.loads(body))
                 lists_at = start
                 log.info("%d pages suivies : %s", len(targets), ", ".join(t[2] for t in targets))
             run_cycle(targets, notify, state)

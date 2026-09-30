@@ -1,6 +1,6 @@
 # price-check
 
-Surveille en continu le **premier prix** des pages produit du top AllKeyShop, et alerte sur Discord quand ce premier prix ne correspond pas au produit ou à notre marché.
+Surveille en continu le **premier prix** des pages produit du top AllKeyShop, et alerte sur Discord quand l'offre en tête ne correspond pas au produit, à la région, à la plateforme ou à l'édition affichées.
 
 Pages suivies (widget top clics de la barre de droite) :
 - top 5 **All Popular** (`sidebar.all.popular`)
@@ -10,59 +10,61 @@ Pages suivies (widget top clics de la barre de droite) :
 
 Une offre peut être ajoutée sur une page produit alors qu'elle ne devrait pas y être :
 
-- **Région non affichable** : c'est bien le produit, mais dans une région qu'on n'est pas censé afficher sur notre marché.
-- **Compte saisi comme clé** : sur la page du marchand, c'est un compte, mais nous l'avons saisi en tant que clé normale.
-- **Autre produit** : l'offre ne correspond pas au produit de la page, par exemple Sonic 1 ou un vieux Mario sur la page du dernier Sonic. **C'est surtout ce cas qui fait peur.**
+- **Autre produit** : Sonic 1 ou un vieux Mario sur la page du dernier Sonic. **C'est surtout ce cas qui fait peur.**
+- **Région non affichable** : le bon produit, mais dans une région qu'on n'est pas censé afficher sur notre marché.
+- **Compte saisi comme clé** : sur la page du marchand, c'est un compte, mais nous l'avons saisi en tant que clé.
+- **Mauvaise édition ou DLC** : Deluxe saisie en Standard, season pass saisi comme le jeu.
 
-Si cette offre est la moins chère, elle devient le premier prix affiché, et ce premier prix est faux. **L'écart avec l'offre suivante n'est pas un critère** : il peut être de 30 %, comme d'un centime. Il faut donc contrôler l'offre elle-même, pas son écart de prix.
-
-> **État actuel** : la version en place ne détecte qu'un écart d'au moins 30 % entre les deux offres les moins chères. Elle ne répond pas à l'objectif et doit être revue. La règle proposée est dans [docs/detection.md](docs/detection.md#règle-proposée--lurl-dabord) : pour toute nouvelle offre en premier prix, suivre son lien de redirection AllKeyShop (UA `AKS/Staff`) et contrôler **l'URL marchand**, qui contient presque toujours le nom du produit, la région et la plateforme. Chromium sans écran en repli quand l'URL ne dit rien.
+Si cette offre est la moins chère, elle devient le premier prix affiché, et ce premier prix est faux. L'écart avec l'offre suivante n'est pas un critère : il peut être d'un centime. Il faut donc contrôler l'offre elle-même, ce que permet son lien de redirection AllKeyShop : il donne l'URL du marchand, qui contient presque toujours le nom du produit, la région et la plateforme.
 
 ## Démarrage rapide
 
 ```
 echo 'DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/...' > .env
-python3 price_check.py --dry-run --once          # test : un passage, sans envoi
+python3 price_check.py --dry-run --once          # test : un passage, verdicts affichés sans envoi
 sudo cp price-check.service /etc/systemd/system/
 sudo systemctl enable --now price-check          # boucle sans fin, relancée si elle plante
 journalctl -u price-check -f
 ```
 
-Python 3 seulement, aucune dépendance.
+Python 3 seulement, aucune dépendance. Chromium (déjà sur le serveur) sert de dernier repli pour ouvrir la page d'un marchand dont l'URL ne dit rien.
 
-## Fonctionnement actuel (à revoir)
+## Fonctionnement
 
 1. Toutes les 30 min, il relit les listes via l'API JSON `getLists`, en ne gardant que les jeux.
-2. Toutes les 2 min 30, il lit les offres de chaque page (`var gamePageTrans` dans le HTML), avec 2 s de pause entre deux GET.
-3. Pour chaque édition, il compare les deux offres de clés les moins chères (`priceCard`, sans les offres compte ni les offres « sans prix » à `0.02`).
-4. Si l'écart est d'au moins 30 %, il alerte sur Discord, une seule fois par offre et par prix (`alerted.json`).
+2. Toutes les 2 min 30, il lit les offres de chaque page produit (`var gamePageTrans` dans le HTML, user agent `AKS/Staff`) et prend, pour chaque édition, l'offre de clé la moins chère (`priceCard`, sans les offres compte ni les offres « sans prix » à `0.02`).
+3. Toute offre en tête **jamais contrôlée** est contrôlée une fois : redirection AllKeyShop (`AKS/Staff`) → URL marchand → le nom du produit doit y être, et les mots de région, plateforme et édition doivent être compatibles avec l'offre. Si l'URL ne dit rien : le 301 du marchand, puis en dernier recours sa page ouverte avec Chromium (user agent Chrome).
+4. Verdict sur Discord : 🟢 `OK`, 🔴 `SUSPECT` (avec la raison), 🟠 `À VÉRIFIER` (impossible de conclure). Les OK partent aussi au début (`NOTIFY_OK=0` pour les couper).
 
-Le moniteur ne fait que des GET en lecture seule et n'appelle jamais les liens `/redirection/` (ils comptent des clics).
+Détails et exemple d'alerte : [docs/detection.md](docs/detection.md). Le moniteur ne fait que des GET, jamais de wp-admin ; `AKS/Staff` n'est utilisé que sur AllKeyShop.
 
 ## Couverture des marchands
 
-Le contrôle passe par l'URL marchand que donne le lien de redirection AllKeyShop. État au 30/09/2026, sur 28 marchands testés :
+État au 30/09/2026, sur 29 marchands testés :
 
-- **26 contrôlables par l'URL seule**, dont 2 après le 301 du marchand lui-même (Instant Gaming, Fanatical).
-- **2 pas encore couverts** : Epic Games et EA.com (URL partielle, page à ouvrir avec Chromium).
-- **Non testés** : les marchands des 7 autres pages suivies.
+- **28 contrôlables par l'URL seule**, dont 2 après le 301 du marchand lui-même (Instant Gaming, Fanatical) et 1 par nom partiel (EA.com).
+- **1 pas encore couvert** : Epic Games (URL partielle, page à ouvrir avec Chromium).
+- **Packs et bundles** (Steam `/sub/`, trilogie G2A) : page ouverte avec Chromium, OK au passage réel.
+- **Non vérifiés** : les marchands qui n'ont pas encore eu d'offre en tête.
 
-Table détaillée, méthode par méthode : [docs/marchands.md](docs/marchands.md). Elle doit être mise à jour à chaque marchand qui oblige à ouvrir sa page, pour qu'on sache toujours qui est monitoré et qui ne l'est pas encore.
+Premier passage réel du 30/09/2026 sur les 9 pages : 31 offres en tête contrôlées, 31 OK, 0 alerte.
+
+Table détaillée, méthode par méthode : [docs/marchands.md](docs/marchands.md). Elle doit être mise à jour à chaque marchand qui oblige à ouvrir sa page, pour qu'on sache toujours qui est monitoré et qui ne l'est pas encore. `python3 price_check.py --coverage` affiche ce que le moniteur a constaté.
 
 ## Documentation
 
 | Document | Contenu |
 |---|---|
-| [docs/detection.md](docs/detection.md) | Objectif, user agents, lien de redirection, règle proposée « l'URL d'abord », règle actuelle, questions ouvertes |
-| [docs/exploitation.md](docs/exploitation.md) | Installation, options, réglages, systemd, journaux, tests |
+| [docs/detection.md](docs/detection.md) | Objectif, user agents, lien de redirection, règle en place, verdicts, limites, questions ouvertes |
 | [docs/marchands.md](docs/marchands.md) | Couverture par marchand : méthode de contrôle, marchands non couverts |
+| [docs/exploitation.md](docs/exploitation.md) | Installation, options, réglages, systemd, journaux, état, tests |
 | [docs/reconnaissance.md](docs/reconnaissance.md) | Analyse du site : API des listes, cache, structure des offres |
 
 ## Arborescence
 
 | Fichier | Rôle |
 |---|---|
-| `price_check.py` | Le moniteur (réglages en tête de fichier) |
+| `price_check.py` | Le moniteur (réglages et listes de mots en tête de fichier) |
 | `test_price_check.py` | Tests hors ligne : `python3 -m unittest -v` |
 | `price-check.service` | Service systemd |
 | `docs/` | Documentation |
@@ -79,4 +81,6 @@ Table détaillée, méthode par méthode : [docs/marchands.md](docs/marchands.md
 | `api_topclick_all-popular_pc-soon.json` | Réponse de l'API getLists (all.popular + pc.soon), 30/09/2026 |
 | `prod_popular1_ea-fc-27.html` + `_gamePageTrans.json` | Page produit n°1 Popular |
 | `prod_soon1_minecraft-dungeons-2.html` + `_gamePageTrans.json` | Page produit n°1 Coming soon |
+| `redirection_kinguin.html` | Page de redirection AllKeyShop d'une offre Kinguin, 30/09/2026 |
+| `merchant_urls.json` | Les 28 URL marchand relevées le 30/09/2026, avec l'offre AllKeyShop correspondante |
 | `autoptimize.js`, `product_bundle.js` | Bundles JS du site (logique top clics et offres) |

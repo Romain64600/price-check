@@ -1,3 +1,5 @@
+"""Tests hors ligne, sur les fichiers de samples/ : python3 -m unittest -v"""
+
 import copy
 import json
 import os
@@ -10,11 +12,18 @@ SAMPLES = os.path.join(os.path.dirname(__file__), "samples")
 
 
 def sample(name):
-    with open(os.path.join(SAMPLES, name)) as f:
+    with open(os.path.join(SAMPLES, name), encoding="utf-8") as f:
         return f.read()
 
 
-class TestParsing(unittest.TestCase):
+def offer(**kw):
+    base = {"id": 1, "merchant": 47, "merchantName": "Kinguin", "edition": "Standard",
+            "region": "GLOBAL", "platform": "steam", "price": 10.0, "account": False}
+    base.update(kw)
+    return base
+
+
+class TestAllKeyShopParsing(unittest.TestCase):
     def test_lists(self):
         targets = pc.parse_lists(json.loads(sample("api_topclick_all-popular_pc-soon.json")))
         popular = [t[2] for t in targets if t[0] == "Popular"]
@@ -28,74 +37,341 @@ class TestParsing(unittest.TestCase):
         data = json.loads(sample("api_topclick_sidebar.json"))
         targets = pc.parse_lists(data, [("all.popular", "Popular", 60)])
         self.assertTrue(targets)
-        names = {i["name"] for i in data["sidebar"]["all.popular"]["items"] if i["productType"] != "game"}
-        self.assertFalse(names & {t[2] for t in targets})
+        software = {i["name"] for i in data["sidebar"]["all.popular"]["items"] if i["productType"] != "game"}
+        self.assertFalse(software & {t[2] for t in targets})
 
     def test_game_page_matches_saved_json(self):
         trans = pc.parse_game_page(sample("prod_popular1_ea-fc-27.html"))
         self.assertEqual(trans["prices"], json.loads(sample("prod_popular1_gamePageTrans.json"))["prices"])
 
+    def test_first_prices_one_per_edition(self):
+        trans = json.loads(sample("prod_popular1_gamePageTrans.json"))
+        firsts = pc.first_prices(trans)
+        self.assertEqual([f["edition"] for f in firsts], ["Standard", "Standard + Bonus", "Ultimate", "Ultimate Plus"])
+        standard = firsts[0]
+        self.assertEqual((standard["merchantName"], standard["price"], standard["region"], standard["platform"]),
+                         ("Mmoga", 54.99, "IN ENGLISH ONLY", "ea-app"))
+        self.assertFalse(any(f["account"] for f in firsts))
+        self.assertFalse(any(f["price"] == pc.NO_PRICE for f in firsts))
 
-class TestAnomalies(unittest.TestCase):
+    def test_first_prices_ignore_sentinel_and_accounts(self):
+        trans = json.loads(sample("prod_popular1_gamePageTrans.json"))
+        cheap = copy.deepcopy(trans["prices"][0])
+        cheap.update(id=1, edition="1", account=False, price=1.0, priceCard=1.0, dispo=1)
+        sentinel = dict(cheap, id=2, price=pc.NO_PRICE, priceCard=pc.NO_PRICE)
+        account = dict(cheap, id=3, account=True, price=0.5, priceCard=0.5)
+        unavailable = dict(cheap, id=4, price=0.4, priceCard=0.4, dispo=0)
+        trans["prices"] += [sentinel, account, unavailable]
+        self.assertEqual(pc.first_prices(trans)[0]["merchantName"], "Mmoga")
+        trans["prices"].append(cheap)
+        self.assertEqual(pc.first_prices(trans)[0]["id"], 1)
+
+
+class TestRedirection(unittest.TestCase):
+    KINGUIN = "https://www.kinguin.net/category/609603/ea-sports-fc-27-pc-steam-altergift?r=3445&nosalesbooster=1&currency=EUR"
+
+    def test_merchant_url_from_app_data(self):
+        self.assertEqual(pc.merchant_url(sample("redirection_kinguin.html")), self.KINGUIN)
+
+    def test_merchant_url_falls_back_to_meta_refresh(self):
+        page = sample("redirection_kinguin.html").replace('id="appData"', 'id="other"')
+        self.assertEqual(pc.merchant_url(page), self.KINGUIN)
+        self.assertIsNone(pc.merchant_url("<html></html>"))
+
+    def test_unwrap_affiliate(self):
+        loaded = ("https://go.loaded.com/c/1297091/2640470/18216"
+                  "?u=https%3A%2F%2Fwww.loaded.com%2Fea-sports-fc-27-standard-edition-pc-ea-app")
+        self.assertEqual(pc.unwrap_affiliate(loaded), "https://www.loaded.com/ea-sports-fc-27-standard-edition-pc-ea-app")
+        self.assertEqual(pc.unwrap_affiliate(self.KINGUIN), self.KINGUIN)  # r=3445 n'est pas une URL
+
+    def test_url_text_drops_locale_segments(self):
+        self.assertEqual(pc.url_text("https://www.instant-gaming.com/en/21656-buy-ea-sports-fc-27-pc-ea-app/?igr=1"),
+                         "21656-buy-ea-sports-fc-27-pc-ea-app")
+        self.assertEqual(pc.url_text("https://store.epicgames.com/en-US/p/fc-27-e149fb"), "p fc-27-e149fb")
+
+
+class TestAnalyzeRealUrls(unittest.TestCase):
+    """Les 28 URL marchand relevées le 30/09/2026 (samples/merchant_urls.json)."""
+
     def setUp(self):
-        self.trans = json.loads(sample("prod_popular1_gamePageTrans.json"))
+        self.rows = json.loads(sample("merchant_urls.json"))
 
-    def standard_offers(self):
-        return sorted(
-            (p for p in self.trans["prices"]
-             if p["edition"] == "1" and not p["account"] and p["price"] != pc.NO_PRICE),
-            key=lambda p: p["priceCard"],
-        )
+    def analyze(self, row):
+        o = offer(merchantName=row["merchant"], edition=row["edition"], region=row["region"], platform=row["platform"])
+        return pc.analyze(row["product"], o, pc.url_text(pc.unwrap_affiliate(row["url"])), "URL")
 
-    def test_real_samples_have_no_anomaly(self):
-        self.assertEqual(pc.find_anomalies(self.trans), [])
-        self.assertEqual(pc.find_anomalies(json.loads(sample("prod_soon1_gamePageTrans.json"))), [])
+    def test_named_urls_are_ok(self):
+        named = [r for r in self.rows if r["name_in_url"]]
+        self.assertGreaterEqual(len(named), 25)
+        for row in named:
+            res = self.analyze(row)
+            self.assertIsNotNone(res["match"], row["merchant"])
+            self.assertEqual(res["reasons"], [], (row["merchant"], row["url"]))
 
-    def test_cheap_offer_triggers(self):
-        cheapest = self.standard_offers()[0]
-        cheapest["priceCard"] = round(cheapest["priceCard"] * 0.6, 2)
-        [a] = pc.find_anomalies(self.trans)
-        self.assertEqual(a["offer_id"], cheapest["id"])
-        self.assertEqual(a["edition"], "Standard")
-        self.assertGreaterEqual(a["gap"], 0.30)
+    def test_steam_underscores(self):
+        row = next(r for r in self.rows if r["merchant"] == "Steam")
+        self.assertEqual(self.analyze(row)["match"], "exact")
 
-    def test_just_under_threshold_does_not_trigger(self):
-        offers = self.standard_offers()
-        offers[0]["priceCard"] = round(offers[1]["priceCard"] * 0.71, 2)
-        self.assertEqual(pc.find_anomalies(self.trans), [])
+    def test_epic_url_has_no_name(self):
+        row = next(r for r in self.rows if r["merchant"] == "Epic Games")
+        res = self.analyze(row)
+        self.assertIsNone(res["match"])
+        self.assertEqual(res["reasons"], ["nom du produit absent (URL)"])
 
-    def test_sentinel_and_account_offers_ignored(self):
-        offers = self.standard_offers()
-        extra = []
-        for account, price in ((True, 1.0), (False, pc.NO_PRICE)):
-            p = copy.deepcopy(offers[0])
-            p.update(id=1, account=account, price=price, priceCard=price)
-            extra.append(p)
-        self.trans["prices"] += extra
-        self.assertEqual(pc.find_anomalies(self.trans), [])
+    def test_ea_com_url_is_partial(self):
+        row = next(r for r in self.rows if r["merchant"] == "EA.com")
+        res = self.analyze(row)
+        self.assertEqual((res["match"], res["reasons"], res["notes"]), ("partial", [], ["nom partiel"]))
 
 
+class TestAnalyzeSuspects(unittest.TestCase):
+    def reasons(self, product, url, **kw):
+        return pc.analyze(product, offer(**kw), pc.url_text(url), "URL")["reasons"]
+
+    def test_wrong_product(self):
+        r = self.reasons("Sonic Racing CrossWorlds", "https://www.kinguin.net/category/1/sonic-the-hedgehog-pc-steam")
+        self.assertEqual(r, ["nom du produit absent (URL)"])
+
+    def test_account_sold_as_key(self):
+        r = self.reasons("EA SPORTS FC 27", "https://shop.example/ea-sports-fc-27-pc-steam-account-global")
+        self.assertIn("compte chez le marchand, saisi en clé", r)
+        self.assertEqual(self.reasons("EA SPORTS FC 27", "https://shop.example/ea-sports-fc-27-account", account=True), [])
+
+    def test_forbidden_region(self):
+        r = self.reasons("EA SPORTS FC 27", "https://shop.example/ea-sports-fc-27-pc-steam-key-ru-cis")
+        self.assertEqual(r, ["région interdite : ru, cis"])
+
+    def test_region_family_mismatch(self):
+        self.assertEqual(self.reasons("EA SPORTS FC 27", "https://shop.example/ea-sports-fc-27-steam-key-europe", region="GLOBAL"),
+                         ["région : AllKeyShop GLOBAL, marchand EU"])
+        self.assertEqual(self.reasons("EA SPORTS FC 27", "https://shop.example/ea-sports-fc-27-steam-key-global", region="EUROPE"),
+                         ["région : AllKeyShop EUROPE, marchand GLOBAL"])
+        self.assertEqual(self.reasons("EA SPORTS FC 27", "https://shop.example/ea-sports-fc-27-steam-key-europe", region="GIFT EU"), [])
+
+    def test_gift_sold_as_key(self):
+        self.assertEqual(self.reasons("EA SPORTS FC 27", "https://shop.example/ea-sports-fc-27-steam-altergift", region="GLOBAL"),
+                         ["gift chez le marchand, affiché en clé GLOBAL"])
+        self.assertEqual(self.reasons("EA SPORTS FC 27", "https://shop.example/ea-sports-fc-27-steam-gift-global", region="GIFT"), [])
+
+    def test_platform_mismatch(self):
+        self.assertEqual(self.reasons("EA SPORTS FC 27", "https://shop.example/ea-sports-fc-27-pc-steam-key", platform="ea-app"),
+                         ["plateforme : AllKeyShop ea-app, marchand steam"])
+        self.assertEqual(self.reasons("EA SPORTS FC 27", "https://shop.example/ea-sports-fc-27-origin-key", platform="ea-app"), [])
+        self.assertEqual(self.reasons("EA SPORTS FC 27", "https://shop.example/ea-sports-fc-27-xbox-pc-key", platform="xbox-play-anywhere"), [])
+        self.assertEqual(self.reasons("EA SPORTS FC 27", "https://shop.example/ea-sports-fc-27-pc-key", platform="mystery-platform"), [])
+
+    def test_edition_mismatch(self):
+        self.assertEqual(self.reasons("EA SPORTS FC 27", "https://shop.example/ea-sports-fc-27-deluxe-edition-pc-steam", edition="Standard"),
+                         ["édition : AllKeyShop Standard, marchand deluxe"])
+        self.assertEqual(self.reasons("EA SPORTS FC 27", "https://shop.example/ea-sports-fc-27-standard-edition", edition="Ultimate"),
+                         ["édition : AllKeyShop Ultimate, marchand standard"])
+        self.assertEqual(self.reasons("EA SPORTS FC 27", "https://shop.example/ea-sports-fc-27-standard-edition", edition="Standard + Bonus"), [])
+        self.assertEqual(self.reasons("EA SPORTS FC 27", "https://shop.example/ea-sports-fc-27-goty", edition="Game of the Year"), [])
+        self.assertEqual(self.reasons("EA SPORTS FC 27", "https://shop.example/ea-sports-fc-27-digital-deluxe", edition="Deluxe"), [])
+
+    def test_edition_words_of_the_product_name_are_ignored(self):
+        product = "Dynasty Warriors 3 Complete Edition Remastered"
+        self.assertEqual(self.reasons(product, "https://shop.example/dynasty-warriors-3-complete-edition-remastered-steam-key"), [])
+
+    def test_dlc(self):
+        self.assertEqual(self.reasons("Valheim", "https://shop.example/valheim-season-pass-dlc"),
+                         ["contenu additionnel : dlc, season-pass"])
+
+    def test_preorder_bonus_dlc_sold_with_the_game(self):
+        # Driffle, 30/09/2026, édition AllKeyShop « Standard + Bonus »
+        url = "https://www.driffle.com/ea-sports-fc-27-pre-order-bonus-dlc-global-pc-ea-play-digital-key-p10001977"
+        self.assertEqual(self.reasons("EA SPORTS FC 27", url, edition="Standard + Bonus", platform="ea-app"), [])
+
+    def test_goty_both_ways(self):
+        # Instant Gaming, 30/09/2026, édition AllKeyShop « GOTY »
+        url = "https://www.instant-gaming.com/en/1497-buy-key-gogcom-the-witcher-3-wild-hunt-goty/"
+        self.assertEqual(self.reasons("The Witcher 3 Wild Hunt", url, edition="GOTY", platform="gog"), [])
+        self.assertEqual(self.reasons("The Witcher 3 Wild Hunt", url, edition="Standard", platform="gog"),
+                         ["édition : AllKeyShop Standard, marchand goty"])
+
+    def test_bundle_edition_has_another_name(self):
+        # G2A, 30/09/2026, édition AllKeyShop « Bundle » : The Witcher Trilogy Pack
+        url = "https://www.g2a.com/en/the-witcher-trilogy-pack-steam-gift-global-i10000000746004"
+        res = pc.analyze("The Witcher 3 Wild Hunt", offer(edition="Bundle", region="GIFT"), pc.url_text(url), "URL")
+        self.assertEqual((res["match"], res["reasons"], res["notes"]), (None, [], ["édition Bundle : nom non contrôlé"]))
+        res = pc.analyze("The Witcher 3 Wild Hunt", offer(edition="Bundle", region="GLOBAL"), pc.url_text(url), "URL")
+        self.assertEqual(res["reasons"], ["gift chez le marchand, affiché en clé GLOBAL"])
+
+    def test_language_restriction_is_fine(self):
+        self.assertEqual(self.reasons("EA SPORTS FC 27", "https://www.mmoga.com/EA-Games/EA-SPORTS-FC-27-EA-App-English-Only.html",
+                                      region="IN ENGLISH ONLY", platform="ea-app"), [])
+
+    def test_alias(self):
+        self.assertEqual(self.reasons("GTA 6", "https://shop.example/grand-theft-auto-vi-ps5", platform="playstation"), [])
+
+    def test_partial_name(self):
+        res = pc.analyze("The Witcher 3 Wild Hunt", offer(), "witcher-3-wild-hunt-goty-steam-key", "URL")
+        self.assertEqual((res["match"], res["notes"]), ("partial", ["nom partiel"]))
+        self.assertEqual(res["reasons"], ["édition : AllKeyShop Standard, marchand goty"])
+
+
+class TestPageTitle(unittest.TestCase):
+    def test_title_from_html(self):
+        dom = ('<html><head><title>EA Sports FC 27 PC Steam Altergift | Buy cheap on Kinguin.net</title>'
+               '<meta property="og:title" content="EA Sports FC 27 PC Steam Altergift"></head>'
+               '<body><h1>EA Sports <b>FC 27</b> PC Steam Altergift</h1></body></html>')
+        title = pc.page_title_from_html(dom)
+        self.assertIn("EA Sports FC 27 PC Steam Altergift | Buy cheap on Kinguin.net", title)
+        self.assertNotIn("<b>", title)
+        self.assertIsNone(pc.page_title_from_html("<html></html>"))
+
+    def test_page_title_without_chromium(self):
+        with mock.patch.object(pc.shutil, "which", return_value=None):
+            self.assertIsNone(pc.page_title("https://shop.example/"))
+
+
+@mock.patch.object(pc, "REQUEST_DELAY", 0)
+class TestCheckOffer(unittest.TestCase):
+    INTERSTITIAL = sample("redirection_kinguin.html")
+
+    def interstitial(self, url):
+        """La page de redirection Kinguin, avec une autre URL marchand (formes HTML et JSON)."""
+        page = self.INTERSTITIAL.replace(TestRedirection.KINGUIN, url)
+        return page.replace(TestRedirection.KINGUIN.replace("/", "\\/"), url.replace("/", "\\/"))
+
+    def test_url_direct(self):
+        with mock.patch.object(pc, "http_get", return_value=(200, None, self.INTERSTITIAL)) as get:
+            res = pc.check_offer("EA SPORTS FC 27", offer(region="GIFT"))
+        self.assertEqual((res["verdict"], res["method"], res["reasons"]), ("OK", "URL", []))
+        self.assertTrue(res["url"].startswith("https://www.kinguin.net/"))
+        get.assert_called_once_with(pc.REDIRECTION_URL % (1, 47), pc.AKS_UA)
+
+    def test_merchant_redirect_fallback(self):
+        page = self.interstitial("https://www.instant-gaming.com/en/21656-/?igr=289098")
+        full = "https://www.instant-gaming.com/en/21656-buy-ea-sports-fc-27-pc-ea-app/?igr=289098"
+
+        def fake_get(url, ua, follow=True, timeout=30):
+            if "allkeyshop.com" in url:
+                return 200, None, page
+            self.assertEqual((ua, follow), (pc.BROWSER_UA, False))
+            return 301, full, ""
+
+        with mock.patch.object(pc, "http_get", side_effect=fake_get):
+            res = pc.check_offer("EA SPORTS FC 27", offer(platform="ea-app"))
+        self.assertEqual((res["verdict"], res["method"], res["url"]), ("OK", "URL après 301 marchand", full))
+
+    def test_page_fallback(self):
+        page = self.interstitial("https://store.epicgames.com/p/fc-27-e149fb")
+        with mock.patch.object(pc, "http_get", side_effect=[(200, None, page), (200, None, "")]), \
+             mock.patch.object(pc, "page_title", return_value="EA SPORTS FC 27 | Download and Buy Today - Epic Games Store"):
+            res = pc.check_offer("EA SPORTS FC 27", offer(platform="epic-store"))
+        self.assertEqual((res["verdict"], res["method"]), ("OK", "page (Chromium)"))
+
+    def test_page_fallback_wrong_product(self):
+        page = self.interstitial("https://store.epicgames.com/p/abc-123")
+        with mock.patch.object(pc, "http_get", side_effect=[(200, None, page), (200, None, "")]), \
+             mock.patch.object(pc, "page_title", return_value="Sonic the Hedgehog - Epic Games Store"):
+            res = pc.check_offer("Sonic Racing CrossWorlds", offer(platform="epic-store"))
+        self.assertEqual((res["verdict"], res["reasons"]), ("SUSPECT", ["nom du produit absent (titre de la page)"]))
+
+    def test_unreadable_page(self):
+        page = self.interstitial("https://store.epicgames.com/p/abc-123")
+        with mock.patch.object(pc, "http_get", side_effect=[(200, None, page), (403, None, "")]), \
+             mock.patch.object(pc, "page_title", return_value=None):
+            res = pc.check_offer("EA SPORTS FC 27", offer())
+        self.assertEqual((res["verdict"], res["method"]), ("À VÉRIFIER", "aucune"))
+
+    def test_redirection_failure_is_retryable(self):
+        with mock.patch.object(pc, "http_get", return_value=(503, None, "")):
+            with self.assertRaises(pc.CheckError):
+                pc.check_offer("EA SPORTS FC 27", offer())
+        with mock.patch.object(pc, "http_get", return_value=(200, None, "<html>rien</html>")):
+            with self.assertRaises(pc.CheckError):
+                pc.check_offer("EA SPORTS FC 27", offer())
+
+
+@mock.patch.object(pc, "REQUEST_DELAY", 0)
 class TestCycle(unittest.TestCase):
-    @mock.patch.object(pc, "REQUEST_DELAY", 0)
-    @mock.patch.object(pc, "http_get", lambda url: "")
-    def test_alerts_once_per_offer_and_price(self):
-        html = sample("prod_popular1_ea-fc-27.html")
-        trans = pc.parse_game_page(html)
-        standard = sorted((p for p in trans["prices"] if p["edition"] == "1" and not p["account"]
-                           and p["price"] != pc.NO_PRICE), key=lambda p: p["priceCard"])
-        standard[0]["priceCard"] = 10.0
+    PAGE = sample("prod_popular1_ea-fc-27.html")
+    TARGETS = [("Popular", 1, "EA SPORTS FC 27", "https://www.allkeyshop.com/blog/buy-ea-sports-fc-27-key-compare-prices/")]
 
-        sent, state = [], {}
-        targets = [("Popular", 1, "EA SPORTS FC 27", "https://example/")]
-        with mock.patch.object(pc, "parse_game_page", lambda html: trans):
-            pc.run_cycle(targets, sent.append, state)
-            pc.run_cycle(targets, sent.append, state)
-            self.assertEqual(len(sent), 1)
-            self.assertIn("10.00 €", sent[0])
+    def setUp(self):
+        pc.FAILURES.clear()
+        patcher = mock.patch.object(pc, "http_get", return_value=(200, None, self.PAGE))
+        patcher.start()
+        self.addCleanup(patcher.stop)
 
-            standard[0]["priceCard"] = 9.0  # nouveau prix -> nouvelle alerte
-            pc.run_cycle(targets, sent.append, state)
-            self.assertEqual(len(sent), 2)
+    @staticmethod
+    def ok(product, o):
+        return {"verdict": "OK", "reasons": [], "notes": [], "url": "https://shop.example/x", "method": "URL"}
+
+    def test_each_first_price_checked_once(self):
+        sent, state, checks = [], pc.load_state("/nonexistent"), []
+
+        def checker(product, o):
+            checks.append(o["id"])
+            return self.ok(product, o)
+
+        pc.run_cycle(self.TARGETS, sent.append, state, checker)
+        pc.run_cycle(self.TARGETS, sent.append, state, checker)
+        self.assertEqual(len(checks), 4)  # 4 éditions, contrôlées une seule fois
+        self.assertEqual(len(sent), 4)
+        self.assertTrue(sent[0].startswith("🟢 **OK** · **EA SPORTS FC 27** (Popular #1) · Standard"))
+        self.assertIn("Mmoga · IN ENGLISH ONLY · ea-app · **54.99 €**", sent[0])
+        self.assertEqual(state["merchants"]["Mmoga"]["methods"], {"URL": 1})
+        self.assertIn("| Mmoga | URL (1) | ", pc.coverage_table(state))
+        self.assertEqual({v["verdict"] for v in state["checked"].values()}, {"OK"})
+
+    def test_ok_not_sent_when_disabled(self):
+        sent, state = [], pc.load_state("/nonexistent")
+        with mock.patch.object(pc, "NOTIFY_OK", False):
+            pc.run_cycle(self.TARGETS, sent.append, state, self.ok)
+        self.assertEqual(sent, [])
+        self.assertEqual(len(state["checked"]), 4)
+
+    def test_suspect_alert(self):
+        def suspect(product, o):
+            return {"verdict": "SUSPECT", "reasons": ["nom du produit absent (URL)"], "notes": [],
+                    "url": "https://shop.example/sonic", "method": "URL"}
+
+        sent, state = [], pc.load_state("/nonexistent")
+        with mock.patch.object(pc, "NOTIFY_OK", False):
+            pc.run_cycle(self.TARGETS, sent.append, state, suspect)
+        self.assertEqual(len(sent), 4)
+        self.assertIn("🔴 **SUSPECT**", sent[0])
+        self.assertIn("Raison : nom du produit absent (URL)", sent[0])
+        self.assertIn("Marchand : <https://shop.example/sonic>", sent[0])
+
+    def test_check_failures_then_manual(self):
+        def failing(product, o):
+            raise pc.CheckError("redirection AllKeyShop HTTP 503")
+
+        sent, state = [], pc.load_state("/nonexistent")
+        for _ in range(pc.MAX_CHECK_FAILURES - 1):
+            pc.run_cycle(self.TARGETS, sent.append, state, failing)
+        self.assertEqual((sent, state["checked"]), ([], {}))
+        pc.run_cycle(self.TARGETS, sent.append, state, failing)
+        self.assertEqual(len(sent), 4)
+        self.assertIn("🟠 **À VÉRIFIER**", sent[0])
+        self.assertIn("contrôle impossible : redirection AllKeyShop HTTP 503", sent[0])
+
+    def test_discord_failure_retries_next_cycle(self):
+        def flaky(msg):
+            raise OSError("discord down")
+
+        sent, state = [], pc.load_state("/nonexistent")
+        pc.run_cycle(self.TARGETS, flaky, state, self.ok)
+        self.assertEqual(state["checked"], {})
+        pc.run_cycle(self.TARGETS, sent.append, state, self.ok)
+        self.assertEqual(len(sent), 4)
+
+    def test_state_roundtrip_and_prune(self):
+        state = pc.load_state("/nonexistent")
+        pc.run_cycle(self.TARGETS, lambda m: None, state, self.ok)
+        path = os.path.join(SAMPLES, "_state_test.json")
+        try:
+            pc.save_state(path, state)
+            loaded = pc.load_state(path)
+        finally:
+            os.remove(path)
+        self.assertEqual(loaded["checked"].keys(), state["checked"].keys())
+        pc.prune_state(loaded, pc.time.time() + (pc.STATE_TTL_DAYS + 1) * 86400)
+        self.assertEqual(loaded["checked"], {})
 
 
 if __name__ == "__main__":

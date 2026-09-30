@@ -2,6 +2,8 @@
 
 Ce que le moniteur sait vérifier pour chaque marchand, et comment. **À tenir à jour** à chaque nouveau marchand ou changement de méthode, pour qu'on sache toujours quels marchands sont bien monitorés et lesquels ne le sont pas encore.
 
+Le moniteur note dans `state.json` la méthode qui a marché pour chaque marchand rencontré ; `python3 price_check.py --coverage` l'affiche en Markdown, prêt à coller ici.
+
 Méthodes, de la moins coûteuse à la plus coûteuse :
 
 | Méthode | Ce qu'on fait | Coût |
@@ -12,7 +14,7 @@ Méthodes, de la moins coûteuse à la plus coûteuse :
 
 ## État au 30/09/2026
 
-Testé sur les pages EA SPORTS FC 27 (Popular #1) et Dynasty Warriors 3 Complete Edition Remastered (Coming soon PC #1), une offre par marchand : **26 marchands contrôlables par l'URL seule, 2 pas encore couverts**.
+Testé sur les pages EA SPORTS FC 27 (Popular #1) et Dynasty Warriors 3 Complete Edition Remastered (Coming soon PC #1), une offre par marchand, puis complété par le premier passage réel sur les 9 pages (31 offres en tête, 31 OK) : **28 marchands contrôlables par l'URL seule, 1 pas encore couvert**. Les packs et bundles (`/sub/` Steam, trilogie G2A) passent par la page avec Chromium.
 
 | Marchand | Méthode | Nom du produit trouvé | Mots région / plateforme dans l'URL | URL marchand (chemin) | Notes |
 |---|---|---|---|---|---|
@@ -20,7 +22,7 @@ Testé sur les pages EA SPORTS FC 27 (Popular #1) et Dynasty Warriors 3 Complete
 | CJS CDKeys | URL directe | oui | steam, key | `www.cjs-cdkeys.com/products/EA-Sports-FC-27-Steam-Key.html` |  |
 | Driffle | URL directe | oui | global, ea-play, key | `www.driffle.com/ea-sports-fc-27-global-pc-ea-play-digital-key-p9997937` |  |
 | Eneba | URL directe | oui | europe, ea-app, key | `www.eneba.com/ea-app-ea-sports-fc-27-ea-app-key-pc-europe` |  |
-| G2A | URL directe | oui | europe, ea-app, key | `www.g2a.com/ea-sports-fc-27-pc-ea-app-key-europe-i10000515240002` |  |
+| G2A | URL directe (page à ouvrir pour un bundle) | oui | europe, ea-app, key | `www.g2a.com/ea-sports-fc-27-pc-ea-app-key-europe-i10000515240002` |  |
 | GameBoost | URL directe | oui | ea-app | `gameboost.com/ea-sports-fc-27-ea-app-00-79268` |  |
 | Gamers Outlet | URL directe | oui | global, ea-app, key | `www.gamers-outlet.net/en/ea-sports-fc-27-pc-ea-app-key-global` | Page lisible en HTTP simple. |
 | GamersGate | URL directe | oui | — | `www.gamersgate.com/product/dynasty-warriors-3-complete-edition-remastered/` |  |
@@ -38,17 +40,19 @@ Testé sur les pages EA SPORTS FC 27 (Popular #1) et Dynasty Warriors 3 Complete
 | Kinguin | URL directe | oui | altergift, steam | `www.kinguin.net/category/609603/ea-sports-fc-27-pc-steam-altergift` | Page bloquée en HTTP simple (Akamai 403), lisible avec Chromium sans écran. |
 | Loaded | URL directe | oui | ea-app, standard | `www.loaded.com/ea-sports-fc-27-standard-edition-pc-ea-app` | Lien affilié `go.loaded.com` (403, même avec Chromium) ; la cible est dans le paramètre `u=`. |
 | Mmoga | URL directe | oui | ea-app, english-only | `www.mmoga.com/EA-Games/EA-SPORTS-FC-27-EA-App-English-Only.html` | `English-Only` dans l'URL = restriction de langue, autorisée. |
-| Steam | URL directe | oui | — | `store.steampowered.com/app/4080220/EA_SPORTS_FC_27/` | Nom avec des `_` : `EA_SPORTS_FC_27`. Normaliser le chemin avant de comparer. |
+| Steam | URL directe pour `/app/`, **page à ouvrir** pour `/sub/` | oui pour `/app/` | — | `store.steampowered.com/app/4080220/EA_SPORTS_FC_27/` | Nom avec des `_` : `EA_SPORTS_FC_27`. Les packs (`/sub/1675064/`, AION 2 Founder's Pack) n'ont qu'un numéro : Chromium lit le titre, OK au passage réel. |
 | Wyrel | URL directe | oui | — | `wyrel.com/en/buy-cheap-ea-sports-fc-27-pc-196673` |  |
 | Fanatical | URL après le 301 du marchand | oui | — | `www.fanatical.com/en/game/dynasty-warriors-3-complete-edition-remastered` | 301 du marchand vers l'URL avec le slug. |
+| Lootbar | URL directe | oui | — | `www.lootbar.com/game-key/ace-combat-8-wings-of-theve-emea` | Vu au passage réel du 30/09/2026 (Ace Combat 8 Deluxe). |
 | Instant Gaming | URL après le 301 du marchand | oui | ea-app | `www.instant-gaming.com/en/21656-buy-ea-sports-fc-27-pc-ea-app/` | `/en/21656-/` → 301 vers l'URL avec le slug. Page lisible en HTTP simple. |
-| EA.com | **page à ouvrir** | **non** | — | `www.ea.com/games/ea-sports-fc/fc-27/buy/checkout` | URL partielle : `/ea-sports-fc/fc-27/buy/checkout`. Il faut ouvrir la page. Pas encore fait. |
+| EA.com | URL directe, nom partiel | partiel (`ea-sports-fc` + `fc-27`) | — | `www.ea.com/games/ea-sports-fc/fc-27/buy/checkout` | URL partielle : `/ea-sports-fc/fc-27/buy/checkout`. Les mots `ea`, `sports`, `fc`, `27` y sont tous : nom partiel, accepté avec une note. |
 | Epic Games | **page à ouvrir** | **non** | — | `store.epicgames.com/p/fc-27-e149fb` | URL partielle : `/p/fc-27-e149fb`. Il faut ouvrir la page (Chromium) pour lire le titre. Pas encore fait. |
 
 ### Pas encore monitorés
 
-- **Epic Games** et **EA.com** : URL partielle, la page doit être ouverte avec Chromium. Boutiques officielles, risque de mauvais produit faible, mais à couvrir.
-- **Marchands des 7 autres pages suivies** : pas encore testés. Le moniteur journalise la méthode utilisée pour chaque marchand ; compléter cette table au premier passage.
+- **Epic Games** : URL partielle (`/p/fc-27-e149fb`), la page doit être ouverte avec Chromium. Boutique officielle, risque de mauvais produit faible, mais à couvrir.
+- **EA.com** : l'analyseur reconnaît le nom en partie (`ea-sports-fc` + `fc-27`), verdict OK avec la note « nom partiel ».
+- **Marchands qui n'ont pas encore eu d'offre en tête** sur les 9 pages : non vérifiés. Le moniteur note la méthode utilisée pour chaque marchand rencontré (`--coverage`) ; compléter cette table quand un nouveau marchand apparaît.
 
 ## Pages marchand : HTTP simple ou Chromium ?
 
@@ -60,4 +64,6 @@ Utile seulement quand la page doit être ouverte.
 | Gamers Outlet | OK | OK, « EA SPORTS FC 27 (PC EA App Key - Global) » |
 | Kinguin | 403 Akamai | OK, « EA Sports FC 27 PC Steam Altergift » |
 | GAMIVO | 403 Cloudflare | OK, « Get EA Sports FC 27 – Steam Gift (Global) » |
+| G2A (bundle) | non testé | OK, titre lu au passage réel |
+| Steam (`/sub/`) | non testé | OK, « AION 2 » dans le titre |
 | go.loaded.com (lien affilié) | 403 | 403 |
