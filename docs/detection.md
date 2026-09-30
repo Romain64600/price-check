@@ -54,9 +54,9 @@ Réponse : HTTP 200, page intermédiaire « Redirecting... » qui contient l'URL
 | Gamers Outlet | Standard / GLOBAL / ea-app | `gamers-outlet.net/en/ea-sports-fc-27-pc-ea-app-key-global` | oui | ea-app, key, global |
 | Loaded | Standard / GLOBAL / ea-app | `go.loaded.com/c/…?u=https://www.loaded.com/ea-sports-fc-27-standard-edition-pc-ea-app` (lien affilié, cible dans `u=`) | oui | standard, ea-app |
 | Driffle | Standard / GLOBAL / ea-app | `driffle.com/ea-sports-fc-27-global-pc-ea-play-digital-key-p9997937` | oui | global, ea-play, key |
-| Instant Gaming | Standard / GLOBAL / ea-app | `instant-gaming.com/en/21656-/` | **non** : un simple numéro | aucun |
+| Instant Gaming | Standard / GLOBAL / ea-app | `instant-gaming.com/en/21656-/`, mais **301 vers** `instant-gaming.com/en/21656-buy-ea-sports-fc-27-pc-ea-app/` | oui, après la redirection du marchand | ea-app |
 
-Quand l'URL ne dit rien (Instant Gaming), il faut ouvrir la page marchand. En HTTP simple (urllib/curl, user agent Chrome), Instant Gaming, Gamers Outlet et Driffle répondent, mais Kinguin (Akamai), GAMIVO (Cloudflare, « Just a moment... ») et le lien affilié de Loaded renvoient 403. Avec **Chromium sans écran** (installé sur le serveur, `chromium --headless=new --dump-dom`, user agent Chrome), Kinguin, GAMIVO et Gamers Outlet donnent leur titre : « EA Sports FC 27 PC Steam Altergift », « Get EA Sports FC 27 – Steam Gift (Global) », « EA SPORTS FC 27 (PC EA App Key - Global) ». Seul le lien affilié de Loaded reste bloqué, mais son URL contient déjà la cible.
+Quand l'URL ne dit rien (Instant Gaming : un simple numéro), une requête chez le marchand **sans suivre la redirection** (user agent Chrome) suffit souvent : l'en-tête `Location` du `301` donne l'URL complète avec le slug. Ce n'est qu'en dernier recours qu'il faut ouvrir la page marchand. En HTTP simple (urllib/curl, user agent Chrome), Instant Gaming, Gamers Outlet et Driffle répondent, mais Kinguin (Akamai), GAMIVO (Cloudflare, « Just a moment... ») et le lien affilié de Loaded renvoient 403. Avec **Chromium sans écran** (installé sur le serveur, `chromium --headless=new --dump-dom`, user agent Chrome), Kinguin, GAMIVO et Gamers Outlet donnent leur titre : « EA Sports FC 27 PC Steam Altergift », « Get EA Sports FC 27 – Steam Gift (Global) », « EA SPORTS FC 27 (PC EA App Key - Global) ». Seul le lien affilié de Loaded reste bloqué, mais son URL contient déjà la cible.
 
 ## Règle proposée : l'URL d'abord
 
@@ -66,7 +66,9 @@ Quand l'URL ne dit rien (Instant Gaming), il faut ouvrir la page marchand. En HT
    - **nom du produit** : le nom AKS normalisé (minuscules, `&` → `and`, ponctuation → `-` : `ea-sports-fc-27`) doit apparaître dans le chemin de l'URL ;
    - **région et plateforme** : les mots de l'URL (global, eu, europe, gift, altergift, row, steam, ea-app, ea-play, epic, xbox, ps5, key, account…) doivent être compatibles avec l'offre AKS. Une URL qui dit `account` pour une offre saisie en clé, ou `ru`, `asia`, `latam`, `tr`… pour une région GLOBAL/EU, est suspecte ;
    - **édition** : `deluxe`, `ultimate`… dans l'URL pour une offre Standard est suspect.
-4. **Repli sur la page marchand** quand l'URL n'a pas de nom : Chromium sans écran, user agent navigateur, lecture de `<title>` / `og:title` / `h1`, mêmes contrôles sur le titre.
+4. **Replis quand l'URL n'a pas de nom**, dans l'ordre :
+   - une requête sur l'URL marchand sans suivre la redirection (user agent Chrome) : si le marchand répond `301`/`302`, on contrôle l'URL de l'en-tête `Location` (Instant Gaming : `/en/21656-/` → `/en/21656-buy-ea-sports-fc-27-pc-ea-app/`) ;
+   - sinon, Chromium sans écran, user agent navigateur, lecture de `<title>` / `og:title` / `h1`, mêmes contrôles sur le titre.
 5. **Verdict et alerte Discord** :
    - `SUSPECT` : nom absent de l'URL et du titre, ou région / plateforme / édition incompatible → alerte ;
    - `À VÉRIFIER` : impossible de conclure (URL muette et page bloquée) → alerte, un humain regarde ;
