@@ -844,7 +844,16 @@ def confirmed(kind, product, offer, page_text):
         zone = aks_zone(offer)
         found = merchant_zones(normed)
         return bool(zone and found) and not ZONE_COVERAGE[zone] <= zone_coverage(found)
+    if kind == "dlc":
+        return any(re.search(r"(^|-)%s(-|$)" % w, normed) for w in DLC_WORDS) and not game_plus_content(product, page_text)
     return False
+
+
+def game_plus_content(product, page_text):
+    """La page vend-elle le jeu PLUS un contenu (« Grand Theft Auto V + Criminal Enterprise Starter Pack DLC »,
+    Keycense, étude du 01/10/2026) ? Le nom du produit avant un « + » d'une partie du titre."""
+    names = name_variants(product)
+    return any(name_match(names, norm(part.split("+", 1)[0])) for part in (page_text or "").split(" | ") if "+" in part)
 
 
 def contradicted(kind, product, offer, page_text):
@@ -863,6 +872,8 @@ def contradicted(kind, product, offer, page_text):
         found = merchant_zones(normed)
         # une seule zone, sans ambiguïté : un menu « Global / Europe / ROW » ne contredit rien
         return bool(zone) and len(found) == 1 and ZONE_COVERAGE[zone] <= zone_coverage(found)
+    if kind == "dlc":
+        return game_plus_content(product, page_text)
     return False
 
 
@@ -1102,7 +1113,9 @@ def check_offer(product, offer):
                     "reasons": ["titre du marchand dans une autre langue, nom non reconnu : %s" % page_text[:120]],
                     "unverifiable": cfg.get("unverifiable", "first-price")}
 
-    confirmable = [k for k in result["kinds"] if k in ("platform", "console", "zone")]
+    # le DLC aussi, sur une édition « X + Y » : le « + » du titre (le jeu plus le contenu) disparaît dans l'URL
+    confirmable = [k for k in result["kinds"] if k in ("platform", "console", "zone")
+                   or (k == "dlc" and "+" in offer["edition"])]
     if confirmable and method.startswith("URL") and not (cfg.get("region") or {}).get("from") == "query":
         # l'URL contredit AllKeyShop : avant d'alerter, on regarde la page (URL trompeuse chez Gamingdragons)
         page_text, _ = merchant_page_text(url, cfg)

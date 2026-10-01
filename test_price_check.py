@@ -748,6 +748,24 @@ class TestConfirmOnMerchantPage(unittest.TestCase):
                              "<h1>The Blood of Dawnwalker Eclipse Edition (Deluxe) Steam Key (PC) EUROPE</h1>")
         self.assertEqual(res["verdict"], "SUSPECT")
 
+    def test_game_plus_content_edition_with_dlc_in_the_url(self):
+        # Keycense, 01/10/2026 (étude, 3e prix de l'édition « GTA 5 + Criminal », 11,09 € comme les autres offres) :
+        # l'URL « …-criminal-enterprise-starter-pack-dlc-rockstar » a perdu le « + » du titre, la page vend le jeu + le pack
+        url = "https://www.keycense.com/grand-theft-auto-v-criminal-enterprise-starter-pack-dlc-rockstar"
+        o = offer(edition="GTA 5 + Criminal", region="GLOBAL", region_filter="ROCKSTAR GLOBAL", platform="rockstar")
+        res = self.run_check("GTA 5", o, url,
+                             "<title>GTA V + Criminal Enterprise - Buy Now on Keycense | Keycense</title>"
+                             "<h1>Grand Theft Auto V + Criminal Enterprise Starter Pack DLC | Rockstar</h1>")
+        self.assertEqual((res["verdict"], res["reasons"]), ("OK", []))
+        self.assertTrue(any(n.startswith("URL contredite par la page") for n in res["notes"]))
+        # le DLC seul, dans la même édition : l'alerte reste, confirmée par la page
+        res = self.run_check("GTA 5", o, url, "<title>GTA V: Criminal Enterprise Starter Pack DLC | Keycense</title>")
+        self.assertEqual(res["reasons"], ["contenu additionnel : dlc"])
+        self.assertTrue(any(n.startswith("confirmé par la page") for n in res["notes"]))
+        # un « + » qui ne suit pas le jeu (le pack plus une carte) ne vaut pas le jeu
+        res = self.run_check("GTA 5", o, url, "<title>Criminal Enterprise Starter Pack + Great White Shark Card DLC</title>")
+        self.assertEqual(res["reasons"], ["contenu additionnel : dlc"])
+
     def test_kinguin_serves_another_page_than_the_link(self):
         # arbitrage du 01/10/2026, Stellaris (offre 135046199) : le lien « …-starter-pack-eu-steam-cd-key » sert la
         # fiche globale « …-starter-pack-bundle-2023-pc-steam-cd-key » (URL canonique) : la fiche servie fait foi
