@@ -46,6 +46,8 @@ Chaque cas réel jugé, avec sa décision, sa preuve et la règle qui en découl
 | 30/09 | Gran Turismo 7 PS5 · Deluxe | PS Store ES | « ™ » transformé en « TM » par la normalisation | symboles de marque retirés | étude |
 | 30/09 | Dragon Quest Monsters PS5 · Deluxe | PS Store ES | titre espagnol « El reino marchito » | PS Store lu en en-gb (`merchants/playstation.toml`) | étude |
 | 30/09 | Attack on Titan 3 PS5 · Deluxe, Preorder | PS Store UK | titre officiel « A.O.T. 3 » | sigles des premiers mots | étude |
+| 01/10 | Onimusha Way of the Sword PS5 · Deluxe, Premium Deluxe (2e et 3e prix, 4 alertes) | PS Store UK, FR | titre officiel « Onimusha: WotS » | sigle de tous les mots après le premier, jamais sur un mot distinctif (`test_names_merchants_shorten_20261001`) | étude (premier jour de Top Offers) |
+| 01/10 | EA Sports UFC 5 Xbox Series · Standard (2e et 3e prix) | Eneba, GAMIVO | « Buy UFC® 5 Xbox key! », « Buy UFC 5 Xbox Series Key Europe », URL Eneba `ufc-r-5` | préfixe d'éditeur « EA Sports » facultatif (`OPTIONAL_PREFIXES`) ; rejeu : DREDGE/DOOM, TORO 2/Metal Garden, Transport Fever 3/Nocturne restent signalés | étude (premier jour de Top Offers) |
 | 30/09 | Crimson Desert PS5 · Standard | PS Store US | produit nommé « Crimson Desert Enhanced », édition « Standard Edition » | libellé d'édition du JSON PS Store | étude |
 | 30/09 | EA Sports UFC 5 PS5 | PS Store US | titre court « UFC® 5 » | titre court contenu dans le nom | étude |
 | 30/09 | Pokemon Legends Z-A Mega Dimension · DLC | Dreamgame | « Pokémon » écrit `pokmon` | mot à une lettre près (6 lettres et plus) | étude |

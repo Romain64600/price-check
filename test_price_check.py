@@ -152,16 +152,17 @@ class TestAnalyzeRealUrls(unittest.TestCase):
         row = next(r for r in self.rows if r["merchant"] == "Steam")
         self.assertEqual(self.analyze(row)["match"], "exact")
 
-    def test_epic_url_has_no_name(self):
+    def test_epic_url_names_the_game_without_its_publisher_prefix(self):
+        # « /p/fc-27-e149fb » : depuis le 01/10/2026, « FC 27 » est reconnu pour « EA SPORTS FC 27 »
         row = next(r for r in self.rows if r["merchant"] == "Epic Games")
         res = self.analyze(row)
-        self.assertIsNone(res["match"])
-        self.assertEqual(res["reasons"], ["nom du produit introuvable (URL)"])
+        self.assertEqual((res["match"], res["reasons"]), ("exact", []))
 
     def test_ea_com_url_is_partial(self):
         row = next(r for r in self.rows if r["merchant"] == "EA.com")
         res = self.analyze(row)
-        self.assertEqual((res["match"], res["reasons"], res["notes"]), ("partial", [], ["nom partiel"]))
+        # « ea-sports-fc » + « fc-27 » : partiel jusqu'au 01/10/2026, exact depuis (« FC 27 » sans « EA Sports »)
+        self.assertEqual((res["match"], res["reasons"]), ("exact", []))
 
 
 class TestAnalyzeSuspects(unittest.TestCase):
@@ -373,7 +374,9 @@ class TestAnalyzeSuspects(unittest.TestCase):
         # PS Store US, 30/09/2026 : <title> « UFC® 5 » pour « EA Sports UFC 5 PS5 »
         o = offer(region="PS5", platform="playstation-store")
         res = pc.analyze("EA Sports UFC 5 PS5", o, "UFC® 5 | Access Denied", "titre de la page")
-        self.assertEqual((res["match"], res["reasons"]), ("partial", []))
+        self.assertEqual((res["match"], res["reasons"]), ("exact", []))  # « UFC 5 » sans « EA Sports », depuis le 01/10/2026
+        res = pc.analyze("Ace Combat 8 Wings of Theve", o, "Wings of Theve | Bandai Namco", "titre de la page")
+        self.assertEqual((res["match"], res["reasons"]), ("partial", []))  # titre court contenu dans le nom
         res = pc.analyze("Pokemon Sword Nintendo Switch", o, "Pokémon Shield | Nintendo", "titre de la page")
         self.assertIsNone(res["match"])
         res = pc.analyze("Sonic Racing CrossWorlds", o, "Sonic | SEGA", "titre de la page")
@@ -692,6 +695,25 @@ class TestStudy20260930(unittest.TestCase):
         self.assertEqual(pc.analyze("Pokemon Sword Nintendo Switch", o, "Pokémon Bouclier (Nintendo Switch)", "titre de la page")["reasons"],
                          ["autre produit chez le marchand : « Pokémon Bouclier (Nintendo Switch) » au lieu de « Pokemon Sword Nintendo Switch » (titre de la page)"])
 
+    def test_names_merchants_shorten_20261001(self):
+        # premier jour de Top Offers (étude) : « UFC 5 » sans le préfixe d'éditeur, chez Eneba (URL « ufc-r-5 », ® écrit r)
+        # et GAMIVO ; « Onimusha: WotS », sigle des derniers mots, au PS Store (2 éditions, boutiques UK et FR)
+        ufc = offer(edition="Standard", region="EU XBOX X|S", region_filter="XBOX X|S EUROPE", platform="xbox")
+        for text, source in (("xbox-ufc-r-5-xbox-series-x-s-xbox-live-key-europe", "URL"),
+                             ("Buy UFC® 5 Xbox key! Cheap price | Eneba", "titre de la page"),
+                             ("Buy UFC 5 Xbox Series Key Europe", "titre de la page"),
+                             (pc.url_text("https://www.gamivo.com/product/ufc-5-xbox-xboxseries-eu-en-standard"), "URL")):
+            with self.subTest(text=text):
+                res = pc.analyze("EA Sports UFC 5 Xbox Series", ufc, text, source)
+                self.assertNotIn("name", res["kinds"], res["reasons"])
+        oni = offer(edition="Deluxe", region="PS5", platform="playstation-store")
+        self.assertEqual(pc.analyze("Onimusha Way of the Sword PS5", oni, "Onimusha: WotS | Deluxe Edition", "titre de la page")["reasons"], [])
+        # un autre jeu de la série, ou un autre UFC, reste un autre produit
+        self.assertEqual(pc.analyze("Onimusha Way of the Sword PS5", oni, "Onimusha 2: Samurai's Destiny", "titre de la page")["kinds"], ["name"])
+        self.assertEqual(pc.analyze("EA Sports UFC 5 Xbox Series", ufc, "Buy UFC 4 Xbox key! Cheap price", "titre de la page")["kinds"], ["name"])
+        self.assertIn("ufc 5 xbox series", pc.name_variants("EA Sports UFC 5 Xbox Series"))
+        self.assertIn("onimusha wots", pc.name_variants("Onimusha Way of the Sword PS5"))
+
     def test_multi_product_page_selected_option(self):
         # LDShop, 01/10/2026 (formation « à discuter ») : la page Forza Horizon 6 a l'option « Premium Upgrade » cochée
         dom = sample("ldshop_forza-horizon-6_sku16560.html")
@@ -866,7 +888,7 @@ class TestCheckOffer(unittest.TestCase):
         self.assertEqual((res["verdict"], res["method"], res["url"]), ("OK", "URL après 301 marchand", full))
 
     def test_page_fallback(self):
-        page = self.interstitial("https://store.epicgames.com/p/fc-27-e149fb")
+        page = self.interstitial("https://store.epicgames.com/p/e149fb")  # URL sans nom : la page tranche
         with mock.patch.object(pc, "http_get", side_effect=[(200, None, page), (200, None, ""), (200, None, "")]), \
              mock.patch.object(pc, "page_title", return_value="EA SPORTS FC 27 | Download and Buy Today - Epic Games Store"):
             res = pc.check_offer("EA SPORTS FC 27", offer(platform="epic-store"))

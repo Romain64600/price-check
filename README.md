@@ -68,7 +68,7 @@ Les reports sont aussi tranchés dans l'admin de l'executor (page « Price check
 État au 30/09/2026, sur 30 marchands testés :
 
 - **29 contrôlables par l'URL seule**, dont 2 après le 301 du marchand lui-même (Instant Gaming, Fanatical) et 1 par nom partiel (EA.com).
-- **1 pas encore couvert** : Epic Games (URL partielle, page à ouvrir avec Chromium).
+- **Epic Games**, longtemps non couvert (URL partielle `/p/fc-27-e149fb`) : reconnu par l'URL depuis le 01/10/2026, « FC 27 » valant « EA SPORTS FC 27 ».
 - **Packs et bundles** (Steam `/sub/`, trilogie G2A) : page ouverte avec Chromium, OK au passage réel.
 - **Non vérifiés** : les marchands qui n'ont pas encore eu d'offre en tête.
 

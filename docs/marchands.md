@@ -77,11 +77,10 @@ Testé sur les pages EA SPORTS FC 27 (Popular #1) et Dynasty Warriors 3 Complete
 | Lootbar | URL directe | oui | — | `www.lootbar.com/game-key/ace-combat-8-wings-of-theve-emea` | Vu au passage réel du 30/09/2026 (Ace Combat 8 Deluxe). |
 | Instant Gaming | URL après le 301 du marchand | oui | ea-app | `www.instant-gaming.com/en/21656-buy-ea-sports-fc-27-pc-ea-app/` | `/en/21656-/` → 301 vers l'URL avec le slug. Page lisible en HTTP simple. |
 | EA.com | URL directe, nom partiel | partiel (`ea-sports-fc` + `fc-27`) | — | `www.ea.com/games/ea-sports-fc/fc-27/buy/checkout` | URL partielle : `/ea-sports-fc/fc-27/buy/checkout`. Les mots `ea`, `sports`, `fc`, `27` y sont tous : nom partiel, accepté avec une note. |
-| Epic Games | **page à ouvrir** | **non** | — | `store.epicgames.com/p/fc-27-e149fb` | URL partielle : `/p/fc-27-e149fb`. Il faut ouvrir la page (Chromium) pour lire le titre. Pas encore fait. |
+| Epic Games | URL | oui (01/10/2026) | — | `store.epicgames.com/p/fc-27-e149fb` | `/p/fc-27-e149fb` : « FC 27 » est reconnu depuis le 01/10/2026 (préfixe « EA Sports » facultatif). Une URL Epic sans nom passe par la page (HTTP, puis Chromium). |
 
 ### Pas encore monitorés
 
-- **Epic Games** : URL partielle (`/p/fc-27-e149fb`), la page doit être ouverte avec Chromium. Boutique officielle, risque de mauvais produit faible, mais à couvrir.
 - **EA.com** : l'analyseur reconnaît le nom en partie (`ea-sports-fc` + `fc-27`), verdict OK avec la note « nom partiel ».
 - **Marchands qui n'ont pas encore eu d'offre en tête** sur les 9 pages : non vérifiés. Le moniteur note la méthode utilisée pour chaque marchand rencontré (`--coverage`) ; compléter cette table quand un nouveau marchand apparaît.
 

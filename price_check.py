@@ -170,6 +170,8 @@ NAME_ALIASES = (
     ("gta", "grand theft auto"),
     ("cod", "call of duty"),
 )
+# préfixes d'éditeur que les marchands omettent (« UFC 5 » chez Eneba et GAMIVO pour « EA Sports UFC 5 », 01/10/2026)
+OPTIONAL_PREFIXES = ("ea sports",)
 # Mots qui distinguent un produit d'un autre : jamais tolérés comme « le mot manquant » d'un nom long
 # (le titre du jeu de base ne passe pas pour « Forza Horizon 6 Premium Upgrade Bundle », étude du 30/09/2026)
 NEVER_MISSING = {"upgrade", "dlc", "expansion", "season", "pass", "soundtrack", "ost", "demo", "vr", "remake", "remastered"}
@@ -457,6 +459,12 @@ def name_variants(product):
     m = re.fullmatch(r"(.+)-(20\d\d)", base)  # année de désambiguïsation AllKeyShop : « Screamer 2026 » -> « Screamer »
     if m:
         names.append(m.group(1).replace("-", " "))
+    for name in list(names):  # « EA Sports UFC 5 Xbox Series » -> « UFC 5 Xbox Series »
+        n = norm(name)
+        for prefix in map(norm, OPTIONAL_PREFIXES):
+            rest = n[len(prefix) + 1:] if n.startswith(prefix + "-") else ""
+            if len([w for w in rest.split("-") if w]) >= 2:
+                names.append(rest.replace("-", " "))
     for short, long in NAME_ALIASES:
         for name in list(names):
             spaced = " %s " % norm(name).replace("-", " ")
@@ -480,6 +488,13 @@ def name_variants(product):
             run += 1
         for k in range(3, run + 1):
             names.append(" ".join(["".join(w[0] for w in words[:k])] + words[k:]))
+        # sigle de tous les mots après le premier : « Onimusha Way of the Sword » -> « Onimusha WotS » (PS Store,
+        # 01/10/2026). Deux mots au plus, donc jamais de mot toléré absent ; jamais sur un nom à suffixe de
+        # plateforme, ni sur un mot distinctif (« Premium Upgrade Bundle » ne devient pas « pub »)
+        tail = words[1:]
+        if (len(tail) >= 3 and all(w.isalpha() and w not in ARABIC for w in tail) and not has_platform_suffix(name)
+                and not set(tail) & (NEVER_MISSING | set(EDITION_WORDS) | set(BUNDLE_WORDS) | GENERIC_EDITION_WORDS)):
+            names.append(" ".join([words[0], "".join(w[0] for w in tail)]))
     return tuple(dict.fromkeys(names))
 
 
