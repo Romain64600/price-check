@@ -1,18 +1,21 @@
-"""Moniteur du premier prix des pages produit des top clics AllKeyShop, avec alertes Discord.
+"""Moniteur des premiers prix des pages produit des top clics AllKeyShop, avec alertes Discord.
 
-Boucle sans fin, deux modes (--mode) :
-- top-games : top 5 All Popular + top 4 Coming soon PC, un passage toutes les 2 min 30 ;
+Boucle sans fin. Deux modes de pages (--mode) :
+- top-games : top 5 All Popular + top 4 Coming soon PC, un passage toutes les 2 min 30, qui passe
+  aussi au milieu d'un long passage homepage ;
 - homepage : tous les jeux des top clics de la home (10 widgets + TOP 50 par plateforme,
-  ~415 pages), un passage toutes les 15 min.
+  ~430 pages), un passage toutes les 15 min.
+Deux modes d'offres (--offers) :
+- top-offers (défaut) : les 3 premiers prix de chaque édition ;
+- full-page : toutes les offres en vente de la page, comptes compris.
 Pour chaque passage :
 - relit les listes toutes les 30 min ;
 - lit les offres de chaque page produit (UA AKS/Staff) ;
-- pour toute nouvelle offre en premier prix d'une édition, suit son lien de
-  redirection AllKeyShop (UA AKS/Staff) pour obtenir l'URL marchand, puis vérifie
-  que cette URL (à défaut : l'URL après le 301 du marchand, puis le titre de sa
-  page ouverte avec Chromium) correspond au produit, à la région, à la
-  plateforme et à l'édition affichées ;
-- envoie le verdict (OK, SUSPECT, À VÉRIFIER) sur Discord.
+- pour toute nouvelle offre retenue, suit son lien de redirection AllKeyShop (UA AKS/Staff)
+  pour obtenir l'URL marchand, puis vérifie que cette URL (à défaut : l'URL après le 301
+  du marchand, puis sa page) correspond au produit, à la région, à la plateforme et à
+  l'édition affichées ;
+- envoie les alertes (SUSPECT, À VÉRIFIER) sur Discord, un webhook par mode de pages.
 
 Voir docs/detection.md et docs/marchands.md.
 """
@@ -55,11 +58,16 @@ HOMEPAGE_LISTS = tuple(
                                         ("playstation", "PlayStation"), ("nintendo", "Nintendo"))
        for tab, tab_label in (("popular", "Popular"), ("soon", "Coming soon"))]
 )
-# Modes de surveillance : listes suivies et intervalle entre deux passages (s)
+# Modes de pages : listes suivies, intervalle entre deux passages (s), variable du webhook Discord.
+# « urgent » : le mode passe aussi entre deux pages d'un passage plus long (les top games pendant la homepage).
 MODES = {
-    "top-games": {"lists": TOP_GAMES_LISTS, "interval": 150},  # 9 pages ; le cache des pages est de 120 s
-    "homepage": {"lists": HOMEPAGE_LISTS, "interval": 900},  # ~415 pages, un passage dure plusieurs minutes
+    "top-games": {"lists": TOP_GAMES_LISTS, "interval": 150, "urgent": True,  # 9 pages ; cache des pages : 120 s
+                  "webhook": "DISCORD_WEBHOOK_URL"},
+    "homepage": {"lists": HOMEPAGE_LISTS, "interval": 900,  # ~430 pages, un passage dure plusieurs minutes
+                 "webhook": "DISCORD_WEBHOOK_URL_HOMEPAGE"},  # son salon ; à défaut, celui des top games
 }
+# Modes d'offres : prix contrôlés par édition (None = toutes les offres en vente de la page, comptes compris)
+OFFER_MODES = {"top-offers": 3, "full-page": None}
 REDIRECTION_URL = "https://www.allkeyshop.com/redirection/offer/eur/%s?locale=en&merchant=%s"
 
 AKS_UA = "AKS/Staff"  # pages AllKeyShop seulement, jamais chez le marchand
@@ -277,33 +285,50 @@ def is_dlc_page(trans, product):
     return "dlc" in editions or bool(words & {"dlc", "expansion"}) or "season-pass" in norm(product)
 
 
-def first_prices(trans):
-    """Offre de clé la moins chère de chaque édition (priceCard), hors offres compte et « sans prix »."""
+def page_offers(trans, per_edition=1):
+    """Offres à contrôler sur une page AllKeyShop.
+
+    `per_edition` = n : les n offres de clé les moins chères de chaque édition (priceCard), hors offres
+    compte et « sans prix » (mode Top Offers : n = 3) ; None : toutes les offres en vente, comptes compris
+    (mode Full Page). Chaque offre porte son rang dans son édition (« edition_rank », compté à part pour
+    les comptes) et « page_first » : est-ce le premier prix (clé) de toute la page ?"""
     editions = trans.get("editions") or {}
     regions = trans.get("regions") or {}
-    best = {}
+    groups = {}  # (édition, compte ?) -> offres, de la moins chère à la plus chère
     for p in trans.get("prices") or []:
-        if p.get("price") == NO_PRICE or p.get("account") or not p.get("dispo"):
+        if p.get("price") == NO_PRICE or not p.get("dispo"):
             continue
-        edition = str(p["edition"])
-        if edition not in best or p["priceCard"] < best[edition]["priceCard"]:
-            best[edition] = p
+        if p.get("account") and per_edition is not None:
+            continue
+        groups.setdefault((str(p["edition"]), bool(p.get("account"))), []).append(p)
+    for group in groups.values():
+        group.sort(key=lambda p: (p["priceCard"], str(p["id"])))
+    cheapest = min((g[0] for (_, account), g in groups.items() if not account),
+                   key=lambda p: (p["priceCard"], str(p["id"])), default=None)
     page_editions = [e.get("name", "") for e in editions.values()]
     offers = []
-    for edition, p in sorted(best.items(), key=lambda kv: kv[1]["priceCard"]):
-        region = regions.get(str(p["region"]), {})
-        offers.append({
-            "id": p["id"], "merchant": p["merchant"], "merchantName": p["merchantName"],
-            "edition": editions.get(edition, {}).get("name", edition),
-            "region": region.get("region_name", str(p["region"])),
-            # le vrai sens de la région : « GERMANY » peut être STEAM GIFT GERMANY (étude du 30/09/2026)
-            "region_filter": region.get("filter_name") or "",
-            "region_desc": region.get("region_short_description") or "",
-            "platform": p.get("activationPlatform") or "",
-            "price": p["priceCard"], "account": bool(p.get("account")),
-            "page_editions": page_editions,
-        })
+    # les éditions dans l'ordre de leur premier prix, les clés avant les comptes
+    for edition, account in sorted(groups, key=lambda k: (k[1], groups[k][0]["priceCard"], k[0])):
+        for rank, p in enumerate(groups[(edition, account)][:per_edition], 1):
+            region = regions.get(str(p["region"]), {})
+            offers.append({
+                "id": p["id"], "merchant": p["merchant"], "merchantName": p["merchantName"],
+                "edition": editions.get(edition, {}).get("name", edition),
+                "region": region.get("region_name", str(p["region"])),
+                # le vrai sens de la région : « GERMANY » peut être STEAM GIFT GERMANY (étude du 30/09/2026)
+                "region_filter": region.get("filter_name") or "",
+                "region_desc": region.get("region_short_description") or "",
+                "platform": p.get("activationPlatform") or "",
+                "price": p["priceCard"], "account": account,
+                "page_editions": page_editions,
+                "edition_rank": rank, "page_first": p is cheapest,
+            })
     return offers
+
+
+def first_prices(trans):
+    """Offre de clé la moins chère de chaque édition : le contrôle d'origine (Top Offers à un prix)."""
+    return page_offers(trans, 1)
 
 
 APP_DATA_RE = re.compile(r'<script[^>]*id="appData"[^>]*>(.*?)</script>', re.DOTALL)
@@ -373,10 +398,13 @@ def product_aliases():
 
 
 def merchant_config(url, merchant_name):
-    """La config du marchand (par hôte de l'URL ou par nom AllKeyShop), ou {} sans exception."""
+    """La config du marchand (par hôte de l'URL, par nom AllKeyShop ou par début de nom : « name_prefixes »),
+    ou {} sans exception."""
     host = urllib.parse.urlparse(url or "").netloc.lower()
+    name = norm(merchant_name or "")
     for cfg in MERCHANT_CONFIGS:
-        if any(h in host for h in cfg["hosts"]) or (merchant_name and norm(cfg["name"]) == norm(merchant_name)):
+        if (any(h in host for h in cfg["hosts"]) or (name and norm(cfg["name"]) == name)
+                or (name and any(name.startswith(norm(prefix)) for prefix in cfg.get("name_prefixes", [])))):
             return cfg
     return {}
 
@@ -685,9 +713,11 @@ def is_base_edition(edition_name):
 
 
 def edition_reason(offer, merchant_editions, words):
-    """Raison de SUSPECT sur l'édition, ou None. L'écart compte quand l'édition affichée est supérieure
-    à celle vendue (Ultimate affichée, « standard » vendu) : l'acheteur reçoit moins. Une édition
-    supérieure vendue sous une édition de base n'alerte pas (formation du 01/10/2026, GTA 4)."""
+    """Raison de SUSPECT sur l'édition, ou None. L'écart compte quand l'offre aurait pu être rangée dans une
+    autre édition de la page, même si l'acheteur reçoit plus (arbitrage du 01/10/2026 : GTA 4, Complete
+    Edition rangée en Standard, et STAR WARS Zero Company, Deluxe rangée en « Standard + DLC », sont de
+    vraies erreurs ; la règle « édition supérieure sous édition de base : pas d'alerte » du matin est
+    annulée), ou quand l'édition affichée est supérieure à celle vendue : l'acheteur reçoit moins."""
     aks = offer["edition"]
     if not merchant_editions or edition_matches(aks, merchant_editions):
         return None
@@ -700,11 +730,23 @@ def edition_reason(offer, merchant_editions, words):
         return None
     if is_base_edition(aks) and set(merchant_editions) <= {"standard"}:
         return None  # « Preorder bonus » vendu « standard pre-purchase »
-    if is_base_edition(aks):
-        # édition de base affichée, édition supérieure vendue : l'acheteur reçoit plus, pas d'alerte
-        # (formation du 01/10/2026 : GTA 4, la Complete Edition de Steam rangée en Standard = faux positif)
-        return None
-    return "édition : AllKeyShop %s, marchand %s" % (aks, ", ".join(merchant_editions))
+    # l'offre aurait dû être rangée dans une autre édition de la page (GTA 4 : la Complete Edition de Steam
+    # rangée en Standard alors que la page a une édition Complete)
+    others = [e for e in offer.get("page_editions") or [] if e != aks and edition_matches(e, merchant_editions)]
+    if others:
+        return "édition : rangée en %s, le marchand vend %s (la page a une édition %s)" % (
+            aks, ", ".join(merchant_editions), others[0])
+    if not is_base_edition(aks):
+        return "édition : AllKeyShop %s, marchand %s" % (aks, ", ".join(merchant_editions))
+    return None  # édition de base affichée, la page n'a pas l'édition vendue : rien de mieux où la ranger
+
+
+def year_pass_edition(edition_name, words):
+    """« Year 1 Edition » : le jeu + le season pass de l'année 1. Chez le marchand, « year-1-season-pass » est
+    alors cette édition, pas un DLC seul (arbitrage du 01/10/2026, Farming Simulator 25 chez Loaded : « le
+    jeu est bien inclus »)."""
+    m = re.search(r"(?:^|-)year-(\d+)(?:-|$)", norm(edition_name))
+    return bool(m) and re.search(r"(?:^|-)year-%s-season-pass(?:-|$)" % m.group(1), words) is not None
 
 
 def announces_extra_content(edition_name):
@@ -785,7 +827,8 @@ def analyze(product, offer, text, source, region=None):
     dlc = [w for w in DLC_WORDS if has(w)]
     # « pre-order-bonus-dlc » est le bonus vendu avec le jeu ; « Standard + DLC Bundle » l'annonce ;
     # sur la page d'un DLC (édition « DLC » présente), le mot est attendu
-    if dlc and not has("bonus") and not announces_extra_content(offer["edition"]) and not offer.get("page_dlc"):
+    if (dlc and not has("bonus") and not announces_extra_content(offer["edition"]) and not offer.get("page_dlc")
+            and not year_pass_edition(offer["edition"], words)):
         reason("dlc", "contenu additionnel : " + ", ".join(dlc))
     return {"match": match, "reasons": reasons, "kinds": kinds, "notes": notes}
 
@@ -935,17 +978,48 @@ def merchant_page_text(url, cfg):
     return None, None
 
 
-def page_title(url, parser=None):
-    """Titre, og:title et h1 de la page marchand, via Chromium sans écran. None si impossible."""
+def chromium_dom(url):
+    """DOM de la page marchand rendu par Chromium sans écran, ou None si impossible."""
     if not shutil.which(CHROMIUM):
         return None
     cmd = [CHROMIUM, "--headless=new", "--no-sandbox", "--disable-gpu", "--disable-dev-shm-usage",
            "--user-agent=" + BROWSER_UA, "--virtual-time-budget=20000", "--dump-dom", url]
     try:
-        dom = subprocess.run(cmd, capture_output=True, timeout=90).stdout.decode("utf-8", "replace")
+        return subprocess.run(cmd, capture_output=True, timeout=90).stdout.decode("utf-8", "replace")
     except (OSError, subprocess.TimeoutExpired):
         return None
-    return page_text_from_dom(dom, url, parser)
+
+
+def page_title(url, parser=None):
+    """Titre, og:title et h1 de la page marchand, via Chromium sans écran. None si impossible."""
+    dom = chromium_dom(url)
+    return None if dom is None else page_text_from_dom(dom, url, parser)
+
+
+CANONICAL_RE = re.compile(r'<link\b(?=[^>]*\brel=["\']canonical["\'])[^>]*\bhref=["\']([^"\']+)["\']', re.IGNORECASE)
+
+
+def canonical_url(dom):
+    m = CANONICAL_RE.search(dom or "")
+    return html.unescape(m.group(1)) if m else None
+
+
+def page_canonical(url, cfg):
+    """URL canonique de la page marchand (HTTP simple, puis Chromium si la config le permet), ou None."""
+    try:
+        status, _, body = http_get(url, BROWSER_UA)
+    except OSError:
+        status, body = None, ""
+    time.sleep(REQUEST_DELAY)
+    if status == 200 and body and not is_block_page(page_title_from_html(body) or ""):
+        return canonical_url(body)  # page lue : sa fiche canonique, ou aucune
+    return canonical_url(chromium_dom(url)) if cfg.get("browser", True) else None
+
+
+def moved(url, canonical):
+    """La page canonique est-elle une autre fiche que celle du lien (chemin différent) ?"""
+    path = lambda u: urllib.parse.urlparse(u).path.rstrip("/").lower()
+    return bool(canonical) and path(url) != path(urllib.parse.urljoin(url, canonical))
 
 
 # ---- Contrôle d'une offre ----------------------------------------------------
@@ -1043,6 +1117,18 @@ def check_offer(product, offer):
                 result["notes"].append("la page ne dit rien sur ce point : %s" % page_text[:120])
             result["reasons"] = [r for r, _ in kept]
             result["kinds"] = [k for _, k in kept]
+        if "zone" in result["kinds"] and (cfg.get("page") or {}).get("canonical"):
+            # le lien garde l'ancien nom d'une fiche que le marchand a remplacée : la fiche servie fait foi
+            # (Kinguin, arbitrage du 01/10/2026 : Stellaris « …-eu-… » sert la fiche globale)
+            canonical = page_canonical(url, cfg)
+            if moved(url, canonical):
+                canonical = urllib.parse.urljoin(url, canonical)
+                again = analyze(product, offer, url_text(canonical), "URL canonique de la page")
+                if again["match"] and "zone" not in again["kinds"]:
+                    kept = [(r, k) for r, k in zip(result["reasons"], result["kinds"]) if k != "zone"]
+                    result["reasons"] = [r for r, _ in kept]
+                    result["kinds"] = [k for _, k in kept]
+                    result["notes"].append("la fiche du lien a été remplacée, région lue sur la fiche servie : %s" % canonical)
 
     return {"verdict": "SUSPECT" if result["reasons"] else "OK", "url": url, "method": method,
             "reasons": result["reasons"], "notes": result["notes"]}
@@ -1054,9 +1140,19 @@ ICONS = {"OK": "🟢", "SUSPECT": "🔴", "À VÉRIFIER": "🟠", "NON VÉRIFIAB
 NOT_SENT = ("OK", "NON VÉRIFIABLE")  # verdicts gardés dans le journal et l'état, sans alerte (OK : sauf NOTIFY_OK)
 
 
+def rank_label(offer):
+    """« 1er prix de l'édition », « 2e prix de l'édition (compte) », ou « » sans rang connu."""
+    r = offer.get("edition_rank")
+    if not r:
+        return ""
+    return "%s prix de l'édition%s" % ("1er" if r == 1 else "%de" % r, " (compte)" if offer.get("account") else "")
+
+
 def format_alert(label, rank, product, page_url, offer, res):
+    where = rank_label(offer)
     lines = [
-        f"{ICONS[res['verdict']]} **{res['verdict']}** · **{product}** ({label} #{rank}) · {offer['edition']}",
+        f"{ICONS[res['verdict']]} **{res['verdict']}** · **{product}** ({label} #{rank}) · {offer['edition']}"
+        + (f" · {where}" if where else ""),
         f"{offer['merchantName']} · {offer['region']}"
         + (f" ({offer['region_filter']})" if offer.get("region_filter") and offer["region_filter"] != offer["region"] else "")
         + f" · {offer['platform'] or 'plateforme ?'} · "
@@ -1084,11 +1180,17 @@ def muted():
     return bool(MUTE_UNTIL) and time.strftime("%Y-%m-%d %H:%M") < MUTE_UNTIL
 
 
-def make_notifier(webhook, state):
-    """Envoie sur Discord, ou met en attente pendant une pause (`DISCORD_MUTE_UNTIL`)."""
+def webhook_for(mode):
+    """Webhook Discord d'un mode de pages (variable MODES[mode]["webhook"]), à défaut DISCORD_WEBHOOK_URL."""
+    return os.environ.get(MODES.get(mode, {}).get("webhook", ""), "") or os.environ.get("DISCORD_WEBHOOK_URL", "")
+
+
+def make_notifier(webhook, state, channel=""):
+    """Envoie sur Discord, ou met en attente pendant une pause (`DISCORD_MUTE_UNTIL`). `channel` : le mode de
+    pages dont le webhook enverra l'alerte mise en attente."""
     def notify(msg):
         if muted():
-            state["queued"].append(msg)
+            state["queued"].append([channel, msg] if channel else msg)
             log.info("Discord en pause jusqu'au %s : alerte mise en attente (%d)", MUTE_UNTIL, len(state["queued"]))
         else:
             send_discord(webhook, msg)
@@ -1096,9 +1198,11 @@ def make_notifier(webhook, state):
 
 
 def flush_queue(state, send):
-    """Envoie les alertes mises en attente pendant la pause, dans l'ordre."""
+    """Envoie les alertes mises en attente pendant la pause, dans l'ordre : `send(msg, channel)`."""
     while state["queued"]:
-        send(state["queued"][0])
+        item = state["queued"][0]
+        channel, msg = item if isinstance(item, list) else ("", item)
+        send(msg, channel)
         state["queued"].pop(0)
         time.sleep(1)
 
@@ -1134,14 +1238,36 @@ def prune_state(state, now):
 FAILURES = {}  # id d'offre -> contrôles ratés d'affilée
 
 
-def run_cycle(targets, notify, state, checker=check_offer, save=None):
-    """Lit chaque page suivie et contrôle toute offre en premier prix pas encore contrôlée.
+def promote_unverifiable(entry, label, rank, product, page_url, offer, notify):
+    """Une offre notée NON VÉRIFIABLE devient le premier prix de la page d'un top ou d'un coming soon : elle
+    passe À VÉRIFIER et part sur Discord (la règle des offres non vérifiables vaut au moment où l'offre est
+    vraiment le premier prix, pas seulement au premier contrôle)."""
+    res = {"verdict": "À VÉRIFIER", "reasons": entry.get("reasons") or [], "url": entry.get("url"),
+           "method": entry.get("method") or "aucune",
+           "notes": (entry.get("notes") or []) + ["devenue le premier prix de la page"]}
+    msg = format_alert(label, rank, product, page_url, offer, res)
+    log.info("%s", msg.replace("\n", " | "))
+    try:
+        notify(msg)
+    except Exception as e:
+        log.error("Envoi Discord impossible, nouvel essai au prochain passage : %s", e)
+        return
+    entry.update(verdict="À VÉRIFIER", notes=res["notes"], page_first=True, edition_rank=offer.get("edition_rank"))
+
+
+def run_cycle(targets, notify, state, checker=None, save=None, per_edition=1, between=None):
+    """Lit chaque page suivie et contrôle toute offre retenue (`per_edition` : voir page_offers) pas encore
+    contrôlée.
 
     `save()` est appelé toutes les SAVE_EVERY pages : un long passage interrompu ne repart pas de zéro.
+    `between()` est appelé entre deux pages : un mode urgent (les top games) y passe pendant un long passage.
     """
+    checker = checker or check_offer
     now = time.time()
     stamp = time.strftime("%Y-%m-%d %H:%M", time.localtime(now))
     for count, (label, rank, product, page_url) in enumerate(targets, 1):
+        if between and count > 1:
+            between()
         if save and count % SAVE_EVERY == 0:
             save()
         try:
@@ -1153,12 +1279,19 @@ def run_cycle(targets, notify, state, checker=check_offer, save=None):
         finally:
             time.sleep(PAGE_DELAY)
         page_dlc = is_dlc_page(trans, product)
-        for position, offer in enumerate(first_prices(trans)):
+        for offer in page_offers(trans, per_edition):
             offer["page_dlc"] = page_dlc
-            offer["page_first"] = position == 0  # le premier prix de toute la page (toutes éditions)
             key = str(offer["id"])
-            if key in state["checked"]:
-                state["checked"][key]["seen"] = now
+            if merchant_config("", offer["merchantName"]).get("skip"):
+                state["checked"].pop(key, None)  # marchand ignoré par sa config (Amazon) : ni contrôle, ni report
+                continue
+            entry = state["checked"].get(key)
+            if entry is not None:
+                entry["seen"] = now
+                policy = entry.get("unverifiable") or merchant_config("", entry.get("merchant")).get("unverifiable", "first-price")
+                if (entry.get("verdict") == "NON VÉRIFIABLE" and policy == "first-price"
+                        and unverifiable_verdict(offer, label, page_url) == "À VÉRIFIER"):
+                    promote_unverifiable(entry, label, rank, product, page_url, offer, notify)
                 continue
             try:
                 res = checker(product, offer)
@@ -1186,6 +1319,8 @@ def run_cycle(targets, notify, state, checker=check_offer, save=None):
                 "platform": offer["platform"], "merchant": offer["merchantName"], "price": offer["price"],
                 "url": res["url"], "method": res["method"], "at": stamp, "seen": now,
                 "page": page_url, "list": label, "rank": rank,
+                "edition_rank": offer.get("edition_rank"), "account": offer.get("account", False),
+                "page_first": offer.get("page_first", False), "unverifiable": res.get("unverifiable"),
             }
             if res["method"] != "aucune":
                 m = state["merchants"].setdefault(offer["merchantName"], {"methods": {}})
@@ -1240,6 +1375,8 @@ def export_reports(state, directory, pages=None):
     for key, e in state["checked"].items():
         if e.get("verdict") not in REPORTED and not e.get("decision"):
             continue
+        if merchant_config("", e.get("merchant")).get("skip"):
+            continue  # marchand ignoré par sa config (Amazon depuis le 01/10/2026)
         label, rank, page = pages.get(e.get("product"), (None, None, None))
         reports.append({
             "offer": key, "verdict": e.get("verdict"), "product": e.get("product"), "edition": e.get("edition"),
@@ -1248,6 +1385,8 @@ def export_reports(state, directory, pages=None):
             "reasons": e.get("reasons") or [], "notes": e.get("notes") or [], "method": e.get("method"),
             "merchant_url": e.get("url"), "page_url": e.get("page") or page, "list": e.get("list") or label,
             "rank": e.get("rank") or rank, "at": e.get("at"), "decision": e.get("decision"),
+            "edition_rank": e.get("edition_rank"), "account": bool(e.get("account")),
+            "page_first": e.get("page_first"), "seen": e.get("seen"),
         })
     reports.sort(key=lambda r: r.get("at") or "", reverse=True)
     payload = {"generated_at": time.strftime("%Y-%m-%dT%H:%M:%S%z"), "decisions": DECISIONS, "reports": reports}
@@ -1285,6 +1424,9 @@ def main():
     ap.add_argument("--mode", choices=("top-games", "homepage", "both"), default=os.environ.get("PRICE_CHECK_MODE", "both"),
                     help="top-games : top 5 Popular + top 4 Coming soon PC ; homepage : tous les jeux des top clics "
                          "de la home ; both (défaut, ou variable PRICE_CHECK_MODE)")
+    ap.add_argument("--offers", choices=tuple(OFFER_MODES), default=os.environ.get("PRICE_CHECK_OFFERS", "top-offers"),
+                    help="top-offers (défaut, ou variable PRICE_CHECK_OFFERS) : les 3 premiers prix de chaque édition ; "
+                         "full-page : toutes les offres en vente de la page, comptes compris")
     ap.add_argument("--dry-run", action="store_true", help="affiche les alertes sans les envoyer")
     ap.add_argument("--once", action="store_true", help="un seul passage puis arrêt")
     ap.add_argument("--state", default="state.json", help="fichier des offres déjà contrôlées")
@@ -1324,48 +1466,63 @@ def main():
             print("raison :", r)
         return
 
-    webhook = os.environ.get("DISCORD_WEBHOOK_URL")
     state = load_state(args.state)
-    if args.dry_run:
-        notify = lambda msg: None  # le journal affiche déjà chaque verdict sur une ligne
-    elif webhook:
-        notify = make_notifier(webhook, state)
-    else:
-        sys.exit("DISCORD_WEBHOOK_URL manquant (ou utiliser --dry-run)")
-
     modes = [m for m in MODES if args.mode in (m, "both")]
+    per_edition = OFFER_MODES[args.offers]
+    if args.dry_run:
+        notifiers = {m: (lambda msg: None) for m in modes}  # le journal affiche déjà chaque verdict sur une ligne
+    else:
+        missing = [MODES[m]["webhook"] for m in modes if not webhook_for(m)]
+        if missing:
+            sys.exit("%s manquant (ou utiliser --dry-run)" % ", ".join(missing))
+        for m in modes:
+            if webhook_for(m) == os.environ.get("DISCORD_WEBHOOK_URL") and MODES[m]["webhook"] != "DISCORD_WEBHOOK_URL":
+                log.info("%s : pas de %s, alertes envoyées sur le webhook des top games", m, MODES[m]["webhook"])
+        notifiers = {m: make_notifier(webhook_for(m), state, m) for m in modes}
+    log.info("modes de pages : %s ; offres : %s", ", ".join(modes), args.offers)
+
     targets = {m: [] for m in modes}
     lists_at = {m: 0.0 for m in modes}
     due = {m: 0.0 for m in modes}  # prochain passage de chaque mode (time.monotonic)
+
+    def run_mode(mode, between=None):
+        now = time.monotonic()
+        due[mode] = now + MODES[mode]["interval"]
+        try:
+            if not targets[mode] or now - lists_at[mode] >= LISTS_REFRESH:
+                targets[mode] = fetch_targets(MODES[mode]["lists"])
+                lists_at[mode] = now
+                names = ", ".join(t[2] for t in targets[mode]) if len(targets[mode]) <= 20 else ""
+                log.info("%s : %d pages suivies %s", mode, len(targets[mode]), names)
+            if REPORTS_DIR:
+                for key in apply_decisions(state, REPORTS_DIR):
+                    log.info("décision de l'admin pour l'offre %s : %s", key, state["checked"][key]["decision"])
+            run_cycle(targets[mode], notifiers[mode], state, save=lambda: save_state(args.state, state),
+                      per_edition=per_edition, between=between)
+            save_state(args.state, state)
+            if REPORTS_DIR:
+                pages = {t[2]: (t[0], t[1], t[3]) for m in modes for t in targets[m]}
+                export_reports(state, REPORTS_DIR, pages)
+        except Exception:
+            log.exception("%s : passage en échec, nouvel essai au prochain cycle", mode)
+
+    def run_urgent():
+        """Entre deux pages d'un long passage : les modes urgents (top games) dont l'heure est venue."""
+        for m in modes:
+            if MODES[m].get("urgent") and time.monotonic() >= due[m]:
+                run_mode(m)
+
     while True:
         if state["queued"] and not muted() and not args.dry_run:
             try:
-                flush_queue(state, lambda msg: send_discord(webhook, msg))
+                flush_queue(state, lambda msg, channel: send_discord(webhook_for(channel), msg))
                 log.info("fin de la pause Discord : alertes en attente envoyées")
             except Exception as e:
                 log.error("Envoi des alertes en attente impossible, nouvel essai plus tard : %s", e)
             save_state(args.state, state)
         for mode in modes:
-            now = time.monotonic()
-            if now < due[mode]:
-                continue
-            due[mode] = now + MODES[mode]["interval"]
-            try:
-                if not targets[mode] or now - lists_at[mode] >= LISTS_REFRESH:
-                    targets[mode] = fetch_targets(MODES[mode]["lists"])
-                    lists_at[mode] = now
-                    names = ", ".join(t[2] for t in targets[mode]) if len(targets[mode]) <= 20 else ""
-                    log.info("%s : %d pages suivies %s", mode, len(targets[mode]), names)
-                if REPORTS_DIR:
-                    for key in apply_decisions(state, REPORTS_DIR):
-                        log.info("décision de l'admin pour l'offre %s : %s", key, state["checked"][key]["decision"])
-                run_cycle(targets[mode], notify, state, save=lambda: save_state(args.state, state))
-                save_state(args.state, state)
-                if REPORTS_DIR:
-                    pages = {t[2]: (t[0], t[1], t[3]) for m in modes for t in targets[m]}
-                    export_reports(state, REPORTS_DIR, pages)
-            except Exception:
-                log.exception("%s : passage en échec, nouvel essai au prochain cycle", mode)
+            if time.monotonic() >= due[mode]:
+                run_mode(mode, between=None if MODES[mode].get("urgent") else run_urgent)
         if args.once:
             return
         time.sleep(max(1, min(due.values()) - time.monotonic()))

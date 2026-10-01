@@ -3,7 +3,13 @@
 # Chromium : inutile d'y perdre 90 s, une URL sans nom exploitable sort en À VÉRIFIER.
 name = "Amazon"
 hosts = ["amazon."]
+name_prefixes = ["amazon"]  # « Amazon.fr », « Amazon.de »… : reconnus par leur nom AllKeyShop, avant tout contrôle
 browser = false
+# Arbitrage du 01/10/2026 (doc partagé, Elden Ring Xbox Series chez Amazon.fr) : « On ne peut pas ouvrir les
+# pages Amazon pour le moment et l'URL n'a pas d'infos, on skip tous les Amazon jusqu'à modifier notre façon
+# de requêter leurs pages. » Les offres Amazon ne sont plus contrôlées : ni alerte, ni ligne NON VÉRIFIABLE,
+# et les reports Amazon déjà notés sortent de reports.json. À retirer quand les pages Amazon seront lisibles.
+skip = true
 # Titres en français, allemand... (« Kirby et le monde oublié ») : un nom non reconnu dans le titre
 # donne À VÉRIFIER, pas SUSPECT (étude du 30/09/2026). La réponse de l'humain va dans aliases.toml.
 localized = true

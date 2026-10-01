@@ -10,7 +10,8 @@ Chaque cas réel jugé, avec sa décision, sa preuve et la règle qui en découl
 2. **On alerte quand le marchand vend moins, ou autre chose, que ce qu'affiche AllKeyShop** : un autre produit, une autre plateforme, une zone plus étroite (clé EU affichée GLOBAL), un DLC seul affiché comme édition du jeu, un compte affiché comme clé, une édition inférieure. **Pas quand il vend plus large** : une clé GLOBAL affichée EUROPE marche en Europe.
 3. **Le vrai sens d'une région AllKeyShop est son nom de filtre**, pas son nom affiché : « GIFT » = `STEAM GIFT GLOBAL`, « GERMANY » peut être `STEAM GIFT GERMANY`, « GLOBAL » = `STEAM GLOBAL`, `EA GLOBAL` ou `ROCKSTAR GLOBAL` selon l'offre.
 4. **Langue n'est pas région** : `IN ENGLISH ONLY`, `EN/FR`, les listes de langues des URL GAMIVO (`en-de-fr-ru-zh-es`) ne disent rien de la zone.
-5. **Une édition est mal rangée quand la page AllKeyShop a l'édition que vend le marchand** (GTA 4 : la page a « Complete », Steam vend la Complete Edition, l'offre est en Standard). Sans cette édition sur la page, un nom différent n'est qu'une différence de nommage.
+5. **Une édition est mal rangée quand la page AllKeyShop a l'édition que vend le marchand**, même si l'acheteur reçoit plus (GTA 4 : la page a « Complete », Steam vend la Complete Edition, l'offre est en Standard ; arbitrage du 01/10/2026). Sans cette édition sur la page, un nom différent n'est qu'une différence de nommage.
+8. **La fiche que sert le marchand compte, pas l'ancien nom du lien** : quand Kinguin a remplacé la fiche d'un lien (URL canonique différente), c'est la région de la fiche servie qui se compare (Stellaris, arbitrage du 01/10/2026).
 6. **Un gift n'a pas de zone comparée** (formation) : K4G « Steam Europe altergift » affiché `STEAM GIFT GLOBAL` est normal.
 7. **Dans le doute, on alerte** en `À VÉRIFIER` (page illisible, titre traduit) : jamais de silence. La réponse de l'humain devient une règle, une config marchand ou un alias.
 
@@ -20,18 +21,16 @@ Chaque cas réel jugé, avec sa décision, sa preuve et la règle qui en découl
 |---|---|---|---|---|---|
 | 30/09 | DREDGE · Premium | Greenmangaming | **Mauvais produit** : vend *DOOM: The Dark Ages Premium Edition* | URL et titre de la page | étude |
 | 30/09 | TORO 2 Nintendo Switch · Standard | Nintendo eShop FR | **Mauvais produit** : la page est celle de *Metal Garden* | version en-GB de la page | étude |
-| 30/09 | Stellaris · Bundle 1 | Kinguin | Clé **EU** affichée `STEAM GLOBAL` | URL `…-starter-pack-eu-steam-cd-key` | **formation** (« celui-ci est OK ») |
-| 30/09 | Crusader Kings 3 · Standard | Driffle | Clé **EU** affichée GLOBAL (10,97 €) | URL `crusader-kings-iii-eu-pc-steam-digital-code` ; page bloquée | étude (même cas que Stellaris) |
-| 30/09 | The Blood Of Dawnwalker · Deluxe | Eneba | Clé **EU** affichée `STEAM GLOBAL` | page : « Steam Key (PC) EUROPE » | étude |
+| 30/09 | Crusader Kings 3 · Standard | Driffle | Clé **EU** affichée GLOBAL (10,97 €) | URL `crusader-kings-iii-eu-pc-steam-digital-code` ; page bloquée | étude ; **à discuter** le 01/10 (Romain voit « global » sur la page : erreur du marchand ou fiche remplacée comme chez Kinguin ?) |
+| 30/09 | The Blood Of Dawnwalker · Deluxe | Eneba | Clé **EU** affichée `STEAM GLOBAL` | page : « Steam Key (PC) EUROPE · Can be activated in France » ; revue le 01/10 : seule offre de l'édition Deluxe, 71,21 €, région AllKeyShop `STEAM GLOBAL` | étude (Romain ne voyait pas le problème sur AllKeyShop : en attente) |
 | 30/09 | F1 25 · 2026 Season Edition | GAMIVO | Version **Xbox Series** affichée `STEAM EU EN ONLY` | page : « … Xbox Series Key Europe » | étude |
 | 30/09 | EA SPORTS FC 26 · ICONS Edition | Driffle | Clé **Steam** affichée `EA GLOBAL` (44,81 € contre 53,83 € pour l'offre suivante) | URL `…-global-pc-steam-digital-key` ; page bloquée | étude |
-| 30/09 | Farming Simulator 25 · Year 1 Edition | Loaded | **Season pass seul** rangé en « Year 1 Edition » (jeu + pass), la page a aussi « Year 1 Bundle » | URL `…-year-1-season-pass-pc-steam` ; 29,19 € contre 40,45 € chez GAMIVO pour le jeu + pass | étude (formation en attente) |
-| 30/09 | Elden Ring Xbox Series · Launch Edition | Amazon.fr | Version **PlayStation** sur la page Xbox | URL `…-3391892017632-PlayStation` ; page Amazon illisible | étude |
+| 30/09 | Elden Ring Xbox Series · Launch Edition | Amazon.fr | Version **PlayStation** sur la page Xbox | URL `…-3391892017632-PlayStation` ; page Amazon illisible | étude ; **plus signalé depuis le 01/10** : Amazon ignoré (arbitrage) |
 | 30/09 | Persona 5 Royal Nintendo Switch · Standard | Eneba | Offre saisie `STEAM EU` (plateforme Steam) sur la page Switch | page : « Persona 5 Royal Nintendo key » | étude (alerte du 30/09 au soir) |
 | 30/09 | Splatoon Raiders Nintendo Switch 2 · Standard | Gamingdragons | Offre saisie **Xbox** (plateforme et région `XBOX X|S EUROPE`) sur la page Switch 2 | page : « … Switch 2 - Nintendo Switch eStore » | étude (rejeu complet) |
 | 30/09 | The Witcher 3 Wild Hunt Xbox Series · Standard | Lootbar | Offre saisie `STEAM ROW` sur la page Xbox, le marchand vend une clé Xbox | URL `…/the-witcher-3-wild-hunt-xbox` ; page muette | étude (rejeu complet) |
-| 30/09 | GTA 4 · Standard | Steam | **Complete Edition** rangée en Standard, la page a une édition Complete | titre Steam « Grand Theft Auto IV: The Complete Edition » | étude (gravité faible, à trancher) |
-| 30/09 | STAR WARS Zero Company Xbox Series · Standard + DLC | GAMIVO | **Deluxe + bonus** rangée en « Standard + DLC », la page a « Deluxe + Bonus » | URL `…-global-deluxe-pre-order-bonus` | étude (gravité faible, à trancher) |
+| 30/09 | GTA 4 · Standard | Steam | **Complete Edition** rangée en Standard, la page a une édition Complete | titre Steam « Grand Theft Auto IV: The Complete Edition » | étude ; **arbitrage du 01/10** : vrai positif (« vraiment rangé en Standard alors qu'il devrait être en Complete ») |
+| 30/09 | STAR WARS Zero Company Xbox Series · Standard + DLC | GAMIVO | **Deluxe + bonus** rangée en « Standard + DLC », la page a « Deluxe + Bonus » | URL `…-global-deluxe-pre-order-bonus` | étude ; **arbitrage du 01/10** : vrai positif (« mauvaise édition = erreur, même si l'acheteur reçoit plus ») |
 
 ## Faux positifs corrigés
 
@@ -64,7 +63,9 @@ Chaque cas réel jugé, avec sa décision, sa preuve et la règle qui en découl
 | 30/09 | Hunt Showdown · Standard + DLC Bundle | Kinguin | `10-dlc-bundle` | page : « Hunt: Showdown 1896 +10 DLC Bundle » (jeu + DLC) | étude |
 
 | 30/09 | Marvel's Spider-Man 2 · Deluxe | K4G | slug `…-playstation-5-europe-cd-key`, page « Deluxe Edition Steam CD Key », champs `PLATFORM Steam · REGION Global` | champs Région / Plateforme du corps de la page lus pour la confirmation ; une page qui nomme plusieurs zones ne contredit rien | question de Romain (« c'est toi qui m'as reporté… ? ») |
-| 01/10 | GTA 4 · Standard | Steam | Complete Edition (seule édition vendue par Steam) rangée en Standard | une édition supérieure vendue sous une édition de base n'alerte plus : l'acheteur reçoit plus ; s'applique aussi à STAR WARS Zero Company (Deluxe + bonus en « Standard + DLC ») | **formation** (« Faux positif : ne pas alerter ») |
+| 01/10 | GTA 4 · Standard | Steam | Complete Edition (seule édition vendue par Steam) rangée en Standard | ~~une édition supérieure vendue sous une édition de base n'alerte plus~~ : **annulé l'après-midi**, GTA 4 est un vrai positif (voir les arbitrages du 01/10) | formation du matin, annulée |
+| 01/10 | Stellaris · Bundle 1 | Kinguin | lien `…/172478/stellaris-starter-pack-eu-steam-cd-key`, offre `STEAM GLOBAL` : Kinguin sert la fiche globale (URL canonique `…/172478/stellaris-starter-pack-bundle-2023-pc-steam-cd-key`) | `merchants/kinguin.toml` : la fiche servie fait foi pour la région (`TestConfirmOnMerchantPage.test_kinguin_serves_another_page_than_the_link`) | **arbitrage** (« C'est bien EU même si maintenant ça redirige sur l'offre globale ») ; signalé vrai le 30/09 sur une formation mal lue (« celui-ci est OK ») |
+| 01/10 | Farming Simulator 25 · Year 1 Edition | Loaded | URL `…-year-1-season-pass-pc-steam` | « Year N Season Pass » = l'édition « Year N » (`test_year_one_season_pass_is_the_year_one_edition`) | **arbitrage** (« le jeu est bien inclus, l'offre est bien rentrée ») |
 | 01/10 | Forza Horizon 6 Premium Upgrade Bundle Xbox · Upgrade | LDShop | page multi-produits, titre du jeu de base ; l'option cochée par le lien `skuId=16560` est « Forza Horizon 6 Premium Upgrade (Global) » | `merchants/ldshop.toml` : lecture de l'option choisie (`aria-checked`) qui reprend les mots du titre | étude (formation « à discuter ») |
 | 30/09 | Call of Duty Black Ops 6 · Standard | Eneba | URL `steam-…-steam-key`, page « (PC) **Windows Store** Key » = région `WINDOWS EU` | confirmation sur la page (faux positif évité au rejeu) | étude |
 | 30/09 | STAR WARS Galactic Racer, KCD2, Castlevania | GAMESEAL | `…-steam-key-eu-na` pris pour EU seul, la région est EU/US | `eu-na` = EU/US | étude (rejeu complet) |
@@ -102,13 +103,31 @@ Rejoués avec les règles du soir, les 11 vraies erreurs sortent toujours et les
 
 ## Offres non vérifiables (formation du 30/09/2026)
 
-« Quand on n'a ni dans l'URL ni sur la page, tu prends note » : une offre invérifiable est notée `NON VÉRIFIABLE` (journal, `state.json`, `python3 price_check.py --unverified`), **sans alerte**, sauf si c'est le premier prix de toute la page sur une page d'un top ou d'un coming soon (listes Popular, Coming soon, Most anticipated) : là, À VÉRIFIER. Amazon : jamais d'alerte pour une offre invérifiable (« ne t'embête pas avec Amazon »), mais un problème vu dans l'URL reste une alerte (Elden Ring). Liste à jour : voir [marchands.md](marchands.md#offres-non-vérifiables).
+« Quand on n'a ni dans l'URL ni sur la page, tu prends note » : une offre invérifiable est notée `NON VÉRIFIABLE` (journal, `state.json`, `python3 price_check.py --unverified`), **sans alerte**, sauf si c'est le premier prix de toute la page sur une page d'un top ou d'un coming soon (listes Popular, Coming soon, Most anticipated) : là, À VÉRIFIER. Depuis le 01/10/2026, une offre notée qui devient plus tard ce premier prix passe À VÉRIFIER et part sur Discord.
+
+« Vraiment un premier prix » (question du 30/09, réponse de Romain du 01/10) : deux modes d'offres. `top-offers` (défaut) contrôle les 3 premiers prix de chaque édition et la règle ci-dessus s'applique dans ce périmètre ; `full-page` contrôle toutes les offres de la page. Voir le README.
+
+Amazon : jusqu'au 01/10/2026, jamais d'alerte pour une offre invérifiable (« ne t'embête pas avec Amazon »). Depuis l'arbitrage du 01/10, **Amazon est ignoré** (« on skip tous les Amazon jusqu'à modifier notre façon de requêter leurs pages ») : plus de contrôle ni de report, Elden Ring compris. Liste à jour : voir [marchands.md](marchands.md#offres-non-vérifiables).
+
+## Arbitrages du 01/10/2026 (doc partagé « reports du 30/09 »)
+
+| Cas | Décision de Romain | Effet dans le moniteur |
+|---|---|---|
+| GTA 4 (Steam, offre 80523) · STAR WARS Zero Company Xbox Series (GAMIVO, offre 140387715) | vrais positifs : « mauvaise édition = erreur à reporter, même si l'acheteur reçoit plus » | règle du matin annulée, retour à la règle « la page a l'édition vendue » ; les deux offres ressortent en SUSPECT |
+| Elden Ring Xbox Series (Amazon.fr) et les 6 offres non vérifiables Amazon | « on skip tous les Amazon jusqu'à modifier notre façon de requêter leurs pages » | `merchants/amazon.toml` : `skip = true` |
+| Stellaris Bundle 1 (Kinguin, offre 135046199) | faux positif : Kinguin redirige le lien EU vers l'offre globale ; le marchand doit passer l'offre en rupture | `merchants/kinguin.toml` : la fiche canonique fait foi pour la région |
+| Farming Simulator 25 Year 1 Edition (Loaded, offre 139028218) | faux positif : « le jeu est bien inclus » | « Year N Season Pass » = édition « Year N » |
+| Euro Truck Simulator 2 · Collection Bundle (Driffle) | faux positif | éditions génériques non comparées (déjà en place) |
+| Forza Horizon 6 Premium Upgrade (LDShop) | faux positif, réglé par la config LDShop du matin | aucun changement |
+| Crusader Kings 3 (Driffle, offre 135593568) | à discuter : « -eu- dans l'URL mais global sur la page. Erreur marchand ou redirection comme Kinguin ? » | non appliqué ; Driffle bloque le moniteur (HTTP 403, Chromium « Blocked - Driffle ») : impossible de voir sa fiche canonique d'ici |
+| The Blood Of Dawnwalker (Eneba, offre 140458058) | pas de décision (« je ne vois pas le pb sur AKS, peut-être déjà fixé ») | non appliqué ; revu le 01/10 : toujours `STEAM GLOBAL` sur AllKeyShop (seule offre Deluxe, 71,21 €), page Eneba « EUROPE · Can be activated in France » |
 
 ## Cas à trancher
 
 | Cas | Question |
 |---|---|
-| Euro Truck Simulator 2 · Collection Bundle, Driffle (« Collector's Bundle ») | La page a aussi « Collectors Bundle Edition ». Éditions génériques non comparées pour l'instant : faut-il les comparer ? |
+| Crusader Kings 3 · Standard, Driffle | Fiche « -eu- » qui dit Global : erreur de nommage du marchand, ou fiche remplacée comme chez Kinguin ? (Driffle bloque le moniteur) |
+| The Blood Of Dawnwalker · Deluxe, Eneba | Toujours `STEAM GLOBAL` sur AllKeyShop pour une clé EUROPE : à revoir par Romain avec l'offre exacte (Deluxe, 71,21 €) |
 
 ## Ce que l'étude a appris sur AllKeyShop
 

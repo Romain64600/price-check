@@ -14,24 +14,28 @@ Méthodes, de la moins coûteuse à la plus coûteuse :
 
 ## Configs marchands (`merchants/*.toml`)
 
-Toute exception propre à un marchand vit dans un fichier `merchants/<marchand>.toml`, jamais dans le code. Le fichier est trouvé par l'hôte de l'URL marchand (`hosts`) ou par le nom AllKeyShop (`name`). Clés :
+Toute exception propre à un marchand vit dans un fichier `merchants/<marchand>.toml`, jamais dans le code. Le fichier est trouvé par l'hôte de l'URL marchand (`hosts`), par le nom AllKeyShop (`name`) ou par le début de ce nom (`name_prefixes`). Clés :
 
 | Clé | Défaut | Rôle |
 |---|---|---|
 | `name` | nom du fichier | Nom AllKeyShop du marchand |
 | `hosts` | `[]` | Morceaux d'hôte qui identifient ses URL (`["wyrel.com"]`, `["amazon."]`) |
+| `name_prefixes` | `[]` | Débuts de nom AllKeyShop qui désignent le marchand (`["amazon"]` : Amazon.fr, Amazon.de…), reconnus avant tout contrôle |
+| `skip` | `false` | `true` : marchand ignoré, ses offres ne sont pas contrôlées (ni alerte, ni ligne NON VÉRIFIABLE, ni report) |
 | `browser` | `true` | `false` : ne jamais ouvrir sa page avec Chromium (elle bloque les robots) ; une URL sans nom sort en À VÉRIFIER |
 | `[region] from` | `url` | Où lire la région : `url` (mots du chemin), `query` (un paramètre de l'URL, traduit par `map`), `none` (région inconnue, pas de contrôle) |
 | `[region] param`, `map` | | Avec `from = "query"` : nom du paramètre et table valeur → mots de région (`global`, `eu`, `row`…) |
 | `[product_name] hreflang` | | Boutique localisée : contrôler le nom sur la version de la page dans cette langue, via son lien `<link rel="alternate" hreflang>` (Nintendo : `en-GB`) |
 | `[page] parser` | | Lecteur spécial de la page : `playstation` (nom du produit et libellé d'édition dans le JSON du PS Store), `selected-option` (option cochée d'une page multi-produits, LDShop) |
 | `[page] locale_from`, `locale_to` | | Réécriture de l'URL avant de lire la page (PS Store : `/es-es/` → `/en-gb/`, pour un titre en anglais) |
+| `[page] canonical` | `false` | `true` : pour une alerte de région, lire aussi l'URL canonique de la page ; si c'est une autre fiche que celle du lien, sa région fait foi (Kinguin) |
 | `localized` | `false` | `true` : titres traduits (Amazon.fr) ; un nom non reconnu dans le titre donne À VÉRIFIER au lieu de SUSPECT |
 
 Exceptions en place :
 
 - **`wyrel.toml`** (formation du 30/09/2026) : le slug de l'URL est générique (`...-starter-pack-bundle-eu-37543` pour une offre Global) ; la région affichée par la page est celle du paramètre `region=` de l'URL : 1 → global, 4 → eu, 5 → row, 19 → germany (relevé sur 38 offres, sans contradiction). Page derrière Cloudflare, `browser = false`.
-- **`amazon.toml`** : éditions physiques (région BOX), nom tronqué dans l'URL, page qui bloque Chromium et renvoie souvent un captcha : `browser = false`, `localized = true` (titres français, voir `aliases.toml`).
+- **`amazon.toml`** : éditions physiques (région BOX), nom tronqué dans l'URL, page qui bloque Chromium et renvoie souvent un captcha : `browser = false`, `localized = true` (titres français, voir `aliases.toml`). **Ignoré depuis le 01/10/2026** (`skip = true`, arbitrage de Romain : « on skip tous les Amazon jusqu'à modifier notre façon de requêter leurs pages ») : plus de contrôle, d'alerte ni de ligne NON VÉRIFIABLE. Conséquence connue : Elden Ring Xbox Series (Amazon.fr, URL « …-PlayStation ») n'est plus signalé. À retirer quand les pages Amazon seront lisibles.
+- **`kinguin.toml`** (arbitrage du 01/10/2026, Stellaris) : un lien peut garder l'ancien nom d'une fiche que Kinguin a remplacée (`…/172478/stellaris-starter-pack-eu-steam-cd-key` sert la fiche globale `…/172478/stellaris-starter-pack-bundle-2023-pc-steam-cd-key`) ; pour une alerte de région, l'URL canonique de la page fait foi quand elle a changé (`[page] canonical = true`).
 - **`nintendo.toml`** : eShop Nintendo FR/IT/DE, URL et titre localisés ; le nom se contrôle sur la version anglaise (`hreflang = "en-GB"`), page lisible en HTTP simple.
 - **`ldshop.toml`** (01/10/2026) : une page regroupe plusieurs produits (Standard, Deluxe, Premium Upgrade…), le lien en choisit un par `skuId` ; le titre est celui du jeu de base, on lit en plus l'option cochée (`aria-checked`). Page lisible avec Chromium.
 - **`playstation.toml`** (étude du 30/09/2026) : l'URL ne contient qu'un code produit ; la page se lit en HTTP simple, son JSON donne le nom et le libellé d'édition (« Crimson Desert Enhanced » + « Standard Edition ») ; les boutiques européennes sont lues en en-gb. Chromium n'est pas utilisé (« Access Denied »).
@@ -83,7 +87,7 @@ Testé sur les pages EA SPORTS FC 27 (Popular #1) et Dynasty Warriors 3 Complete
 
 ## Offres non vérifiables
 
-Offres en premier prix que le moniteur n'a pas pu vérifier : ni l'URL ni la page ne donnent le nom. Elles sont notées `NON VÉRIFIABLE`, sans alerte (formation du 30/09/2026), sauf premier prix d'une page d'un top ou d'un coming soon. Liste générée par `python3 price_check.py --unverified`, état au 01/10/2026 :
+Offres contrôlées que le moniteur n'a pas pu vérifier : ni l'URL ni la page ne donnent le nom. Elles sont notées `NON VÉRIFIABLE`, sans alerte (formation du 30/09/2026), sauf premier prix de toute la page d'un top ou d'un coming soon, y compris quand l'offre le devient plus tard (elle passe alors À VÉRIFIER et part sur Discord). Liste générée par `python3 price_check.py --unverified`, état au 01/10/2026 le matin ; les lignes Amazon sont sorties le 01/10/2026 avec le marchand (voir `amazon.toml`) :
 
 | Jeu | Édition | Marchand | Prix | Pourquoi | URL marchand | Vu le |
 |---|---|---|---|---|---|---|
@@ -100,7 +104,7 @@ Offres en premier prix que le moniteur n'a pas pu vérifier : ni l'URL ni la pag
 | The Legend of Zelda Breath of the Wild Nintendo Switch | Limited | Amazon.fr | 81.89 € | URL sans nom du produit et page marchand illisible | `https://www.amazon.fr/gp/product/B01MS6R9FG/ref=as_li_tl` | 2026-10-01 07:45 |
 | A Plague Tale Requiem | Bundle | G2A | 20.93 € | URL sans nom du produit et page marchand illisible | `https://www.g2a.com/en/a-plague-tale-bundle-pc-steam-key-global-i10000337512001` | 2026-10-01 07:00 |
 
-Toutes chez Amazon, dont la page renvoie un captcha et dont l'URL ne porte souvent qu'un code produit (`gp/product/B01N223WHL`).
+Toutes chez Amazon sauf une (G2A), dont la page renvoie un captcha et dont l'URL ne porte souvent qu'un code produit (`gp/product/B01N223WHL`).
 
 ## Lecture des pages marchand (étude du 30/09/2026)
 

@@ -1,0 +1,11 @@
+# Kinguin (kinguin.net) — arbitrage du 01/10/2026, Stellaris Bundle 1 (offre 135046199).
+# Le lien AllKeyShop garde l'ancien nom de la fiche (« …/172478/stellaris-starter-pack-eu-steam-cd-key ») alors
+# que Kinguin sert désormais la fiche globale : URL canonique « …/172478/stellaris-starter-pack-bundle-2023-pc-
+# steam-cd-key », titre « Stellaris: Starter Pack Bundle 2023 PC Steam CD Key ». Romain : « C'est bien EU même si
+# maintenant ça redirige sur l'offre globale » ; le marchand doit passer l'offre EU en rupture dans son feed (ou
+# l'API). Pour une alerte de région, la fiche canonique fait foi quand elle a remplacé celle du lien.
+name = "Kinguin"
+hosts = ["kinguin.net"]
+
+[page]
+canonical = true
