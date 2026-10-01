@@ -788,6 +788,23 @@ class TestConfirmOnMerchantPage(unittest.TestCase):
         res = self.run_check("GTA 5", o, url, "<title>Criminal Enterprise Starter Pack + Great White Shark Card DLC</title>")
         self.assertEqual(res["reasons"], ["contenu additionnel : dlc"])
 
+    def test_nintendo_old_domains_are_read_in_english(self):
+        # 01/10/2026 (étude, Top Offers) : liens eShop ES et DE sur nintendo.es / nintendo.de (308 vers nintendo.com) ;
+        # la config Nintendo ne s'appliquait pas et le titre traduit sortait en « autre produit »
+        es = "https://www.nintendo.es/Juegos/Nintendo-Switch/Ni-no-Kuni-La-ira-de-la-bruja-blanca-1575919.html"
+        for url, name in ((es, "Nintendo eShop ES"),
+                          ("https://www.nintendo.de/Spiele/Nintendo-Switch/Ni-no-Kuni-Der-Fluch-der-weissen-Konigin-1575919.html", "Nintendo eShop DE"),
+                          ("https://www.nintendo.com/fr-fr/Jeux/Jeux-a-telecharger/x-1.html", "Nintendo eShop FR")):
+            self.assertEqual(pc.merchant_config(url, name)["product_name"]["hreflang"], "en-GB", url)
+        self.assertEqual(pc.merchant_config("", "Nintendo eShop IT")["name"], "Nintendo eShop")
+        page = ('<title>Ni no Kuni: La ira de la bruja blanca | Juegos de Nintendo Switch | Juegos | Nintendo ES</title>'
+                '<link rel="alternate" href="https://www.nintendo.com/en-gb/Games/Nintendo-Switch-games/'
+                'Ni-No-Kuni-Remastered-Wrath-of-the-White-Witch-1575919.html" hreflang="en-GB">')
+        o = offer(merchantName="Nintendo eShop ES", region="GLOBAL", platform="nintendo-eshop")
+        with mock.patch.object(pc, "http_get", side_effect=[(200, None, self.page(es)), (200, None, page)]):
+            res = pc.check_offer("Ni no Kuni Wrath of the White Witch Remastered Nintendo Switch", o)
+        self.assertEqual((res["verdict"], res["method"]), ("OK", "URL de la version en-GB"))
+
     def test_kinguin_serves_another_page_than_the_link(self):
         # arbitrage du 01/10/2026, Stellaris (offre 135046199) : le lien « …-starter-pack-eu-steam-cd-key » sert la
         # fiche globale « …-starter-pack-bundle-2023-pc-steam-cd-key » (URL canonique) : la fiche servie fait foi

@@ -3,7 +3,12 @@
 # le nom se contrôle sur la version anglaise de la page, donnée par son lien hreflang en-GB.
 # Vérifié le 30/09/2026 : la page se lit en HTTP simple ; TORO 2 -> « Metal-Garden » reste bien suspect.
 name = "Nintendo eShop"
-hosts = ["nintendo.com"]
+# Les liens des boutiques ES / DE (et autres) peuvent être sur les anciens domaines nintendo.es, nintendo.de…,
+# qui redirigent (308) vers nintendo.com : sans eux, la version anglaise n'était pas lue et le titre traduit
+# (« Ni no Kuni: La ira de la bruja blanca ») sortait en « autre produit » (étude du 01/10/2026, Top Offers).
+hosts = ["nintendo.com", "nintendo.es", "nintendo.de", "nintendo.fr", "nintendo.it", "nintendo.nl", "nintendo.pt",
+         "nintendo.be", "nintendo.at", "nintendo.ch", "nintendo.co.uk"]
+name_prefixes = ["nintendo eshop"]  # « Nintendo eShop FR », « … DE », « … IT », « … ES »
 
 [product_name]
 hreflang = "en-GB"
