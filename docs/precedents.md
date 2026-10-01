@@ -53,6 +53,7 @@ Chaque cas réel jugé, avec sa décision, sa preuve et la règle qui en découl
 | 30/09 | EA Sports UFC 5 PS5 | PS Store US | titre court « UFC® 5 » | titre court contenu dans le nom | étude |
 | 30/09 | Pokemon Legends Z-A Mega Dimension · DLC | Dreamgame | « Pokémon » écrit `pokmon` | mot à une lettre près (6 lettres et plus) | étude |
 | 30/09 | Rhythm Heaven Groove Switch 2 | Loaded | titre européen « Rhythm Paradise » | `aliases.toml` | étude |
+| 01/10 | Mario Kart 8 Deluxe Booster Course Pass Switch · DLC (3e prix) | K4G | « Booster Courses Pack » ; page : « This is a DLC and it requires the base game… Booster Course Pass » | `aliases.toml` ; le jeu de base vendu sur la page du DLC reste signalé (`test_booster_courses_pack_alias`) | étude (Top Offers) |
 | 30/09 | Kirby, Pokémon Sword, Brilliant Diamond (Switch) | Amazon.fr | titres français | `aliases.toml` ; titre traduit non reconnu → À VÉRIFIER | étude |
 | 30/09 | Minecraft Dungeons 2 | GameBoost, YUPLAY | « Dungeons II » | chiffres romains | étude |
 | 30/09 | 9 offres Xbox | Instant Gaming, Playerland | `microsoft-store` dans l'URL | Microsoft Store = Xbox | étude |

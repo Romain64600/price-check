@@ -714,6 +714,18 @@ class TestStudy20260930(unittest.TestCase):
         self.assertIn("ufc 5 xbox series", pc.name_variants("EA Sports UFC 5 Xbox Series"))
         self.assertIn("onimusha wots", pc.name_variants("Onimusha Way of the Sword PS5"))
 
+    def test_booster_courses_pack_alias(self):
+        # K4G, 01/10/2026 (étude, 3e prix de l'édition DLC) : « Booster Courses Pack » = le Booster Course Pass
+        pc._PRODUCT_ALIASES = None  # relit aliases.toml
+        o = offer(edition="DLC", region="EUROPE", platform="nintendo-eshop", page_dlc=True)
+        url = "https://k4g.com/product/mario-kart-8-deluxe-booster-courses-pack-nintendo-switch-europe-cd-key-D492FAEB"
+        self.assertEqual(pc.analyze("Mario Kart 8 Deluxe Booster Course Pass Nintendo Switch", o, pc.url_text(url), "URL")["reasons"], [])
+        self.assertEqual(pc.analyze("Mario Kart 8 Deluxe Booster Course Pass Nintendo Switch", o,
+                                    "Buy Mario Kart 8 Deluxe - Booster Courses Pack - cheap | K4G.com", "titre de la page")["reasons"], [])
+        # le jeu de base vendu sur la page du DLC reste un autre produit
+        self.assertEqual(pc.analyze("Mario Kart 8 Deluxe Booster Course Pass Nintendo Switch", o,
+                                    "Buy Mario Kart 8 Deluxe Nintendo Switch Europe - cheap | K4G.com", "titre de la page")["kinds"], ["name"])
+
     def test_multi_product_page_selected_option(self):
         # LDShop, 01/10/2026 (formation « à discuter ») : la page Forza Horizon 6 a l'option « Premium Upgrade » cochée
         dom = sample("ldshop_forza-horizon-6_sku16560.html")
