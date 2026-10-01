@@ -64,6 +64,8 @@ Chaque cas réel jugé, avec sa décision, sa preuve et la règle qui en découl
 | 30/09 | Hunt Showdown · Standard + DLC Bundle | Kinguin | `10-dlc-bundle` | page : « Hunt: Showdown 1896 +10 DLC Bundle » (jeu + DLC) | étude |
 
 | 30/09 | Marvel's Spider-Man 2 · Deluxe | K4G | slug `…-playstation-5-europe-cd-key`, page « Deluxe Edition Steam CD Key », champs `PLATFORM Steam · REGION Global` | champs Région / Plateforme du corps de la page lus pour la confirmation ; une page qui nomme plusieurs zones ne contredit rien | question de Romain (« c'est toi qui m'as reporté… ? ») |
+| 01/10 | GTA 4 · Standard | Steam | Complete Edition (seule édition vendue par Steam) rangée en Standard | une édition supérieure vendue sous une édition de base n'alerte plus : l'acheteur reçoit plus ; s'applique aussi à STAR WARS Zero Company (Deluxe + bonus en « Standard + DLC ») | **formation** (« Faux positif : ne pas alerter ») |
+| 01/10 | Forza Horizon 6 Premium Upgrade Bundle Xbox · Upgrade | LDShop | page multi-produits, titre du jeu de base ; l'option cochée par le lien `skuId=16560` est « Forza Horizon 6 Premium Upgrade (Global) » | `merchants/ldshop.toml` : lecture de l'option choisie (`aria-checked`) qui reprend les mots du titre | étude (formation « à discuter ») |
 | 30/09 | Call of Duty Black Ops 6 · Standard | Eneba | URL `steam-…-steam-key`, page « (PC) **Windows Store** Key » = région `WINDOWS EU` | confirmation sur la page (faux positif évité au rejeu) | étude |
 | 30/09 | STAR WARS Galactic Racer, KCD2, Castlevania | GAMESEAL | `…-steam-key-eu-na` pris pour EU seul, la région est EU/US | `eu-na` = EU/US | étude (rejeu complet) |
 | 30/09 | Euro Truck Simulator 2 · Standard + DLC | GameBoost | « Vive la **France** » (un DLC) pris pour une zone | pas de noms de pays comme mots de zone | étude (rejeu complet) |
@@ -106,8 +108,6 @@ Rejoués avec les règles du soir, les 11 vraies erreurs sortent toujours et les
 
 | Cas | Question |
 |---|---|
-| Forza Horizon 6 Premium Upgrade Bundle Xbox · Upgrade, LDShop (42,54 €) | La page LDShop regroupe plusieurs produits (Standard, Deluxe, Premium Upgrade…) et le lien `skuId=16560` ne dit pas lequel. Est-ce bien l'upgrade ? |
-| GTA 4 (Complete en Standard), Zero Company (Deluxe + bonus en Standard + DLC) | L'acheteur reçoit plus que ce qui est affiché. Alerter ces offres mal rangées, ou seulement celles où il reçoit moins ? |
 | Euro Truck Simulator 2 · Collection Bundle, Driffle (« Collector's Bundle ») | La page a aussi « Collectors Bundle Edition ». Éditions génériques non comparées pour l'instant : faut-il les comparer ? |
 
 ## Ce que l'étude a appris sur AllKeyShop

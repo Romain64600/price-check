@@ -24,7 +24,7 @@ Toute exception propre à un marchand vit dans un fichier `merchants/<marchand>.
 | `[region] from` | `url` | Où lire la région : `url` (mots du chemin), `query` (un paramètre de l'URL, traduit par `map`), `none` (région inconnue, pas de contrôle) |
 | `[region] param`, `map` | | Avec `from = "query"` : nom du paramètre et table valeur → mots de région (`global`, `eu`, `row`…) |
 | `[product_name] hreflang` | | Boutique localisée : contrôler le nom sur la version de la page dans cette langue, via son lien `<link rel="alternate" hreflang>` (Nintendo : `en-GB`) |
-| `[page] parser` | | Lecteur spécial de la page : `playstation` (nom du produit et libellé d'édition dans le JSON du PS Store) |
+| `[page] parser` | | Lecteur spécial de la page : `playstation` (nom du produit et libellé d'édition dans le JSON du PS Store), `selected-option` (option cochée d'une page multi-produits, LDShop) |
 | `[page] locale_from`, `locale_to` | | Réécriture de l'URL avant de lire la page (PS Store : `/es-es/` → `/en-gb/`, pour un titre en anglais) |
 | `localized` | `false` | `true` : titres traduits (Amazon.fr) ; un nom non reconnu dans le titre donne À VÉRIFIER au lieu de SUSPECT |
 
@@ -33,6 +33,7 @@ Exceptions en place :
 - **`wyrel.toml`** (formation du 30/09/2026) : le slug de l'URL est générique (`...-starter-pack-bundle-eu-37543` pour une offre Global) ; la région affichée par la page est celle du paramètre `region=` de l'URL : 1 → global, 4 → eu, 5 → row, 19 → germany (relevé sur 38 offres, sans contradiction). Page derrière Cloudflare, `browser = false`.
 - **`amazon.toml`** : éditions physiques (région BOX), nom tronqué dans l'URL, page qui bloque Chromium et renvoie souvent un captcha : `browser = false`, `localized = true` (titres français, voir `aliases.toml`).
 - **`nintendo.toml`** : eShop Nintendo FR/IT/DE, URL et titre localisés ; le nom se contrôle sur la version anglaise (`hreflang = "en-GB"`), page lisible en HTTP simple.
+- **`ldshop.toml`** (01/10/2026) : une page regroupe plusieurs produits (Standard, Deluxe, Premium Upgrade…), le lien en choisit un par `skuId` ; le titre est celui du jeu de base, on lit en plus l'option cochée (`aria-checked`). Page lisible avec Chromium.
 - **`playstation.toml`** (étude du 30/09/2026) : l'URL ne contient qu'un code produit ; la page se lit en HTTP simple, son JSON donne le nom et le libellé d'édition (« Crimson Desert Enhanced » + « Standard Edition ») ; les boutiques européennes sont lues en en-gb. Chromium n'est pas utilisé (« Access Denied »).
 
 Pour ajouter un marchand : copier un fichier, ajuster `name`/`hosts`, et ajouter le cas réel dans `test_price_check.py` (`TestMerchantConfigs`).

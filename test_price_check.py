@@ -224,9 +224,9 @@ class TestAnalyzeSuspects(unittest.TestCase):
         self.assertEqual(self.reasons("EA SPORTS FC 27", "https://shop.example/ea-sports-fc-27-pc-key", platform="mystery-platform"), [])
 
     def test_edition_mismatch(self):
+        # édition supérieure vendue sous Standard : pas d'alerte, même si la page a une édition Deluxe (formation, GTA 4)
         self.assertEqual(self.reasons("EA SPORTS FC 27", "https://shop.example/ea-sports-fc-27-deluxe-edition-pc-steam", edition="Standard",
-                                      page_editions=["Standard", "Deluxe"]),
-                         ["édition : rangée en Standard, le marchand vend deluxe (la page a une édition Deluxe)"])
+                                      page_editions=["Standard", "Deluxe"]), [])
         # pas d'édition Deluxe sur la page : l'acheteur a plus que ce qui est affiché, pas d'alerte
         self.assertEqual(self.reasons("EA SPORTS FC 27", "https://shop.example/ea-sports-fc-27-deluxe-edition-pc-steam", edition="Standard"), [])
         self.assertEqual(self.reasons("EA SPORTS FC 27", "https://shop.example/ea-sports-fc-27-standard-edition", edition="Ultimate"),
@@ -253,8 +253,7 @@ class TestAnalyzeSuspects(unittest.TestCase):
         url = "https://www.instant-gaming.com/en/1497-buy-key-gogcom-the-witcher-3-wild-hunt-goty/"
         self.assertEqual(self.reasons("The Witcher 3 Wild Hunt", url, edition="GOTY", platform="gog"), [])
         self.assertEqual(self.reasons("The Witcher 3 Wild Hunt", url, edition="Standard", platform="gog",
-                                      page_editions=["Complete", "GOTY", "Standard", "Bundle"]),
-                         ["édition : rangée en Standard, le marchand vend goty (la page a une édition GOTY)"])
+                                      page_editions=["Complete", "GOTY", "Standard", "Bundle"]), [])
 
     def test_bundle_edition_has_another_name(self):
         # G2A, 30/09/2026, édition AllKeyShop « Bundle » : The Witcher Trilogy Pack
@@ -294,8 +293,10 @@ class TestAnalyzeSuspects(unittest.TestCase):
                                       region="XBOX/PC", platform="xbox-play-anywhere"), [])
         self.assertEqual(self.reasons("WARDOGS", "https://shop.example/wardogs-deluxe-edition-pc-steam", edition="Early Access"), [])
         self.assertEqual(self.reasons("WARDOGS", "https://shop.example/wardogs-deluxe-edition-pc-steam", edition="Standard",
-                                      page_editions=["Standard", "Deluxe"]),
-                         ["édition : rangée en Standard, le marchand vend deluxe (la page a une édition Deluxe)"])
+                                      page_editions=["Standard", "Deluxe"]), [])
+        # mais une édition supérieure affichée, l'édition de base vendue, alerte toujours
+        self.assertEqual(self.reasons("WARDOGS", "https://shop.example/wardogs-standard-edition-pc-steam", edition="Deluxe"),
+                         ["édition : AllKeyShop Deluxe, marchand standard"])
 
     def test_edition_announcing_dlc(self):
         # Kinguin, 30/09/2026 : édition AllKeyShop « Standard + DLC Bundle »
@@ -403,8 +404,7 @@ class TestAnalyzeSuspects(unittest.TestCase):
 
     def test_partial_name(self):
         res = pc.analyze("The Witcher 3 Wild Hunt", offer(page_editions=["Standard", "GOTY"]), "witcher-3-wild-hunt-goty-steam-key", "URL")
-        self.assertEqual((res["match"], res["notes"]), ("partial", ["nom partiel"]))
-        self.assertEqual(res["reasons"], ["édition : rangée en Standard, le marchand vend goty (la page a une édition GOTY)"])
+        self.assertEqual((res["match"], res["notes"], res["reasons"]), ("partial", ["nom partiel"], []))
 
 
 class TestPageTitle(unittest.TestCase):
@@ -540,15 +540,15 @@ class TestStudy20260930(unittest.TestCase):
                                       edition="Year 1 Edition", page_editions=["Standard", "Highlands Fishing Edition", "Year 1 Bundle", "Year 1 Edition"]),
                          ["contenu additionnel : season-pass"])
 
-    def test_edition_misfiled_while_the_page_has_it(self):
+    def test_higher_edition_sold_under_a_base_edition(self):
+        # formation du 01/10/2026 : GTA 4 (Complete Edition rangée en Standard) = faux positif, l'acheteur reçoit plus
         gta4 = ["Complete", "Standard", "Collection", "Complete Bundle", "Complete Pack", "Bundle"]
         res = pc.analyze("GTA 4", offer(edition="Standard", page_editions=gta4), "Grand Theft Auto IV: The Complete Edition on Steam", "titre de la page")
-        self.assertEqual(res["reasons"], ["édition : rangée en Standard, le marchand vend complete (la page a une édition Complete)"])
+        self.assertEqual(res["reasons"], [])
         zero = ["Standard", "Deluxe", "Deluxe + Bonus", "Bonus", "Standard + DLC"]
         self.assertEqual(self.reasons("STAR WARS Zero Company Xbox Series",
                                       "https://www.gamivo.com/product/star-wars-zero-company-xbox-xbox-series-global-deluxe-pre-order-bonus",
-                                      edition="Standard + DLC", region="XBOX X|S", region_filter="XBOX X|S GLOBAL", platform="xbox", page_editions=zero),
-                         ["édition : rangée en Standard + DLC, le marchand vend deluxe (la page a une édition Deluxe)"])
+                                      edition="Standard + DLC", region="XBOX X|S", region_filter="XBOX X|S GLOBAL", platform="xbox", page_editions=zero), [])
 
     # -- faux positifs : ne doivent plus sortir --
     def test_gift_germany_is_a_gift(self):
@@ -672,6 +672,19 @@ class TestStudy20260930(unittest.TestCase):
         # mais Épée n'est pas Bouclier
         self.assertEqual(pc.analyze("Pokemon Sword Nintendo Switch", o, "Pokémon Bouclier (Nintendo Switch)", "titre de la page")["reasons"],
                          ["autre produit chez le marchand : « Pokémon Bouclier (Nintendo Switch) » au lieu de « Pokemon Sword Nintendo Switch » (titre de la page)"])
+
+    def test_multi_product_page_selected_option(self):
+        # LDShop, 01/10/2026 (formation « à discuter ») : la page Forza Horizon 6 a l'option « Premium Upgrade » cochée
+        dom = sample("ldshop_forza-horizon-6_sku16560.html")
+        self.assertEqual(pc.selected_option_text(dom), "Forza Horizon 6 Premium Upgrade (Global)")
+        # une option de prix cochée avant le produit (page réelle) ne doit pas être prise pour le produit
+        priced = dom.replace("<section>", '<section><li role="radio" aria-checked="true">€ 40,97 € 49,99 Direct purchase</li>')
+        self.assertEqual(pc.selected_option_text(priced), "Forza Horizon 6 Premium Upgrade (Global)")
+        text = pc.page_text_from_dom(dom, "https://www.ldshop.gg/card/forza-horizon-6.html?skuId=16560", "selected-option")
+        res = pc.analyze("Forza Horizon 6 Premium Upgrade Bundle Xbox Series", offer(edition="Upgrade", region="XBOX/PC", platform="xbox-play-anywhere"),
+                         text, "titre de la page")
+        self.assertEqual(res["reasons"], [])
+        self.assertEqual(pc.merchant_config("https://www.ldshop.gg/card/x.html", "LDShop")["page"]["parser"], "selected-option")
 
     def test_block_pages(self):
         for t in ("Just a moment...", "Blocked - Driffle", "Amazon.fr", "Tut uns Leid!", "Access Denied", ""):

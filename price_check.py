@@ -685,9 +685,9 @@ def is_base_edition(edition_name):
 
 
 def edition_reason(offer, merchant_editions, words):
-    """Raison de SUSPECT sur l'édition, ou None. L'écart compte quand l'offre aurait pu être rangée
-    dans une autre édition de la page (GTA 4 : la Complete Edition de Steam rangée en Standard alors
-    que la page a une édition Complete), ou quand l'édition affichée est supérieure à celle vendue."""
+    """Raison de SUSPECT sur l'édition, ou None. L'écart compte quand l'édition affichée est supérieure
+    à celle vendue (Ultimate affichée, « standard » vendu) : l'acheteur reçoit moins. Une édition
+    supérieure vendue sous une édition de base n'alerte pas (formation du 01/10/2026, GTA 4)."""
     aks = offer["edition"]
     if not merchant_editions or edition_matches(aks, merchant_editions):
         return None
@@ -700,13 +700,11 @@ def edition_reason(offer, merchant_editions, words):
         return None
     if is_base_edition(aks) and set(merchant_editions) <= {"standard"}:
         return None  # « Preorder bonus » vendu « standard pre-purchase »
-    others = [e for e in offer.get("page_editions") or [] if e != aks and edition_matches(e, merchant_editions)]
-    if others:
-        return "édition : rangée en %s, le marchand vend %s (la page a une édition %s)" % (
-            aks, ", ".join(merchant_editions), others[0])
-    if not is_base_edition(aks):
-        return "édition : AllKeyShop %s, marchand %s" % (aks, ", ".join(merchant_editions))
-    return None
+    if is_base_edition(aks):
+        # édition de base affichée, édition supérieure vendue : l'acheteur reçoit plus, pas d'alerte
+        # (formation du 01/10/2026 : GTA 4, la Complete Edition de Steam rangée en Standard = faux positif)
+        return None
+    return "édition : AllKeyShop %s, marchand %s" % (aks, ", ".join(merchant_editions))
 
 
 def announces_extra_content(edition_name):
@@ -884,6 +882,36 @@ def playstation_text(page_html, url):
     return "%s | %s" % (name, edition) if edition else name
 
 
+SELECTED_OPTION_RE = re.compile(r'<(button|div|li|a|label)\b[^>]*\baria-(?:checked|selected)="true"[^>]*>(.*?)</\1>', re.DOTALL)
+
+
+def selected_option_text(dom):
+    """Page multi-produits (LDShop : Standard, Deluxe, Premium Upgrade sur une même page) : le libellé de
+    l'option choisie par le lien (aria-checked / aria-selected), ajouté au titre. Parmi les options cochées
+    (produit, mode d'achat, devise…), celle qui reprend les mots du titre : le produit, pas un prix."""
+    title = page_title_from_html(dom) or ""
+    title_words = {w for w in norm(title).split("-") if len(w) >= 4 and not w.isdigit()}
+    best, best_score = None, 0
+    for _, inner in SELECTED_OPTION_RE.findall(dom):
+        label = re.sub(r"\s+", " ", html.unescape(re.sub(r"<[^>]+>", " ", inner))).strip()
+        label = re.split(r"\s+(?:From|Dès|Ab|Da)\s", label)[0].strip()
+        score = len({w for w in norm(label).split("-") if len(w) >= 4} & title_words)
+        if score > best_score:
+            best, best_score = label[:100], score
+    return best
+
+
+def page_text_from_dom(dom, url, parser):
+    if parser == "playstation":
+        return playstation_text(dom, url) or page_title_from_html(dom)
+    text = page_title_from_html(dom)
+    if parser == "selected-option" and text:
+        option = selected_option_text(dom)
+        if option:
+            text = "%s | option choisie : %s" % (text, option)
+    return text
+
+
 def merchant_page_text(url, cfg):
     """Titre de la page marchand : HTTP simple d'abord (UA navigateur), puis Chromium si la config le
     permet. La config peut réécrire l'URL (PS Store : version en-gb, pour un titre en anglais).
@@ -897,17 +925,17 @@ def merchant_page_text(url, cfg):
         status, body = None, ""
     time.sleep(REQUEST_DELAY)
     if status == 200 and body:
-        text = (playstation_text(body, url) if page_cfg.get("parser") == "playstation" else None) or page_title_from_html(body)
+        text = page_text_from_dom(body, url, page_cfg.get("parser"))
         if text and not is_block_page(text):
             return text, "page (HTTP)"
     if cfg.get("browser", True):
-        text = page_title(url)
+        text = page_title(url, page_cfg.get("parser"))
         if text and not is_block_page(text):
             return text, "page (Chromium)"
     return None, None
 
 
-def page_title(url):
+def page_title(url, parser=None):
     """Titre, og:title et h1 de la page marchand, via Chromium sans écran. None si impossible."""
     if not shutil.which(CHROMIUM):
         return None
@@ -917,7 +945,7 @@ def page_title(url):
         dom = subprocess.run(cmd, capture_output=True, timeout=90).stdout.decode("utf-8", "replace")
     except (OSError, subprocess.TimeoutExpired):
         return None
-    return page_title_from_html(dom)
+    return page_text_from_dom(dom, url, parser)
 
 
 # ---- Contrôle d'une offre ----------------------------------------------------
