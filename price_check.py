@@ -1181,16 +1181,83 @@ def run_cycle(targets, notify, state, checker=check_offer, save=None):
                     log.error("Envoi Discord impossible, nouvel essai au prochain passage : %s", e)
                     continue
             state["checked"][key] = {
-                "verdict": res["verdict"], "reasons": res["reasons"], "product": product,
-                "edition": offer["edition"], "region": offer["region"], "platform": offer["platform"],
-                "merchant": offer["merchantName"], "price": offer["price"],
+                "verdict": res["verdict"], "reasons": res["reasons"], "notes": res["notes"], "product": product,
+                "edition": offer["edition"], "region": offer["region"], "region_filter": offer.get("region_filter", ""),
+                "platform": offer["platform"], "merchant": offer["merchantName"], "price": offer["price"],
                 "url": res["url"], "method": res["method"], "at": stamp, "seen": now,
+                "page": page_url, "list": label, "rank": rank,
             }
             if res["method"] != "aucune":
                 m = state["merchants"].setdefault(offer["merchantName"], {"methods": {}})
                 m["methods"][res["method"]] = m["methods"].get(res["method"], 0) + 1
                 m.update(url=res["url"], at=stamp)
     prune_state(state, now)
+
+
+# ---- Reports pour l'admin (fichiers partagés) ---------------------------------
+
+# Dossier partagé avec l'admin : le moniteur y écrit reports.json, l'admin y écrit decisions.jsonl.
+REPORTS_DIR = os.environ.get("PRICE_CHECK_REPORTS_DIR", "")
+REPORTED = ("SUSPECT", "À VÉRIFIER", "NON VÉRIFIABLE")
+DECISIONS = {"vrai": "Vrai positif : alerter", "faux": "Faux positif : ne pas alerter", "a_discuter": "À discuter"}
+
+
+def read_decisions(directory):
+    """Décisions de l'admin (decisions.jsonl : une ligne JSON par décision), la dernière par offre l'emporte.
+    Une ligne illisible ou inconnue est ignorée."""
+    decisions = {}
+    try:
+        with open(os.path.join(directory, "decisions.jsonl"), encoding="utf-8") as f:
+            for line in f:
+                try:
+                    d = json.loads(line)
+                except ValueError:
+                    continue
+                if isinstance(d, dict) and str(d.get("offer", "")).isdigit() and d.get("decision") in DECISIONS:
+                    decisions[str(d["offer"])] = {k: d.get(k) for k in ("decision", "note", "by", "at")}
+    except OSError:
+        pass
+    return decisions
+
+
+def apply_decisions(state, directory):
+    """Reporte les décisions de l'admin dans l'état ; renvoie les offres dont la décision est nouvelle."""
+    changed = []
+    for key, decision in read_decisions(directory).items():
+        entry = state["checked"].get(key)
+        if entry is not None and entry.get("decision") != decision:
+            entry["decision"] = decision
+            changed.append(key)
+    return changed
+
+
+def export_reports(state, directory, pages=None):
+    """Écrit reports.json : chaque report (SUSPECT, À VÉRIFIER, NON VÉRIFIABLE, ou déjà décidé) avec son
+    URL AllKeyShop, son URL marchand, sa raison, sa preuve et sa décision. `pages` (produit -> (liste, rang,
+    URL)) complète les reports anciens, enregistrés avant que l'état garde la page."""
+    pages = pages or {}
+    reports = []
+    for key, e in state["checked"].items():
+        if e.get("verdict") not in REPORTED and not e.get("decision"):
+            continue
+        label, rank, page = pages.get(e.get("product"), (None, None, None))
+        reports.append({
+            "offer": key, "verdict": e.get("verdict"), "product": e.get("product"), "edition": e.get("edition"),
+            "merchant": e.get("merchant"), "price": e.get("price"), "region": e.get("region"),
+            "region_filter": e.get("region_filter") or "", "platform": e.get("platform"),
+            "reasons": e.get("reasons") or [], "notes": e.get("notes") or [], "method": e.get("method"),
+            "merchant_url": e.get("url"), "page_url": e.get("page") or page, "list": e.get("list") or label,
+            "rank": e.get("rank") or rank, "at": e.get("at"), "decision": e.get("decision"),
+        })
+    reports.sort(key=lambda r: r.get("at") or "", reverse=True)
+    payload = {"generated_at": time.strftime("%Y-%m-%dT%H:%M:%S%z"), "decisions": DECISIONS, "reports": reports}
+    path = os.path.join(directory, "reports.json")
+    tmp = path + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(payload, f, ensure_ascii=False, indent=1)
+    os.chmod(tmp, 0o644)
+    os.replace(tmp, path)
+    return len(reports)
 
 
 def unverified_table(state):
@@ -1223,6 +1290,7 @@ def main():
     ap.add_argument("--state", default="state.json", help="fichier des offres déjà contrôlées")
     ap.add_argument("--coverage", action="store_true", help="affiche la table de couverture des marchands et sort")
     ap.add_argument("--unverified", action="store_true", help="affiche la table des offres NON VÉRIFIABLE et sort")
+    ap.add_argument("--export-reports", metavar="DOSSIER", help="écrit reports.json (et lit decisions.jsonl) dans DOSSIER et sort")
     ap.add_argument("--check", nargs=2, metavar=("PRODUIT", "URL"), help="analyse une URL marchand et sort")
     ap.add_argument("--edition", default="Standard", help="avec --check : édition affichée")
     ap.add_argument("--region", default="GLOBAL", help="avec --check : région affichée")
@@ -1236,6 +1304,16 @@ def main():
         return
     if args.unverified:
         print(unverified_table(load_state(args.state)))
+        return
+    if args.export_reports:
+        state = load_state(args.state)
+        apply_decisions(state, args.export_reports)
+        pages = {}
+        for mode in MODES:
+            for label, rank, product, url in fetch_targets(MODES[mode]["lists"]):
+                pages.setdefault(product, (label, rank, url))
+        print(export_reports(state, args.export_reports, pages), "reports écrits dans", args.export_reports)
+        save_state(args.state, state)
         return
     if args.check:
         product, url = args.check
@@ -1278,8 +1356,14 @@ def main():
                     lists_at[mode] = now
                     names = ", ".join(t[2] for t in targets[mode]) if len(targets[mode]) <= 20 else ""
                     log.info("%s : %d pages suivies %s", mode, len(targets[mode]), names)
+                if REPORTS_DIR:
+                    for key in apply_decisions(state, REPORTS_DIR):
+                        log.info("décision de l'admin pour l'offre %s : %s", key, state["checked"][key]["decision"])
                 run_cycle(targets[mode], notify, state, save=lambda: save_state(args.state, state))
                 save_state(args.state, state)
+                if REPORTS_DIR:
+                    pages = {t[2]: (t[0], t[1], t[3]) for m in modes for t in targets[m]}
+                    export_reports(state, REPORTS_DIR, pages)
             except Exception:
                 log.exception("%s : passage en échec, nouvel essai au prochain cycle", mode)
         if args.once:

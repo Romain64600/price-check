@@ -967,6 +967,37 @@ class TestCycle(unittest.TestCase):
         send.assert_called_once_with("https://hook", "alerte 3")
         self.assertEqual(state["queued"], [])
 
+    def test_state_keeps_page_list_and_rank(self):
+        state = pc.load_state("/nonexistent")
+        pc.run_cycle(self.TARGETS, lambda m: None, state, self.ok)
+        e = next(iter(state["checked"].values()))
+        self.assertEqual((e["page"], e["list"], e["rank"]), (self.TARGETS[0][3], "Popular", 1))
+
+    def test_reports_export_and_decisions(self):
+        import tempfile
+        state = pc.load_state("/nonexistent")
+        state["checked"] = {
+            "1": {"verdict": "SUSPECT", "product": "TORO 2 Nintendo Switch", "edition": "Standard", "merchant": "Nintendo eShop FR",
+                  "price": 5.99, "reasons": ["autre produit chez le marchand : « Metal Garden » au lieu de « TORO 2 Nintendo Switch » (URL)"],
+                  "url": "https://www.nintendo.com/fr-fr/Metal-Garden-3177422.html", "at": "2026-09-30 16:15"},
+            "2": {"verdict": "OK", "product": "Valheim", "edition": "Standard", "at": "2026-09-30 14:00"},
+            "3": {"verdict": "NON VÉRIFIABLE", "product": "Mario Kart 8 Deluxe Nintendo Switch", "at": "2026-09-30 16:13"},
+        }
+        with tempfile.TemporaryDirectory() as d:
+            with open(os.path.join(d, "decisions.jsonl"), "w") as f:
+                f.write('{"offer": "1", "decision": "vrai", "note": "Metal Garden", "by": "romain", "at": "2026-10-01T10:00"}\n')
+                f.write("pas du json\n")
+                f.write('{"offer": "2", "decision": "inconnue"}\n')
+            self.assertEqual(pc.apply_decisions(state, d), ["1"])
+            self.assertEqual(pc.apply_decisions(state, d), [])  # déjà appliquée
+            pages = {"TORO 2 Nintendo Switch": ("TOP 50 · Nintendo Popular", 56, "https://www.allkeyshop.com/blog/buy-toro-2-nintendo-switch-compare-prices/")}
+            self.assertEqual(pc.export_reports(state, d, pages), 2)  # SUSPECT et NON VÉRIFIABLE, pas l'OK sans décision
+            data = json.load(open(os.path.join(d, "reports.json")))
+        first = data["reports"][0]
+        self.assertEqual((first["offer"], first["page_url"], first["list"], first["decision"]["decision"]),
+                         ("1", "https://www.allkeyshop.com/blog/buy-toro-2-nintendo-switch-compare-prices/", "TOP 50 · Nintendo Popular", "vrai"))
+        self.assertIn("faux", data["decisions"])
+
     def test_state_roundtrip_and_prune(self):
         state = pc.load_state("/nonexistent")
         pc.run_cycle(self.TARGETS, lambda m: None, state, self.ok)
