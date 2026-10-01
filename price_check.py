@@ -496,6 +496,39 @@ def name_match(names, normed):
     return None
 
 
+# Mots de service des URL et des titres marchands, sans valeur pour dire quel produit est vendu
+LABEL_NOISE = {"buy", "cheap", "acheter", "kaufen", "comprar", "key", "keys", "cd", "cdkey", "code", "codes", "digital",
+               "steam", "pc", "global", "europe", "eu", "row", "ww", "gift", "altergift", "xbox", "live", "series", "one",
+               "ps5", "ps4", "psn", "playstation", "nintendo", "switch", "eshop", "epic", "gog", "origin", "app", "ea",
+               "games", "game", "jeux", "jeu", "spiele", "giochi", "juegos", "download", "software", "telecharger", "a",
+               "sur", "product", "products", "category", "p", "html", "htm", "store", "instant", "en", "fr", "de", "it",
+               "es", "gb", "us", "uk", "card", "dp", "gp", "ref", "the-game", "windows", "microsoft", "account", "s",
+               "rockstar", "ubisoft", "uplay", "connect", "battle", "net", "battlenet", "social", "club"}
+
+
+def merchant_label(text, source):
+    """Le produit que le texte marchand nomme, pour le dire dans l'alerte (« Metal Garden »), ou None.
+
+    URL : le dernier segment qui contient des mots, sans identifiants ni mots de service.
+    Titre : sa première partie (« Sonic the Hedgehog - Epic Games Store » -> « Sonic the Hedgehog »)."""
+    if not text:
+        return None
+    if source.startswith("titre"):
+        first = re.split(r"\s+\|\s+|\s+[-\u2013\u2014]\s+", text.strip())[0].strip()
+        return first[:80] or None
+    for segment in reversed(text.split(" ")):
+        if "=" in segment or segment.lower().startswith("ref"):
+            continue  # segment de suivi (Amazon : « ref=as_li_tl »)
+        segment = re.sub(r"\.(html?|php|aspx?)$", "", segment)
+        words = [w for w in re.split(r"[-_]+", segment) if w]
+        kept = [w for w in words if w.lower() not in LABEL_NOISE
+                and not (any(c.isdigit() for c in w) and (len(w) >= 5 or any(c.isalpha() for c in w) and len(w) >= 4))]
+        if sum(len(w) for w in kept if w.isalpha()) >= 4:
+            label = " ".join(w if any(c.isupper() for c in w) else w.capitalize() for w in kept)
+            return label[:80]
+    return None
+
+
 def has_platform_suffix(name):
     n = norm(name)
     return any(n.endswith("-" + norm(sfx)) for sfx in PLATFORM_SUFFIXES)
@@ -717,7 +750,11 @@ def analyze(product, offer, text, source, region=None):
     if match is None and is_bundle(offer["edition"]):
         notes.append("édition %s : nom non contrôlé" % offer["edition"])  # un bundle porte un autre nom
     elif match is None:
-        reason("name", "nom du produit absent (%s)" % source)
+        label = merchant_label(text, source)
+        if label:  # le marchand nomme un produit, mais pas celui-là (TORO 2 -> « Metal Garden »)
+            reason("name", "autre produit chez le marchand : « %s » au lieu de « %s » (%s)" % (label, product, source))
+        else:
+            reason("name", "nom du produit introuvable (%s)" % source)
     elif match == "partial":
         notes.append("nom partiel")
     if not offer["account"] and any(has(w) for w in ACCOUNT_WORDS):

@@ -156,7 +156,7 @@ class TestAnalyzeRealUrls(unittest.TestCase):
         row = next(r for r in self.rows if r["merchant"] == "Epic Games")
         res = self.analyze(row)
         self.assertIsNone(res["match"])
-        self.assertEqual(res["reasons"], ["nom du produit absent (URL)"])
+        self.assertEqual(res["reasons"], ["nom du produit introuvable (URL)"])
 
     def test_ea_com_url_is_partial(self):
         row = next(r for r in self.rows if r["merchant"] == "EA.com")
@@ -170,7 +170,7 @@ class TestAnalyzeSuspects(unittest.TestCase):
 
     def test_wrong_product(self):
         r = self.reasons("Sonic Racing CrossWorlds", "https://www.kinguin.net/category/1/sonic-the-hedgehog-pc-steam")
-        self.assertEqual(r, ["nom du produit absent (URL)"])
+        self.assertEqual(r, ["autre produit chez le marchand : « Sonic The Hedgehog » au lieu de « Sonic Racing CrossWorlds » (URL)"])
 
     def test_account_sold_as_key(self):
         r = self.reasons("EA SPORTS FC 27", "https://shop.example/ea-sports-fc-27-pc-steam-account-global")
@@ -331,9 +331,9 @@ class TestAnalyzeSuspects(unittest.TestCase):
         self.assertEqual((res["match"], res["reasons"]), ("partial", []))
         # mais un numéro qui manque, c'est un autre jeu
         self.assertEqual(self.reasons("Call of Duty Modern Warfare 4", "https://shop.example/call-of-duty-modern-warfare-3-pc"),
-                         ["nom du produit absent (URL)"])
+                         ["autre produit chez le marchand : « Call Of Duty Modern Warfare 3 » au lieu de « Call of Duty Modern Warfare 4 » (URL)"])
         self.assertEqual(self.reasons("Red Dead Redemption 2", "https://shop.example/red-dead-redemption-pc-rockstar-key",
-                                      platform="rockstar"), ["nom du produit absent (URL)"])
+                                      platform="rockstar"), ["autre produit chez le marchand : « Red Dead Redemption » au lieu de « Red Dead Redemption 2 » (URL)"])
 
     def test_console_names_and_stores(self):
         # Instant Gaming et Playerland, 30/09/2026 : « microsoft-store » dans l'URL d'une offre Xbox
@@ -390,7 +390,7 @@ class TestAnalyzeSuspects(unittest.TestCase):
     def test_wrong_product_dredge_doom(self):
         # Greenmangaming, 30/09/2026 : DOOM The Dark Ages en premier prix « Premium » de la page DREDGE
         self.assertEqual(self.reasons("DREDGE", "https://www.greenmangaming.com/games/doom-the-dark-ages-premium-edition-pc/",
-                                      edition="Premium"), ["nom du produit absent (URL)"])
+                                      edition="Premium"), ["autre produit chez le marchand : « Doom The Dark Ages Premium Edition » au lieu de « DREDGE » (URL)"])
 
     def test_alias(self):
         self.assertEqual(self.reasons("GTA 6", "https://shop.example/grand-theft-auto-vi-ps5", platform="playstation"), [])
@@ -478,6 +478,8 @@ class TestMerchantConfigs(unittest.TestCase):
                 res = pc.check_offer(product, offer(merchantName="Nintendo eShop FR", region="GLOBAL", platform="nintendo-eshop"))
             title.assert_not_called()
             self.assertEqual((res["verdict"], res["method"]), (expected, "URL de la version en-GB"), product)
+            if expected == "SUSPECT":  # le message dit ce que vend le marchand (formation du 01/10/2026)
+                self.assertEqual(res["reasons"], ["autre produit chez le marchand : « Metal Garden » au lieu de « TORO 2 Nintendo Switch » (URL de la version en-GB)"])
 
     @mock.patch.object(pc, "REQUEST_DELAY", 0)
     def test_amazon_never_opens_a_browser(self):
@@ -594,7 +596,8 @@ class TestStudy20260930(unittest.TestCase):
                                       edition="DLC", region="EUROPE", platform="nintendo-eshop", page_dlc=True), [])
 
     def test_one_letter_tolerance_is_narrow(self):
-        self.assertEqual(self.reasons("Portal 2", "https://shop.example/mortal-kombat-2-pc-steam"), ["nom du produit absent (URL)"])
+        self.assertEqual(self.reasons("Portal 2", "https://shop.example/mortal-kombat-2-pc-steam"),
+                         ["autre produit chez le marchand : « Mortal Kombat 2 » au lieu de « Portal 2 » (URL)"])
         self.assertEqual(self.reasons("Horizon Forbidden West Complete Edition", "https://shop.example/horizon-forbidden-west-complete-edition-pc-steam",
                                       edition="Complete"), [])
         self.assertFalse(pc.is_block_page("Horizon Forbidden West™ Complete Edition"))
@@ -632,7 +635,7 @@ class TestStudy20260930(unittest.TestCase):
         # LDShop : page du jeu de base pour l'offre de l'upgrade (cas à trancher, doit rester signalé)
         res = pc.analyze("Forza Horizon 6 Premium Upgrade Bundle Xbox Series", offer(edition="Upgrade", region="XBOX/PC", platform="xbox-play-anywhere"),
                          "Forza Horizon 6 CD-Key for Xbox & PC – Safe & Fast | Forza Horizon 6 Global Key (Xbox/PC)", "titre de la page")
-        self.assertEqual(res["reasons"], ["nom du produit absent (titre de la page)"])
+        self.assertEqual(res["reasons"], ["autre produit chez le marchand : « Forza Horizon 6 CD-Key for Xbox & PC » au lieu de « Forza Horizon 6 Premium Upgrade Bundle Xbox Series » (titre de la page)"])
 
     def test_european_title_alias(self):
         self.assertEqual(self.reasons("Rhythm Heaven Groove Nintendo Switch 2", "https://www.loaded.com/rhythm-paradise-groove-switch-eu",
@@ -668,7 +671,7 @@ class TestStudy20260930(unittest.TestCase):
             self.assertEqual(pc.analyze(product, o, title, "titre de la page")["reasons"], [], product)
         # mais Épée n'est pas Bouclier
         self.assertEqual(pc.analyze("Pokemon Sword Nintendo Switch", o, "Pokémon Bouclier (Nintendo Switch)", "titre de la page")["reasons"],
-                         ["nom du produit absent (titre de la page)"])
+                         ["autre produit chez le marchand : « Pokémon Bouclier (Nintendo Switch) » au lieu de « Pokemon Sword Nintendo Switch » (titre de la page)"])
 
     def test_block_pages(self):
         for t in ("Just a moment...", "Blocked - Driffle", "Amazon.fr", "Tut uns Leid!", "Access Denied", ""):
@@ -803,7 +806,8 @@ class TestCheckOffer(unittest.TestCase):
         with mock.patch.object(pc, "http_get", side_effect=[(200, None, page), (200, None, ""), (200, None, "")]), \
              mock.patch.object(pc, "page_title", return_value="Sonic the Hedgehog - Epic Games Store"):
             res = pc.check_offer("Sonic Racing CrossWorlds", offer(platform="epic-store"))
-        self.assertEqual((res["verdict"], res["reasons"]), ("SUSPECT", ["nom du produit absent (titre de la page)"]))
+        self.assertEqual((res["verdict"], res["reasons"]),
+                         ("SUSPECT", ["autre produit chez le marchand : « Sonic the Hedgehog » au lieu de « Sonic Racing CrossWorlds » (titre de la page)"]))
 
     def test_unreadable_page(self):
         page = self.interstitial("https://store.epicgames.com/p/abc-123")

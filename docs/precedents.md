@@ -69,6 +69,12 @@ Chaque cas réel jugé, avec sa décision, sa preuve et la règle qui en découl
 | 30/09 | Euro Truck Simulator 2 · Standard + DLC | GameBoost | « Vive la **France** » (un DLC) pris pour une zone | pas de noms de pays comme mots de zone | étude (rejeu complet) |
 | 30/09 | Fable Premium Upgrade Bundle Xbox · DLC | Eneba | « bundle » absent de l'URL | « bundle » facultatif dans un nom | étude (rejeu complet) |
 
+## Lisibilité des alertes
+
+| Date | Cas | Règle |
+|---|---|---|
+| 01/10 | TORO 2 : l'alerte disait « nom du produit absent » alors que l'URL nomme *Metal Garden* (formation : « tu te fous de ma gueule… alors que tu l'as ») | l'alerte dit ce que vend le marchand : « autre produit chez le marchand : « Metal Garden » au lieu de « TORO 2 » » ; « nom du produit introuvable » seulement quand le texte ne nomme rien |
+
 ## Faux négatifs évités
 
 | Date | Cas | Règle |
