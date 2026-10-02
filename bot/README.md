@@ -22,6 +22,9 @@ sessions terminal (même répertoire de travail `/root/price-checker`).
   classificateur approuve ou refuse chaque action (`--dangerously-skip-permissions` est de toute
   façon refusé en root). Une action refusée est signalée dans la réponse.
 - Le jeton du bot est dans `../.env` (root seulement, jamais dans git).
+- `claude -p` ne reçoit ni le jeton du bot ni les webhooks (variables `*TOKEN*`, `*WEBHOOK*`, `*SECRET*`,
+  `*PASSWORD*` retirées de son environnement, audit du 02/10/2026).
+- Les réponses du bot ne peuvent notifier ni `@everyone`, ni `@here`, ni un rôle (`allowed_mentions`).
 
 ## Installation
 

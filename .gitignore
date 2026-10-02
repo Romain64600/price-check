@@ -6,3 +6,5 @@ bot/.venv/
 bot/state.json
 bot/state.json.tmp
 bot/__pycache__/
+state.json.bak
+state.json.bak.tmp

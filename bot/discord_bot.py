@@ -144,6 +144,17 @@ def find_claude():
     return None
 
 
+# Jamais transmis à `claude -p` : le jeton du bot, les webhooks (audit du 02/10/2026). Claude n'en a pas besoin, et une
+# commande qu'il lancerait ne doit pas les trouver dans son environnement.
+SECRET_ENV_RE = re.compile(r"TOKEN|WEBHOOK|SECRET|PASSWORD", re.IGNORECASE)
+
+
+def claude_env(environ):
+    env = {k: v for k, v in environ.items() if not SECRET_ENV_RE.search(k)}
+    env["HOME"] = environ.get("HOME", "/root")
+    return env
+
+
 class ClaudeRunner:
     def __init__(self, cwd, permission_mode, timeout):
         self.cwd, self.permission_mode, self.timeout = cwd, permission_mode, timeout
@@ -159,7 +170,7 @@ class ClaudeRunner:
                "--append-system-prompt", SYSTEM_PROMPT]
         if session_id:
             cmd += ["--resume", session_id]
-        env = dict(os.environ, HOME=os.environ.get("HOME", "/root"))
+        env = claude_env(os.environ)
         self.process = await asyncio.create_subprocess_exec(
             *cmd, cwd=self.cwd, env=env, stdin=asyncio.subprocess.PIPE,
             stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
@@ -207,7 +218,9 @@ class Bot(discord.Client):
     def __init__(self, channel_id, owner_id, runner):
         intents = discord.Intents.default()
         intents.message_content = True
-        super().__init__(intents=intents)
+        # pas de @everyone, @here ni de rôle dans les réponses : un texte de Claude ne notifie jamais tout le salon
+        super().__init__(intents=intents, allowed_mentions=discord.AllowedMentions(everyone=False, roles=False, users=True,
+                                                                                  replied_user=True))
         self.channel_id, self.owner_id, self.runner = channel_id, owner_id, runner
         self.state = load_state()
         if not self.owner_id:

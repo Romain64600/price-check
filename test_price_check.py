@@ -5,6 +5,7 @@ import json
 import os
 import re
 import unittest
+import urllib.request
 from unittest import mock
 
 import price_check as pc
@@ -1562,6 +1563,94 @@ class TestOfferModes20261001(unittest.TestCase):
 
 @mock.patch.object(pc, "REQUEST_DELAY", 0)
 @mock.patch.object(pc, "PAGE_DELAY", 0)
+class TestSecurityAudit20261002(unittest.TestCase):
+    """Audit sécurité du 02/10/2026 : le moniteur tourne en root."""
+
+    def test_targets_refused(self):
+        # l'URL marchand vient de la redirection AllKeyShop et des redirections du marchand, sans contrôle
+        for url in ("file:///etc/hostname", "http://127.0.0.1:8650/api/price-check/run", "http://localhost/x",
+                    "http://10.0.0.5/", "http://169.254.169.254/latest/meta-data/", "http://[::1]/", "ftp://example.com/x", ""):
+            self.assertFalse(pc.safe_target(url), url)
+        for url in ("https://www.kinguin.net/category/1/x", "https://www.allkeyshop.com/blog/x/", "http://93.184.216.34/"):
+            self.assertTrue(pc.safe_target(url), url)
+        with self.assertRaises(OSError):
+            pc.http_get("file:///etc/hostname", pc.BROWSER_UA)
+        with self.assertRaises(OSError):  # AKS/Staff ne part jamais chez un marchand
+            pc.http_get("https://www.kinguin.net/category/1/x", pc.AKS_UA)
+
+    def test_redirects_never_carry_the_aks_user_agent_off_allkeyshop(self):
+        handler = pc.GuardedRedirect()
+        aks = urllib.request.Request("https://www.allkeyshop.com/redirection/offer/eur/1?merchant=2", headers={"User-Agent": pc.AKS_UA})
+        self.assertIsNone(handler.redirect_request(aks, None, 302, "Found", {}, "https://www.kinguin.net/category/1/x"))
+        self.assertIsNotNone(handler.redirect_request(aks, None, 301, "Moved", {}, "https://www.allkeyshop.com/blog/x/"))
+        shop = urllib.request.Request("https://www.kinguin.net/category/1/x", headers={"User-Agent": pc.BROWSER_UA})
+        self.assertIsNotNone(handler.redirect_request(shop, None, 301, "Moved", {}, "https://www.kinguin.net/category/1/y"))
+        self.assertIsNone(handler.redirect_request(shop, None, 302, "Found", {}, "http://127.0.0.1:8650/"))
+        # si le lien de redirection répond un jour 302 tout droit chez le marchand : l'URL est lue dans l'en-tête,
+        # et la suite du contrôle part avec l'UA navigateur
+        calls = []
+
+        def get(url, ua, follow=True, timeout=30):
+            calls.append((url, ua))
+            if "allkeyshop.com/redirection" in url:
+                return 302, "https://www.instant-gaming.com/en/21656-buy-ea-sports-fc-27-pc-ea-app/", ""
+            return 200, None, ""
+        with mock.patch.object(pc, "http_get", side_effect=get):
+            res = pc.check_offer("EA SPORTS FC 27", offer(merchantName="Instant Gaming", platform="ea-app",
+                                                          region="GLOBAL", region_filter="EA GLOBAL"))
+        self.assertEqual((res["verdict"], res["url"]), ("OK", "https://www.instant-gaming.com/en/21656-buy-ea-sports-fc-27-pc-ea-app/"))
+        self.assertTrue(all(ua == pc.BROWSER_UA for url, ua in calls if "allkeyshop" not in url))
+        with mock.patch.object(pc, "http_get", return_value=(200, None, '<meta http-equiv="refresh" content="0; URL=file:///etc/passwd">')):
+            with self.assertRaises(pc.CheckError):
+                pc.check_offer("EA SPORTS FC 27", offer())
+
+    def test_chromium_never_runs_as_root(self):
+        # rendu de pages tierces : « --no-sandbox » en root, sur un Chromium en retard de versions
+        nobody = pc.pwd.struct_passwd(("nobody", "x", 65534, 65534, "", "/nonexistent", "/usr/sbin/nologin"))
+        with mock.patch.object(pc.os, "geteuid", return_value=0), mock.patch.object(pc.pwd, "getpwnam", return_value=nobody), \
+             mock.patch.object(pc.os, "chown") as chown, mock.patch.dict(os.environ, {"DISCORD_WEBHOOK_URL": "https://hook/secret"}):
+            cmd, env = pc.chromium_command("https://www.kinguin.net/category/1/x", "/tmp/profile")
+        self.assertEqual(cmd[:4], ["setpriv", "--reuid=65534", "--regid=65534", "--clear-groups"])
+        self.assertNotIn("--no-sandbox", cmd)
+        chown.assert_called_once_with("/tmp/profile", 65534, 65534)
+        self.assertNotIn("DISCORD_WEBHOOK_URL", env)
+        self.assertEqual(cmd[-1], "https://www.kinguin.net/category/1/x")
+        with mock.patch.object(pc.shutil, "which", return_value="/usr/bin/chromium"), mock.patch.object(pc.subprocess, "run") as run:
+            self.assertIsNone(pc.chromium_dom("file:///etc/passwd"))
+        run.assert_not_called()
+
+    def test_shared_directory_never_written_or_read_through_a_symlink(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as d:
+            victim = os.path.join(d, "victime.txt")
+            with open(victim, "w") as f:
+                f.write("secret")
+            os.symlink(victim, os.path.join(d, "status.json.tmp"))
+            os.symlink(victim, os.path.join(d, "status.json"))
+            pc.write_status(d, {"modes": {}})
+            with open(victim) as f:
+                self.assertEqual(f.read(), "secret")
+            self.assertFalse(os.path.islink(os.path.join(d, "status.json")))
+            with open(os.path.join(d, "status.json"), encoding="utf-8") as f:
+                self.assertIn("modes", json.load(f))
+            self.assertEqual(oct(os.stat(os.path.join(d, "status.json")).st_mode & 0o777), "0o644")
+            with open(victim, "w") as f:
+                f.write(json.dumps({"offer": "1", "decision": "faux"}) + "\n")
+            os.symlink(victim, os.path.join(d, "decisions.jsonl"))
+            self.assertEqual(pc.read_decisions(d), {})  # un lien symbolique n'est pas lu
+
+    def test_state_backup_once_an_hour(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as d:
+            path = os.path.join(d, "state.json")
+            pc.save_state(path, {"checked": {"1": {}}, "merchants": {}})
+            with open(path + ".bak", encoding="utf-8") as f:
+                self.assertEqual(json.load(f)["checked"], {"1": {}})
+            pc.save_state(path, {"checked": {}, "merchants": {}})  # moins d'une heure après : la copie reste
+            with open(path + ".bak", encoding="utf-8") as f:
+                self.assertEqual(json.load(f)["checked"], {"1": {}})
+
+
 class TestCycle(unittest.TestCase):
     PAGE = sample("prod_popular1_ea-fc-27.html")
     TARGETS = [("Popular", 1, "EA SPORTS FC 27", "https://www.allkeyshop.com/blog/buy-ea-sports-fc-27-key-compare-prices/")]

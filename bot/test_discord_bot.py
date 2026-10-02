@@ -69,3 +69,21 @@ class TestProgressLine(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestClaudeEnvironment(unittest.TestCase):
+    def test_secrets_never_reach_claude(self):
+        # audit du 02/10/2026 : le sous-processus `claude -p` héritait du jeton du bot et des webhooks
+        env = db.claude_env({"DISCORD_BOT_TOKEN": "t", "DISCORD_WEBHOOK_URL": "w", "DISCORD_WEBHOOK_URL_HOMEPAGE": "h",
+                             "PATH": "/usr/bin", "LANG": "C.UTF-8", "DISCORD_CHANNEL_ID": "1", "HOME": "/root"})
+        self.assertEqual(sorted(env), ["DISCORD_CHANNEL_ID", "HOME", "LANG", "PATH"])
+        self.assertEqual(db.claude_env({})["HOME"], "/root")
+
+    def test_no_mass_mentions(self):
+        # audit du 02/10/2026 : une réponse de Claude contenant @everyone ou un rôle notifierait tout le salon
+        from unittest import mock
+        with mock.patch.object(db, "load_state", return_value={}):
+            bot = db.Bot(1, 2, None)
+        self.assertFalse(bot.allowed_mentions.everyone)
+        self.assertFalse(bot.allowed_mentions.roles)
+

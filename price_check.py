@@ -23,13 +23,16 @@ Voir docs/detection.md et docs/marchands.md.
 import argparse
 import glob
 import html
+import ipaddress
 import json
 import logging
 import os
+import pwd
 import re
 import shutil
 import subprocess
 import sys
+import tempfile
 import time
 import tomllib
 import unicodedata
@@ -74,6 +77,7 @@ AKS_UA = "AKS/Staff"  # pages AllKeyShop seulement, jamais chez le marchand
 BROWSER_UA = ("Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) "
               "Chrome/150.0.0.0 Safari/537.36")  # chez le marchand
 CHROMIUM = os.environ.get("CHROMIUM_BIN", "chromium")  # dernier repli : ouvrir la page marchand
+CHROMIUM_USER = os.environ.get("CHROMIUM_USER", "nobody")  # le compte du rendu : jamais root (voir chromium_command)
 MERCHANTS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "merchants")  # une exception par marchand
 NOTIFY_OK = os.environ.get("NOTIFY_OK", "1") != "0"  # envoyer aussi les verdicts OK sur Discord
 # Pause Discord : jusqu'à cette date locale « AAAA-MM-JJ HH:MM », les alertes sont mises en attente
@@ -204,9 +208,38 @@ log = logging.getLogger("price-check")
 
 # ---- HTTP --------------------------------------------------------------------
 
+def is_aks_host(url):
+    host = (urllib.parse.urlsplit(url).hostname or "").lower()
+    return host == "allkeyshop.com" or host.endswith(".allkeyshop.com")
+
+
+def safe_target(url):
+    """Une URL que le moniteur (root) peut ouvrir : http(s) seulement, jamais la machine elle-même ni le réseau privé
+    (audit du 02/10/2026 : l'URL marchand vient de la redirection AllKeyShop et des redirections du marchand, sans
+    contrôle ; « file:///… » ou « http://127.0.0.1:8650/… » étaient ouverts)."""
+    parts = urllib.parse.urlsplit(url or "")
+    host = (parts.hostname or "").lower().rstrip(".")
+    if parts.scheme not in ("http", "https") or not host or host == "localhost" or host.endswith(".localhost"):
+        return False
+    try:
+        return ipaddress.ip_address(host).is_global
+    except ValueError:
+        return True  # un nom DNS
+
+
 class NoRedirect(urllib.request.HTTPRedirectHandler):
     def redirect_request(self, *args, **kwargs):
         return None
+
+
+class GuardedRedirect(urllib.request.HTTPRedirectHandler):
+    """Suit une redirection, sauf vers une cible refusée (safe_target), et sauf, avec l'UA AKS/Staff, hors d'AllKeyShop :
+    urllib renvoie le même User-Agent à la cible, et AKS/Staff ne part jamais chez un marchand (règle de Romain ; audit
+    du 02/10/2026). La redirection non suivie revient à l'appelant : statut 30x et en-tête Location."""
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        if not safe_target(newurl) or (req.get_header("User-agent") == AKS_UA and not is_aks_host(newurl)):
+            return None
+        return super().redirect_request(req, fp, code, msg, headers, newurl)
 
 
 def request_headers(ua):
@@ -225,9 +258,14 @@ def request_headers(ua):
 
 
 def http_get(url, ua, follow=True, timeout=30):
-    """Renvoie (statut HTTP, en-tête Location, corps). Un statut d'erreur ne lève pas."""
+    """Renvoie (statut HTTP, en-tête Location, corps). Un statut d'erreur ne lève pas ; une cible refusée (safe_target),
+    ou l'UA AKS/Staff hors d'AllKeyShop, lève OSError."""
+    if not safe_target(url):
+        raise OSError("cible refusée : %s" % (url or "")[:120])
+    if ua == AKS_UA and not is_aks_host(url):
+        raise OSError("UA AKS/Staff hors d'AllKeyShop refusé : %s" % url[:120])
     req = urllib.request.Request(url, headers=request_headers(ua))
-    opener = urllib.request.build_opener() if follow else urllib.request.build_opener(NoRedirect)
+    opener = urllib.request.build_opener(GuardedRedirect if follow else NoRedirect)
     try:
         with opener.open(req, timeout=timeout) as resp:
             return resp.status, resp.headers.get("Location"), resp.read().decode("utf-8", "replace")
@@ -1098,16 +1136,31 @@ def merchant_page_text(url, cfg):
     return None, None
 
 
+def chromium_command(url, profile):
+    """La commande Chromium : jamais en root. Le moniteur tourne en root ; le rendu d'une page tierce passe sous
+    CHROMIUM_USER (nobody), avec le bac à sable de Chromium (audit du 02/10/2026 : « --no-sandbox » en root), un profil
+    jetable et un environnement vide (ni webhooks ni jeton)."""
+    cmd = [CHROMIUM, "--headless=new", "--disable-gpu", "--disable-dev-shm-usage", "--user-data-dir=" + os.path.join(profile, "p"),
+           "--user-agent=" + BROWSER_UA, "--virtual-time-budget=20000", "--dump-dom", url]
+    if os.geteuid() == 0:
+        user = pwd.getpwnam(CHROMIUM_USER)
+        os.chown(profile, user.pw_uid, user.pw_gid)
+        cmd = ["setpriv", "--reuid=%d" % user.pw_uid, "--regid=%d" % user.pw_gid, "--clear-groups"] + cmd
+    return cmd, {"HOME": profile, "PATH": "/usr/sbin:/usr/bin:/sbin:/bin", "LANG": "C.UTF-8"}
+
+
 def chromium_dom(url):
     """DOM de la page marchand rendu par Chromium sans écran, ou None si impossible."""
-    if not shutil.which(CHROMIUM):
+    if not shutil.which(CHROMIUM) or not safe_target(url):
         return None
-    cmd = [CHROMIUM, "--headless=new", "--no-sandbox", "--disable-gpu", "--disable-dev-shm-usage",
-           "--user-agent=" + BROWSER_UA, "--virtual-time-budget=20000", "--dump-dom", url]
+    profile = tempfile.mkdtemp(prefix="price-check-chromium.")
     try:
-        return subprocess.run(cmd, capture_output=True, timeout=90).stdout.decode("utf-8", "replace")
-    except (OSError, subprocess.TimeoutExpired):
+        cmd, env = chromium_command(url, profile)
+        return subprocess.run(cmd, capture_output=True, timeout=90, env=env, cwd="/").stdout.decode("utf-8", "replace")
+    except (OSError, KeyError, subprocess.TimeoutExpired):
         return None
+    finally:
+        shutil.rmtree(profile, ignore_errors=True)
 
 
 def page_title(url, parser=None):
@@ -1209,19 +1262,26 @@ def check_offer(product, offer):
 
     for attempt in (1, 2):
         try:
-            status, _, body = http_get(REDIRECTION_URL % (offer["id"], offer["merchant"]), AKS_UA)
+            status, location, body = http_get(REDIRECTION_URL % (offer["id"], offer["merchant"]), AKS_UA)
         except OSError as e:
             raise CheckError("redirection AllKeyShop : %s" % e)
         if status < 500 or attempt == 2:
             break
         time.sleep(REQUEST_DELAY * 3)  # 503 passager de la redirection AllKeyShop : un second essai
     time.sleep(REQUEST_DELAY)
-    if status != 200:
+    if status in (301, 302, 303, 307, 308) and location:
+        # le lien redirige tout droit chez le marchand (aujourd'hui : page « Redirecting… » en 200) : l'URL est lue
+        # dans l'en-tête, la redirection n'est pas suivie avec l'UA AKS/Staff
+        url = urllib.parse.urljoin(REDIRECTION_URL % (offer["id"], offer["merchant"]), location)
+    elif status != 200:
         raise CheckError("redirection AllKeyShop HTTP %s" % status)
-    url = merchant_url(body)
+    else:
+        url = merchant_url(body)
     if not url:
         raise CheckError("URL marchand introuvable dans la page de redirection")
     url = unwrap_affiliate(url)
+    if not safe_target(url):
+        raise CheckError("URL marchand refusée : %s" % url[:120])
     cfg = merchant_config(url, offer["merchantName"])
     result, method = analyze(product, offer, url_text(url), "URL", region=region_text(url, cfg)), "URL"
     if (cfg.get("region") or {}).get("from") == "query":
@@ -1408,11 +1468,22 @@ def load_state(path):
     return state
 
 
+BACKUP_EVERY = 3600  # copie de state.json, une fois par heure (audit du 02/10/2026 : aucune sauvegarde)
+
+
 def save_state(path, state):
     tmp = path + ".tmp"
     with open(tmp, "w") as f:
         json.dump(state, f, ensure_ascii=False, indent=1)
     os.replace(tmp, path)
+    backup = path + ".bak"
+    try:
+        if not os.path.exists(backup) or time.time() - os.path.getmtime(backup) >= BACKUP_EVERY:
+            shutil.copy2(path, backup + ".tmp")
+            os.replace(backup + ".tmp", backup)  # un state.json perdu ou abîmé se reprend là (au plus une heure de retard)
+            os.utime(backup)
+    except OSError as e:
+        log.warning("copie de state.json impossible : %s", e)
 
 
 def prune_state(state, now):
@@ -1706,9 +1777,9 @@ def take_requests(directory, modes):
             continue
         by = ""
         try:
-            with open(path, encoding="utf-8") as f:
+            with open_shared(path) as f:
                 by = str(json.load(f).get("by") or "")
-        except (OSError, ValueError):
+        except (OSError, ValueError, AttributeError):
             pass
         try:
             os.remove(path)
@@ -1718,17 +1789,33 @@ def take_requests(directory, modes):
     return found
 
 
+def write_shared(path, payload):
+    """Écrit un fichier JSON du dossier partagé avec l'admin. Ce dossier est inscriptible par le groupe debian : le
+    moniteur (root) n'y écrit jamais à travers un lien symbolique posé là (audit du 02/10/2026) ; le .tmp est retiré
+    s'il existe (unlink ne suit pas le lien), recréé neuf (O_EXCL | O_NOFOLLOW), puis renommé sur le fichier."""
+    tmp = path + ".tmp"
+    try:
+        os.unlink(tmp)
+    except FileNotFoundError:
+        pass
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o644)
+    with os.fdopen(fd, "w", encoding="utf-8") as f:
+        os.fchmod(f.fileno(), 0o644)
+        json.dump(payload, f, ensure_ascii=False, indent=1)
+    os.replace(tmp, path)
+
+
+def open_shared(path):
+    """Lit un fichier du dossier partagé sans suivre de lien symbolique (OSError sinon)."""
+    return os.fdopen(os.open(path, os.O_RDONLY | os.O_NOFOLLOW), encoding="utf-8")
+
+
 def write_status(directory, status):
     """status.json pour l'admin : l'état de chaque mode (en cours, avancement, dernier et prochain passage)."""
     if not directory:
         return
-    path = os.path.join(directory, STATUS_FILE)
-    tmp = path + ".tmp"
     try:
-        with open(tmp, "w", encoding="utf-8") as f:
-            json.dump(dict(status, updated_at=time.strftime("%Y-%m-%dT%H:%M:%S%z")), f, ensure_ascii=False, indent=1)
-        os.chmod(tmp, 0o644)
-        os.replace(tmp, path)
+        write_shared(os.path.join(directory, STATUS_FILE), dict(status, updated_at=time.strftime("%Y-%m-%dT%H:%M:%S%z")))
     except OSError as e:
         log.warning("status.json non écrit : %s", e)
 DECISIONS = {"vrai": "Vrai positif : alerter", "faux": "Faux positif : ne pas alerter", "a_discuter": "À discuter"}
@@ -1739,7 +1826,7 @@ def read_decisions(directory):
     Une ligne illisible ou inconnue est ignorée."""
     decisions = {}
     try:
-        with open(os.path.join(directory, "decisions.jsonl"), encoding="utf-8") as f:
+        with open_shared(os.path.join(directory, "decisions.jsonl")) as f:
             for line in f:
                 try:
                     d = json.loads(line)
@@ -1792,11 +1879,7 @@ def export_reports(state, directory, pages=None):
     reports.sort(key=lambda r: r.get("at") or "", reverse=True)
     payload = {"generated_at": time.strftime("%Y-%m-%dT%H:%M:%S%z"), "decisions": DECISIONS, "reports": reports}
     path = os.path.join(directory, "reports.json")
-    tmp = path + ".tmp"
-    with open(tmp, "w", encoding="utf-8") as f:
-        json.dump(payload, f, ensure_ascii=False, indent=1)
-    os.chmod(tmp, 0o644)
-    os.replace(tmp, path)
+    write_shared(path, payload)
     return len(reports)
 
 
