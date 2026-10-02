@@ -263,9 +263,18 @@ class TestAnalyzeSuspects(unittest.TestCase):
         # G2A, 30/09/2026, édition AllKeyShop « Bundle » : The Witcher Trilogy Pack
         url = "https://www.g2a.com/en/the-witcher-trilogy-pack-steam-gift-global-i10000000746004"
         res = pc.analyze("The Witcher 3 Wild Hunt", offer(edition="Bundle", region="GIFT"), pc.url_text(url), "URL")
-        self.assertEqual((res["match"], res["reasons"], res["notes"]), (None, [], ["édition Bundle : nom non contrôlé"]))
+        self.assertEqual((res["match"], res["reasons"], res["notes"]),
+                         (None, [], ["édition Bundle : nom non contrôlé en entier (un mot du nom présent)"]))
         res = pc.analyze("The Witcher 3 Wild Hunt", offer(edition="Bundle", region="GLOBAL"), pc.url_text(url), "URL")
         self.assertEqual(res["reasons"], ["gift chez le marchand, affiché en clé GLOBAL"])
+        # audit du 02/10/2026 : sans un mot du nom, un lot n'est pas blanchi (Sonic en « Starter Pack » sur The Witcher 3)
+        sonic = "https://www.g2a.com/sonic-the-hedgehog-4-episode-1-steam-key-global-i10000000001"
+        for edition in ("Starter Pack", "Bundle", "Complete Collection"):
+            res = pc.analyze("The Witcher 3 Wild Hunt", offer(edition=edition), pc.url_text(sonic), "URL")
+            self.assertTrue(res["reasons"] and res["reasons"][0].startswith("autre produit chez le marchand"), (edition, res["reasons"]))
+        # DREDGE vendu « dredging-the-depths-bundle » : un mot du nom par ses 5 premières lettres suffit
+        self.assertEqual(pc.analyze("DREDGE", offer(edition="Bundle"), pc.url_text("https://shop.example/dredging-the-depths-bundle"),
+                                    "URL")["reasons"], [])
 
     def test_language_restriction_is_fine(self):
         self.assertEqual(self.reasons("EA SPORTS FC 27", "https://www.mmoga.com/EA-Games/EA-SPORTS-FC-27-EA-App-English-Only.html",

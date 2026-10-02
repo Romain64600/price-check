@@ -726,6 +726,16 @@ def exact_in(c, tokens, core, product_years):
     return False
 
 
+def bundle_names_product(names, normed):
+    """Un lot (édition Bundle, Pack, Collection…) porte un autre nom que le jeu, mais il en reprend au moins un mot
+    distinctif : 4 lettres ou plus, hors mots d'édition et de service, entier ou par ses 5 premières lettres
+    (« dredging » pour DREDGE)."""
+    tokens = [t for t in normed.split("-") if t]
+    distinctive = {w for w in name_core_words(names) if len(w) >= 4 and not w.isdigit() and w not in SOFT_WORDS
+                   and w not in FILLER_WORDS and w not in LABEL_NOISE and w not in GENERIC_EDITION_WORDS}
+    return any(t == w or (len(w) >= 5 and len(t) >= 5 and t[:5] == w[:5]) for w in distinctive for t in tokens)
+
+
 def name_match(names, normed, extra_ok=()):
     """« exact » si un des noms est dans le texte (aligné sur des mots), « partial » si ses mots significatifs y sont.
 
@@ -1066,8 +1076,10 @@ def analyze(product, offer, text, source, region=None):
         match = title_match(names, text)
         if match:
             notes.append("titre court contenu dans le nom")
-    if match is None and is_bundle(offer["edition"]):
-        notes.append("édition %s : nom non contrôlé" % offer["edition"])  # un bundle porte un autre nom
+    if match is None and is_bundle(offer["edition"]) and bundle_names_product(names, normed):
+        # un bundle porte un autre nom (« The Witcher Trilogy Pack ») ; mais un mot distinctif du nom y est
+        # (audit du 02/10/2026 : sans ce mot, une URL Sonic passait sur la page de The Witcher 3 en « Starter Pack »)
+        notes.append("édition %s : nom non contrôlé en entier (un mot du nom présent)" % offer["edition"])
     elif match is None:
         label = merchant_label(text, source)
         result_label = label
