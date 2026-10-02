@@ -1050,6 +1050,18 @@ def moved(url, canonical):
 
 # ---- Contrôle d'une offre ----------------------------------------------------
 
+def unverified_reason(offer, url):
+    """Pourquoi l'offre n'a pas pu être vérifiée, en disant ce que nomme l'URL : jamais « URL sans nom »
+    quand elle nomme quelque chose (formation du 01/10/2026 sur TORO 2, revu le 02/10 sur World of Warcraft:
+    Forever chez Driffle, dont l'URL « warcraft-forever-… » n'était pas contrôlée, édition « Heroic Pack »)."""
+    label = merchant_label(url_text(url), "URL")
+    if is_bundle(offer["edition"]):
+        why = "édition %s : nom non contrôlé dans l'URL" % offer["edition"]
+    else:
+        why = "nom du produit introuvable dans l'URL"
+    return why + (" (elle nomme « %s »)" % label if label else "") + ", page marchand illisible"
+
+
 class CheckError(Exception):
     """Contrôle impossible pour l'instant (réseau, redirection AllKeyShop en erreur) : à réessayer."""
 
@@ -1118,7 +1130,7 @@ def check_offer(product, offer):
                 return {"verdict": "SUSPECT", "url": url, "method": method, "reasons": others,
                         "notes": result["notes"] + ["nom du produit non vérifiable (page marchand illisible)"]}
             return {"verdict": "À VÉRIFIER", "url": url, "method": "aucune", "notes": [],
-                    "reasons": ["URL sans nom du produit et page marchand illisible"],
+                    "reasons": [unverified_reason(offer, url)],
                     "unverifiable": cfg.get("unverifiable", "first-price")}
         result, method = analyze(product, offer, page_text, "titre de la page"), page_method
         if cfg.get("localized") and result["kinds"] == ["name"]:

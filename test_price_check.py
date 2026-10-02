@@ -817,6 +817,21 @@ class TestConfirmOnMerchantPage(unittest.TestCase):
             res = pc.check_offer("Ni no Kuni Wrath of the White Witch Remastered Nintendo Switch", o)
         self.assertEqual((res["verdict"], res["method"]), ("OK", "URL de la version en-GB"))
 
+    def test_unverifiable_reason_says_what_the_url_names(self):
+        # 02/10/2026, World of Warcraft: Forever (Heroic Pack) chez Driffle : la page bloque le moniteur ; l'ancien
+        # message « URL sans nom du produit » était faux, l'URL nomme « warcraft forever skyborne heroic pack »
+        o = offer(edition="Heroic Pack", region="BATTLENET GIFT", region_filter="BATTLENET GIFT", platform="battle-net")
+        url = "https://www.driffle.com/warcraft-forever-skyborne-heroic-pack-dlc-global-pc-mac-battlenet-gift-p10001673"
+        self.assertEqual(pc.unverified_reason(o, url),
+                         "édition Heroic Pack : nom non contrôlé dans l'URL (elle nomme « Warcraft Forever Skyborne Heroic Pack Dlc Mac »), "
+                         "page marchand illisible")
+        self.assertEqual(pc.unverified_reason(offer(), "https://www.hrkgame.com/en/product/12345/"),
+                         "nom du produit introuvable dans l'URL, page marchand illisible")
+        # l'alias : « Warcraft Forever » est le produit, l'offre se vérifie par l'URL
+        pc._PRODUCT_ALIASES = None
+        res = pc.analyze("World of Warcraft: Forever", o, pc.url_text(url), "URL")
+        self.assertEqual((res["match"], res["reasons"]), ("exact", []))
+
     def test_kinguin_serves_another_page_than_the_link(self):
         # arbitrage du 01/10/2026, Stellaris (offre 135046199) : le lien « …-starter-pack-eu-steam-cd-key » sert la
         # fiche globale « …-starter-pack-bundle-2023-pc-steam-cd-key » (URL canonique) : la fiche servie fait foi
@@ -1092,7 +1107,7 @@ class TestOfferModes20261001(unittest.TestCase):
         first = pc.page_offers(self.trans, 3)[0]
         state, sent = pc.load_state("/nonexistent"), []
         state["checked"][str(first["id"])] = {"verdict": "NON VÉRIFIABLE", "unverifiable": "first-price", "product": "EA SPORTS FC 27",
-                                              "reasons": ["URL sans nom du produit et page marchand illisible"], "notes": [],
+                                              "reasons": ["nom du produit introuvable dans l'URL, page marchand illisible"], "notes": [],
                                               "url": "https://shop.example/dp/B0", "method": "aucune"}
         with mock.patch.object(pc, "http_get", return_value=(200, None, self.PAGE)), mock.patch.object(pc, "NOTIFY_OK", False), \
                 mock.patch.dict(pc.PAGE_LISTS, {page: {"Popular"}}, clear=True):
