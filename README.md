@@ -101,7 +101,7 @@ Format des fichiers : [docs/exploitation.md](docs/exploitation.md#reports-pour-l
 - **La page est nécessaire** pour le PS Store (URL = code produit ; page lue en HTTP, en anglais), les packs Steam (`/sub/`, `/bundle/`), les bundles G2A, PlanetPlay (URL = identifiant), LDShop (page multi-produits, option cochée).
 - **Pages illisibles** (Driffle, Loaded, Wyrel : blocage anti-robot) : l'URL fait foi, elle nomme presque toujours le produit.
 - **Ignoré** : Amazon (arbitrage du 01/10/2026, pages illisibles et URL sans nom).
-- **Spécificités** : Wyrel (région dans `region=`), Eneba (préfixe `steam-` écarté), Nintendo eShop (version anglaise de la fiche, anciens domaines `nintendo.es`…), Kinguin (redirections non suivies), LDShop (option cochée), PS Store (JSON de la page, lu en en-gb).
+- **Spécificités** : Wyrel (région dans `region=`), Eneba (préfixe `steam-` écarté), CJS CDKeys (région de la variante choisie par le lien), Nintendo eShop (version anglaise de la fiche, anciens domaines `nintendo.es`…), Kinguin (redirections non suivies), LDShop (option cochée), PS Store (JSON de la page, lu en en-gb).
 
 Table détaillée, méthode par méthode, et configs marchands : [docs/marchands.md](docs/marchands.md). Elle doit être mise à jour à chaque marchand qui oblige à ouvrir sa page, pour qu'on sache toujours qui est monitoré et qui ne l'est pas encore. `python3 price_check.py --coverage` affiche ce que le moniteur a constaté.
 
@@ -123,7 +123,7 @@ Table détaillée, méthode par méthode, et configs marchands : [docs/marchands
 | `test_price_check.py` | Tests hors ligne : `python3 -m unittest -v` |
 | `bot/` | Bot Discord : parler à Claude Code depuis le salon des alertes et développer le projet depuis Discord. Voir [bot/README.md](bot/README.md) |
 | `aliases.toml` | Autres noms des produits qu'aucune règle ne peut deviner (titre européen, titre de travail, formulation d'un marchand), appris au fil de la formation ; les préfixes omis par les marchands (« EA Sports », « Call of Duty »…) sont une règle générale, pas des alias |
-| `merchants/` | Une exception par marchand (TOML) : Wyrel (région dans le paramètre `region=`), Amazon (ignoré depuis le 01/10/2026), Nintendo (version anglaise, anciens domaines), PlayStation (page lue en en-gb), LDShop (option cochée d'une page multi-produits), Kinguin (groupe « redirections non suivies »), Eneba (préfixe `steam-` écarté). Voir [docs/marchands.md](docs/marchands.md#configs-marchands-merchantstoml) |
+| `merchants/` | Une exception par marchand (TOML) : Wyrel (région dans le paramètre `region=`), Amazon (ignoré depuis le 01/10/2026), Nintendo (version anglaise, anciens domaines), PlayStation (page lue en en-gb), LDShop (option cochée d'une page multi-produits), Kinguin (groupe « redirections non suivies »), Eneba (préfixe `steam-` écarté), CJS CDKeys (variante du lien). Voir [docs/marchands.md](docs/marchands.md#configs-marchands-merchantstoml) |
 | `price-check.service` | Service systemd |
 | `docs/` | Documentation |
 | `samples/` | Réponses brutes du site, utilisées par les tests |

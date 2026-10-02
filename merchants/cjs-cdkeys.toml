@@ -1,0 +1,15 @@
+# CJS CDKeys (cjs-cdkeys.com) — Minecraft Dungeons « Triple Bundle », alerte du 02/10/2026 à 23:31 (faux positif).
+# Une fiche CJS regroupe plusieurs variantes de région (AR (Argentina), Europe, USA, United Kingdom…) ; le lien
+# AllKeyShop en choisit une par « ?variation=699 » (ici Europe, SKU « …_EU_ONLY »). Le champ « Region: » de la page
+# montre la variante mise en avant (la moins chère : « AR (Argentina) … works worldwide with an Argentina VPN »), pas
+# celle du lien : il ne fait pas foi. L'URL ne dit rien de la région : avec « variation= », la page est lue pour
+# connaître la variante choisie (Chromium : HTTP répond 403).
+name = "CJS CDKeys"
+hosts = ["cjs-cdkeys.com"]
+
+[page]
+parser = "url-variation"
+variation_param = "variation"
+
+[region]
+from = "page-variation"

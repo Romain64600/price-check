@@ -997,6 +997,36 @@ class TestConfirmOnMerchantPage(unittest.TestCase):
             res = pc.check_offer("Forza Horizon 6 Premium Upgrade Bundle Xbox Series", o)
         self.assertEqual((res["verdict"], res["method"]), ("OK", "page (Chromium)"), res)
 
+    def test_cjs_cdkeys_region_is_the_variation_chosen_by_the_link(self):
+        # alerte du 02/10/2026 à 23:31, faux positif : Minecraft Dungeons « Triple Bundle », CJS CDKeys, affichée EUROPE
+        # (WINDOWS EU). Le lien choisit « ?variation=699 » = Europe (SKU …_EU_ONLY) ; le champ « Region: » de la page
+        # montre la variante mise en avant, « AR (Argentina) ». merchants/cjs-cdkeys.toml
+        dom = sample("cjs_minecraft-triple-bundle_variations.html")
+        base = "https://www.cjs-cdkeys.com/products/Minecraft-Triple-Bundle-PC-Windows-Key-%28Digital-Download%29.html?variation="
+        self.assertEqual([pc.url_variation_label(dom, base + v) for v in ("699", "700", "701", "725")],
+                         ["Europe", "USA", "AR (Argentina)", "United Kingdom"])
+        self.assertIsNone(pc.url_variation_label(dom, base.split("?")[0]))
+        self.assertIsNone(pc.url_variation_label(dom, base + "999"))
+        text = pc.page_text_from_dom(dom, base + "699", "url-variation")
+        self.assertIn("REGION Europe", text)
+        self.assertNotIn("Argentina", text)
+        o = offer(merchantName="CJS CDKeys", edition="Triple Bundle", region="EUROPE", region_filter="WINDOWS EU", platform="microsoft-windows")
+        self.assertEqual(pc.analyze("Minecraft Dungeons", o, text, "titre de la page")["reasons"], [])
+        argentina = pc.page_text_from_dom(dom, base + "701", "url-variation")
+        self.assertEqual(pc.analyze("Minecraft Dungeons", o, argentina, "titre de la page")["reasons"], ["région interdite : ar, argentina"])
+
+        # de bout en bout : l'URL nomme le produit mais pas la région ; avec « variation= », la page est lue pour la variante
+        def check(variation):
+            with mock.patch.object(pc, "http_get", side_effect=[(200, None, self.page(base + variation)), (403, None, "")] + [(403, None, "")] * 4), \
+                 mock.patch.object(pc, "chromium_dom", return_value=dom):
+                return pc.check_offer("Minecraft", offer(merchantName="CJS CDKeys", region="EUROPE", region_filter="WINDOWS EU",
+                                                         platform="microsoft-windows"))
+        res = check("699")
+        self.assertEqual(res["verdict"], "OK", res)
+        self.assertIn("région lue sur la variante choisie par le lien : Europe", res["notes"])
+        res = check("701")  # la clé argentine affichée EUROPE : une vraie erreur, que l'URL seule laissait passer
+        self.assertEqual((res["verdict"], res["reasons"]), ("SUSPECT", ["région interdite : ar, argentina"]))
+
     def test_browser_headers_and_moved(self):
         # 02/10/2026 : Akamai (Kinguin) répond 403 à l'Accept minimal, 200 ou 301 au jeu complet d'en-têtes de Chrome
         h = pc.request_headers(pc.BROWSER_UA)

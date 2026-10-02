@@ -549,7 +549,7 @@ def region_text(url, cfg):
         return rc.get("map", {}).get(value, "")
     if rc.get("from") == "none":
         return ""
-    return None
+    return None  # « url », et « page-variation » tant que la page n'est pas lue (voir check_offer)
 
 
 # ---- Analyse d'une URL ou d'un titre marchand --------------------------------
@@ -1291,7 +1291,26 @@ def selected_option_text(dom):
     return best
 
 
-def page_text_from_dom(dom, url, parser):
+VARIATION_LABEL_RE = r'<label\b[^>]*>\s*<input\b[^>]*\bvalue="%s"[^>]*>(.*?)</label>'
+
+
+def url_variation_label(dom, url, param="variation"):
+    """Page à variantes (CJS CDKeys : AR (Argentina), Europe, USA… sur une même fiche) : le libellé de la variante que
+    choisit le lien (`?variation=699` -> « Europe »), lu sur le bouton dont la valeur est celle du paramètre, prix
+    retirés. None si le lien n'a pas le paramètre ou si la page ne l'a pas."""
+    value = (urllib.parse.parse_qs(urllib.parse.urlparse(url).query).get(param) or [""])[0]
+    if not re.fullmatch(r"[\w-]{1,40}", value or ""):
+        return None
+    m = re.search(VARIATION_LABEL_RE % re.escape(value), dom, re.DOTALL)
+    if not m:
+        return None
+    name = re.search(r'class="[^"]*variation-name[^"]*"[^>]*>(.*?)<', m.group(1), re.DOTALL)
+    label = html.unescape(re.sub(r"<[^>]+>", " ", name.group(1) if name else m.group(1)))
+    label = re.sub(r"[£€$]\s?\d[\d.,]*|\d[\d.,]*\s?[£€$]", " ", label)
+    return re.sub(r"\s+", " ", label).strip() or None
+
+
+def page_text_from_dom(dom, url, parser, variation_param="variation"):
     if parser == "playstation":
         return playstation_text(dom, url) or page_title_from_html(dom)
     text = page_title_from_html(dom)
@@ -1299,6 +1318,11 @@ def page_text_from_dom(dom, url, parser):
         option = selected_option_text(dom)
         if option:
             text = "%s | option choisie : %s" % (text, option)
+    if parser == "url-variation" and text:
+        # le champ « Region » de la page montre la variante mise en avant, pas celle du lien : il est remplacé
+        parts = [p for p in text.split(" | ") if not p.upper().startswith("REGION ")]
+        label = url_variation_label(dom, url, variation_param)
+        text = " | ".join(parts + (["REGION %s" % label] if label else []))
     return text
 
 
@@ -1315,12 +1339,12 @@ def merchant_page_text(url, cfg):
         status, body = None, ""
     time.sleep(REQUEST_DELAY)
     if status == 200 and body:
-        text = page_text_from_dom(body, url, page_cfg.get("parser"))
+        text = page_text_from_dom(body, url, page_cfg.get("parser"), page_cfg.get("variation_param", "variation"))
         # LDShop (option cochée) : le HTML servi en HTTP n'a pas les options, rendues en JavaScript : Chromium
         if text and not is_block_page(text) and not (page_cfg.get("parser") == "selected-option" and "option choisie" not in text):
             return text, "page (HTTP)"
     if cfg.get("browser", True):
-        text = page_title(url, page_cfg.get("parser"))
+        text = page_title(url, page_cfg.get("parser"), page_cfg.get("variation_param", "variation"))
         if text and not is_block_page(text):
             return text, "page (Chromium)"
     return None, None
@@ -1353,10 +1377,10 @@ def chromium_dom(url):
         shutil.rmtree(profile, ignore_errors=True)
 
 
-def page_title(url, parser=None):
+def page_title(url, parser=None, variation_param="variation"):
     """Titre, og:title et h1 de la page marchand, via Chromium sans écran. None si impossible."""
     dom = chromium_dom(url)
-    return None if dom is None else page_text_from_dom(dom, url, parser)
+    return None if dom is None else page_text_from_dom(dom, url, parser, variation_param)
 
 
 CANONICAL_RE = re.compile(r'<link\b(?=[^>]*\brel=["\']canonical["\'])[^>]*\bhref=["\']([^"\']+)["\']', re.IGNORECASE)
@@ -1527,6 +1551,21 @@ def check_offer(product, offer):
         # titres traduits (« localized ») ou contrôlé sur sa version anglaise (Nintendo : un slug traduit n'est pas
         # un autre produit quand la version en-GB n'a pas pu être lue)
         return done("SUSPECT", method, result["reasons"], result["notes"])
+
+    variation_param = (cfg.get("page") or {}).get("variation_param", "variation")
+    if ((cfg.get("region") or {}).get("from") == "page-variation" and result["match"] is not None
+            and urllib.parse.parse_qs(urllib.parse.urlparse(url).query).get(variation_param)):
+        # la région est celle de la variante que choisit le lien (CJS CDKeys : ?variation=699 = Europe), pas dans l'URL :
+        # la page est lue (sinon une clé AR (Argentina) affichée EUROPE passait sur la seule URL)
+        variation_text, variation_via = merchant_page_text(url, cfg)
+        chosen = [p[len("REGION "):] for p in (variation_text or "").split(" | ") if p.startswith("REGION ")]
+        if chosen:
+            page_text, page_via = variation_text, variation_via
+            result = analyze(product, offer, shop_url_text(url, cfg), "URL", region=chosen[0])
+            result["notes"].append("région lue sur la variante choisie par le lien : %s" % chosen[0])
+            method = "URL et variante de la page (%s)" % (variation_via or "page")
+        else:
+            result["notes"].append("variante choisie par le lien non lue (page illisible) : région de l'URL seule")
 
     if result["match"] is None:
         # 2e repli : lire la page marchand (HTTP simple, puis Chromium si la config le permet)
