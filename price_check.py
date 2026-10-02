@@ -1427,9 +1427,107 @@ def promote_unverifiable(entry, label, rank, product, page_url, offer, notify):
     entry.update(verdict="À VÉRIFIER", notes=res["notes"], page_first=True, edition_rank=offer.get("edition_rank"))
 
 
-def run_cycle(targets, notify, state, checker=None, save=None, per_edition=1, between=None, progress=None):
+RECHECK_EVERY = 3600  # s : recontrôle des offres signalées encore sur leurs pages (et à chaque passage demandé depuis l'admin)
+
+
+def flagged_entries(state, page_url):
+    """Les offres signalées de cette page à recontrôler : SUSPECT, À VÉRIFIER, NON VÉRIFIABLE, pas encore réparées,
+    hors « faux positif » décidé dans l'admin."""
+    return {k: e for k, e in state["checked"].items()
+            if e.get("page") == page_url and e.get("verdict") in REPORTED and not e.get("fixed_at")
+            and (e.get("decision") or {}).get("decision") != "faux"}
+
+
+def apply_recheck(entry, label, rank, product, page_url, offer, res, notify, stamp, now, outcome):
+    """Une offre déjà vue, recontrôlée : son nouveau verdict comparé à l'ancien. Réparée (était signalée, maintenant
+    OK), toujours en erreur, ou nouvelle erreur (était OK) : celle-ci part sur Discord comme une alerte, ainsi qu'une
+    offre notée NON VÉRIFIABLE devenue SUSPECT."""
+    was = entry.get("verdict")
+    entry.update(reasons=res["reasons"], notes=res["notes"], method=res["method"], url=res["url"] or entry.get("url"),
+                 edition_rank=offer.get("edition_rank"), page_first=offer.get("page_first", False), seen=now,
+                 last_recheck=stamp, region=offer["region"], region_filter=offer.get("region_filter", ""),
+                 platform=offer["platform"], price=offer["price"])
+    outcome["checked"] += 1
+    if res["verdict"] == "OK":
+        if was in REPORTED:
+            entry.update(fixed_at=stamp, fixed_how="recontrôle OK", fixed_from=was, verdict="OK")
+            outcome["fixed"].append(entry)
+        else:
+            entry["verdict"] = "OK"
+        return
+    entry["verdict"] = res["verdict"]
+    if was in REPORTED:
+        entry["still_wrong_at"] = stamp
+        outcome["still"].append(entry)
+        alert = res["verdict"] == "SUSPECT" and was != "SUSPECT"  # une offre notée devient une erreur avérée
+    else:  # était OK (ou réparée) : nouvelle erreur
+        entry.update(at=stamp, fixed_at=None, fixed_how=None, fixed_from=None)
+        outcome["new"].append(entry)
+        alert = res["verdict"] not in NOT_SENT
+    if alert:
+        msg = format_alert(label, rank, product, page_url, offer, res)
+        log.info("%s", msg.replace("\n", " | "))
+        try:
+            notify(msg)
+        except Exception as e:
+            log.error("Envoi Discord impossible : %s", e)
+
+
+def recheck_flagged(label, rank, product, page_url, trans, state, notify, checker, stamp, now, outcome, skip=()):
+    """Romain, 02/10/2026 : « il faut qu'il contrôle les offres déjà vues, comme ça on saura si elles sont réparées ou
+    pas ». Les offres signalées de la page qui ne sont plus parmi les offres retenues (`skip` : déjà recontrôlées) :
+    disparues de la page = retirées ; encore là (plus bas dans l'édition) = recontrôlées."""
+    flagged = {k: e for k, e in flagged_entries(state, page_url).items() if k not in skip}
+    if not flagged:
+        return
+    on_page = {str(o["id"]): o for o in page_offers(trans, None)}
+    page_dlc = is_dlc_page(trans, product)
+    for key, entry in flagged.items():
+        offer = on_page.get(key)
+        if offer is None:
+            entry.update(fixed_at=stamp, fixed_how="offre retirée de la page", fixed_from=entry["verdict"], verdict="OK",
+                         seen=now, last_recheck=stamp)
+            outcome["removed"].append(entry)
+            continue
+        offer["page_dlc"] = page_dlc
+        try:
+            res = checker(product, offer)
+        except CheckError as e:
+            outcome["unknown"].append((entry, str(e)))
+            continue
+        if res["verdict"] == "À VÉRIFIER":
+            res = dict(res, verdict=unverifiable_verdict(offer, label, page_url, res.get("unverifiable", "first-price")))
+        apply_recheck(entry, label, rank, product, page_url, offer, res, notify, stamp, now, outcome)
+
+
+def format_recheck(label, by, outcome, full=False):
+    """Récapitulatif Discord d'un recontrôle : complet (toutes les offres retenues, passage demandé depuis l'admin) ou
+    des seules offres signalées (toutes les heures)."""
+    what = "Recontrôle de toutes les offres" if full else "Recontrôle des offres signalées"
+    lines = ["🔁 **%s** · %s%s · %d offre(s) recontrôlée(s)" % (
+        what, label, " (demandé depuis l'admin par %s)" % by if by else "", outcome["checked"])]
+    item = lambda e: "%s · %s · %s" % (e.get("product"), e.get("edition"), e.get("merchant"))
+    fixed = ["%s — %s" % (item(e), e.get("fixed_how")) for e in outcome["removed"] + outcome["fixed"]]
+    if fixed:
+        lines.append("✅ Réparées (%d) : %s%s" % (len(fixed), " ; ".join(fixed[:15]), " ; …" if len(fixed) > 15 else ""))
+    new = ["%s (%s)" % (item(e), (e.get("reasons") or ["?"])[0][:90]) for e in outcome["new"]]
+    if new:
+        lines.append("🆕 Nouvelles erreurs (%d) : %s%s" % (len(new), " ; ".join(new[:15]), " ; …" if len(new) > 15 else ""))
+    still = ["%s (%s)" % (item(e), (e.get("reasons") or ["?"])[0][:90]) for e in outcome["still"]]
+    if still:
+        lines.append("🔴 Toujours en erreur (%d) : %s%s" % (len(still), " ; ".join(still[:15]), " ; …" if len(still) > 15 else ""))
+    if outcome["unknown"]:
+        lines.append("⚪ Recontrôle impossible (%d)" % len(outcome["unknown"]))
+    if not (fixed or new or still or outcome["unknown"]):
+        lines.append("Rien à signaler : aucune offre réparée ni en erreur.")
+    return "\n".join(lines)[:1900]
+
+
+def run_cycle(targets, notify, state, checker=None, save=None, per_edition=1, between=None, progress=None, recheck=False):
     """Lit chaque page suivie et contrôle toute offre retenue (`per_edition` : voir page_offers) pas encore
-    contrôlée.
+    contrôlée. `recheck` : "all" recontrôle aussi toutes les offres retenues déjà vues (passage demandé depuis
+    l'admin : Romain, 02/10/2026, « toutes les offres concernées par le top check, pareil pour l'autre check ») ;
+    "flagged" recontrôle les seules offres signalées. Renvoie le bilan du recontrôle.
 
     `save()` est appelé toutes les SAVE_EVERY pages : un long passage interrompu ne repart pas de zéro.
     `between()` est appelé entre deux pages : un mode urgent (les top games) y passe pendant un long passage.
@@ -1438,6 +1536,7 @@ def run_cycle(targets, notify, state, checker=None, save=None, per_edition=1, be
     checker = checker or check_offer
     now = time.time()
     stamp = time.strftime("%Y-%m-%d %H:%M", time.localtime(now))
+    outcome = {"checked": 0, "fixed": [], "removed": [], "still": [], "new": [], "unknown": []}
     for count, (label, rank, product, page_url) in enumerate(targets, 1):
         if between and count > 1:
             between()
@@ -1454,6 +1553,7 @@ def run_cycle(targets, notify, state, checker=None, save=None, per_edition=1, be
         finally:
             time.sleep(PAGE_DELAY)
         page_dlc = is_dlc_page(trans, product)
+        handled = set()
         for offer in page_offers(trans, per_edition):
             offer["page_dlc"] = page_dlc
             key = str(offer["id"])
@@ -1461,7 +1561,12 @@ def run_cycle(targets, notify, state, checker=None, save=None, per_edition=1, be
                 state["checked"].pop(key, None)  # marchand ignoré par sa config (Amazon) : ni contrôle, ni report
                 continue
             entry = state["checked"].get(key)
-            if entry is not None:
+            handled.add(key)  # une offre retenue est traitée ici, une fois ; recheck_flagged ne voit que les autres
+            # une offre déjà vue est recontrôlée sur un passage complet ("all"), ou si elle est signalée ("flagged") ;
+            # jamais si l'admin l'a jugée faux positif
+            again = entry is not None and (entry.get("decision") or {}).get("decision") != "faux" and (
+                recheck == "all" or (recheck == "flagged" and entry.get("verdict") in REPORTED and not entry.get("fixed_at")))
+            if entry is not None and not again:
                 entry["seen"] = now
                 policy = entry.get("unverifiable") or merchant_config("", entry.get("merchant")).get("unverifiable", "first-price")
                 if (entry.get("verdict") == "NON VÉRIFIABLE" and policy == "first-price"
@@ -1480,6 +1585,9 @@ def run_cycle(targets, notify, state, checker=None, save=None, per_edition=1, be
             FAILURES.pop(key, None)
             if res["verdict"] == "À VÉRIFIER":
                 res = dict(res, verdict=unverifiable_verdict(offer, label, page_url, res.get("unverifiable", "first-price")))
+            if entry is not None:  # recontrôle d'une offre déjà vue
+                apply_recheck(entry, label, rank, product, page_url, offer, res, notify, stamp, now, outcome)
+                continue
             msg = format_alert(label, rank, product, page_url, offer, res)
             log.info("%s", msg.replace("\n", " | "))
             if res["verdict"] not in NOT_SENT or (res["verdict"] == "OK" and NOTIFY_OK):
@@ -1501,7 +1609,10 @@ def run_cycle(targets, notify, state, checker=None, save=None, per_edition=1, be
                 m = state["merchants"].setdefault(offer["merchantName"], {"methods": {}})
                 m["methods"][res["method"]] = m["methods"].get(res["method"], 0) + 1
                 m.update(url=res["url"], at=stamp)
+        if recheck:
+            recheck_flagged(label, rank, product, page_url, trans, state, notify, checker, stamp, now, outcome, skip=handled)
     prune_state(state, now)
+    return outcome
 
 
 # ---- Reports pour l'admin (fichiers partagés) ---------------------------------
@@ -1590,7 +1701,7 @@ def export_reports(state, directory, pages=None):
     pages = pages or {}
     reports = []
     for key, e in state["checked"].items():
-        if e.get("verdict") not in REPORTED and not e.get("decision"):
+        if e.get("verdict") not in REPORTED and not e.get("decision") and not e.get("fixed_at"):
             continue
         if merchant_config("", e.get("merchant")).get("skip"):
             continue  # marchand ignoré par sa config (Amazon depuis le 01/10/2026)
@@ -1604,6 +1715,9 @@ def export_reports(state, directory, pages=None):
             "rank": e.get("rank") or rank, "at": e.get("at"), "decision": e.get("decision"),
             "edition_rank": e.get("edition_rank"), "account": bool(e.get("account")),
             "page_first": e.get("page_first"), "seen": e.get("seen"),
+            # recontrôle des offres signalées (02/10/2026) : réparée (retirée de la page, ou recontrôle OK) ou toujours en erreur
+            "fixed_at": e.get("fixed_at"), "fixed_how": e.get("fixed_how"), "fixed_from": e.get("fixed_from"),
+            "last_recheck": e.get("last_recheck"), "still_wrong_at": e.get("still_wrong_at"),
         })
     reports.sort(key=lambda r: r.get("at") or "", reverse=True)
     payload = {"generated_at": time.strftime("%Y-%m-%dT%H:%M:%S%z"), "decisions": DECISIONS, "reports": reports}
@@ -1722,10 +1836,16 @@ def main():
             status["modes"][mode]["requested_by"] = by
         return bool(taken)
 
+    last_recheck = {m: 0.0 for m in modes}
+
     def run_mode(mode, between=None):
         now = time.monotonic()
         due[mode] = now + MODES[mode]["interval"]
         st, alerts, before, last_pub = status["modes"][mode], [0], len(state["checked"]), [time.monotonic()]
+        requested = st.get("requested_by")
+        # passage demandé depuis l'admin : toutes les offres retenues sont recontrôlées ; sinon, les offres signalées
+        # une fois par heure
+        recheck = "all" if requested else ("flagged" if now - last_recheck[mode] >= RECHECK_EVERY else False)
 
         def notify(msg, _send=notifiers[mode]):
             _send(msg)
@@ -1749,9 +1869,21 @@ def main():
             if REPORTS_DIR:
                 for key in apply_decisions(state, REPORTS_DIR):
                     log.info("décision de l'admin pour l'offre %s : %s", key, state["checked"][key]["decision"])
-            run_cycle(targets[mode], notify, state, save=lambda: save_state(args.state, state),
-                      per_edition=per_edition, between=between, progress=progress)
+            outcome = run_cycle(targets[mode], notify, state, save=lambda: save_state(args.state, state),
+                                per_edition=per_edition, between=between, progress=progress, recheck=recheck)
             save_state(args.state, state)
+            if recheck:
+                last_recheck[mode] = time.monotonic()
+                st["last_recheck"] = {"at": stamp_iso(), "kind": recheck, "checked": outcome["checked"],
+                                      "fixed": len(outcome["fixed"]) + len(outcome["removed"]), "new": len(outcome["new"]),
+                                      "still": len(outcome["still"]), "unknown": len(outcome["unknown"])}
+                recap = format_recheck(MODES[mode]["label"], requested, outcome, full=recheck == "all")
+                log.info("%s", recap.replace("\n", " | "))
+                if requested or outcome["fixed"] or outcome["removed"] or outcome["new"]:  # automatique : s'il y a du nouveau
+                    try:
+                        notifiers[mode](recap)
+                    except Exception as e:
+                        log.error("Envoi Discord du récapitulatif impossible : %s", e)
             if REPORTS_DIR:
                 pages = {t[2]: (t[0], t[1], t[3]) for m in modes for t in targets[m]}
                 export_reports(state, REPORTS_DIR, pages)

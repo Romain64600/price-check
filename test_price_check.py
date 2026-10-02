@@ -1328,6 +1328,74 @@ class TestOfferModes20261001(unittest.TestCase):
             pc.run_cycle(self.TARGETS * 3, lambda m: None, pc.load_state("/nonexistent"), self.ok, progress=progress_spy)
         self.assertEqual(seen, [(1, 3), (2, 3), (3, 3)])
 
+    def test_rechecks(self):
+        """Romain, 02/10/2026 : « il faut qu'il contrôle les offres déjà vues, comme ça on saura si elles sont réparées ou
+        pas … toutes les offres concernées par le top check ». Passage demandé = recontrôle complet ; en automatique,
+        les offres signalées toutes les heures."""
+        import tempfile
+        page = self.TARGETS[0][3]
+        offers = pc.page_offers(self.trans, 3)
+        fixed_id, still_id, faux_id, nv_id, ok_id = (str(o["id"]) for o in offers[:5])
+        flagged = lambda **kw: dict({"verdict": "SUSPECT", "product": "EA SPORTS FC 27", "edition": "Standard", "merchant": "X",
+                                     "reasons": ["région : AllKeyShop GLOBAL, marchand EU"], "page": page, "at": "2026-10-01 10:00",
+                                     "seen": pc.time.time()}, **kw)
+        def fresh_state():
+            st = pc.load_state("/nonexistent")
+            st["checked"] = {fixed_id: flagged(), still_id: flagged(), "999999": flagged(merchant="Retiré"),
+                             faux_id: flagged(decision={"decision": "faux", "by": "romain"}),
+                             nv_id: flagged(verdict="NON VÉRIFIABLE", reasons=["nom du produit introuvable dans l'URL, page marchand illisible"]),
+                             ok_id: flagged(verdict="OK", reasons=[])}
+            return st
+        suspect = {"verdict": "SUSPECT", "reasons": ["région : AllKeyShop GLOBAL, marchand EU"], "notes": [], "url": "https://x/eu", "method": "URL"}
+        checked = []
+
+        def checker(product, o):
+            checked.append(str(o["id"]))
+            return self.ok(product, o) if str(o["id"]) == fixed_id else dict(suspect)
+
+        # 1. recontrôle des seules offres signalées (automatique, toutes les heures)
+        state, sent = fresh_state(), []
+        with mock.patch.object(pc, "http_get", return_value=(200, None, self.PAGE)), mock.patch.object(pc, "NOTIFY_OK", False):
+            outcome = pc.run_cycle(self.TARGETS, sent.append, state, checker, per_edition=3, recheck="flagged")
+        self.assertEqual([checked.count(k) for k in (fixed_id, still_id, nv_id, faux_id, ok_id)], [1, 1, 1, 0, 0])
+        self.assertEqual(([e["merchant"] for e in outcome["removed"]], [e["fixed_how"] for e in outcome["fixed"]], outcome["checked"]),
+                         (["Retiré"], ["recontrôle OK"], 3))
+        self.assertEqual((state["checked"][fixed_id]["fixed_from"], state["checked"][fixed_id]["verdict"]), ("SUSPECT", "OK"))
+        self.assertEqual(state["checked"]["999999"]["fixed_how"], "offre retirée de la page")
+        self.assertEqual((len(outcome["still"]), state["checked"][nv_id]["verdict"], outcome["new"]), (2, "SUSPECT", []))
+        self.assertTrue(state["checked"][still_id]["still_wrong_at"])
+        # alertes : la NON VÉRIFIABLE devenue SUSPECT, plus les 6 offres de la page jamais vues (SUSPECT dans ce test)
+        self.assertEqual(len(sent), 1 + 6)
+        recap = pc.format_recheck("Price check top", "", outcome)
+        self.assertIn("Recontrôle des offres signalées** · Price check top · 3 offre(s)", recap)
+        self.assertIn("✅ Réparées (2)", recap)
+        self.assertIn("🔴 Toujours en erreur (2)", recap)
+        self.assertIn("Retiré — offre retirée de la page", recap)
+        with tempfile.TemporaryDirectory() as d:
+            pc.export_reports(state, d)
+            with open(os.path.join(d, "reports.json"), encoding="utf-8") as f:
+                reports = {r["offer"]: r for r in json.load(f)["reports"]}
+        self.assertEqual((reports[fixed_id]["fixed_how"], reports["999999"]["fixed_from"], reports[still_id]["fixed_at"]),
+                         ("recontrôle OK", "SUSPECT", None))
+        # 2. passage demandé depuis l'admin : TOUTES les offres retenues, l'offre OK comprise (nouvelle erreur, alertée)
+        state, sent, checked[:] = fresh_state(), [], []
+        with mock.patch.object(pc, "http_get", return_value=(200, None, self.PAGE)), mock.patch.object(pc, "NOTIFY_OK", False):
+            outcome = pc.run_cycle(self.TARGETS, sent.append, state, checker, per_edition=3, recheck="all")
+        self.assertEqual(checked.count(ok_id), 1)
+        self.assertEqual(checked.count(faux_id), 0)  # un faux positif décidé reste hors recontrôle
+        self.assertEqual(outcome["checked"], 4)  # fixed, still, nv, ok
+        self.assertEqual([e["verdict"] for e in outcome["new"]], ["SUSPECT"])
+        self.assertEqual(state["checked"][ok_id]["at"], state["checked"][ok_id]["last_recheck"])  # nouvelle erreur : date du jour
+        self.assertEqual(len(sent), 1 + 1 + 6)  # la nouvelle erreur, la NV devenue SUSPECT, les 6 jamais vues
+        recap = pc.format_recheck("Price check top", "romain", outcome, full=True)
+        self.assertIn("Recontrôle de toutes les offres** · Price check top (demandé depuis l'admin par romain) · 4 offre(s)", recap)
+        self.assertIn("🆕 Nouvelles erreurs (1)", recap)
+        # 3. sans recontrôle : rien
+        with mock.patch.object(pc, "http_get", return_value=(200, None, self.PAGE)), mock.patch.object(pc, "NOTIFY_OK", False):
+            outcome = pc.run_cycle(self.TARGETS, lambda m: None, pc.load_state("/nonexistent"), self.ok)
+        self.assertEqual(outcome, {"checked": 0, "fixed": [], "removed": [], "still": [], "new": [], "unknown": []})
+        self.assertIn("Rien à signaler", pc.format_recheck("Price check top", "", outcome))
+
     def test_webhook_per_mode(self):
         with mock.patch.dict(os.environ, {"DISCORD_WEBHOOK_URL": "https://hook/top", "DISCORD_WEBHOOK_URL_HOMEPAGE": "https://hook/home"}):
             self.assertEqual((pc.webhook_for("top-games"), pc.webhook_for("homepage")), ("https://hook/top", "https://hook/home"))
