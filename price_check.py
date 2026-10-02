@@ -131,7 +131,7 @@ FORBIDDEN_REGION_WORDS = ("ru", "russia", "russian", "cis", "asia", "sea", "lata
                           "jp", "japan", "kr", "korea", "mena", "africa", "za")
 GIFT_WORDS = ("gift", "altergift")
 ACCOUNT_WORDS = ("account", "accounts", "offline-account", "shared-account")
-DLC_WORDS = ("dlc", "season-pass", "expansion", "soundtrack", "upgrade")
+DLC_WORDS = ("dlc", "season-pass", "expansion", "soundtrack", "upgrade", "add-on", "pass")  # « pass », « add-on » : audit du 02/10/2026
 PLATFORM_FAMILIES = {  # clé = activationPlatform AllKeyShop, ou son début
     "steam": ("steam",),
     "ea-app": ("ea-app", "eaapp", "ea-play", "origin"),
@@ -369,13 +369,36 @@ def parse_game_page(page_html):
     return json.loads(m.group(1))
 
 
-def is_dlc_page(trans, product):
-    """La page AllKeyShop est celle d'un DLC : une de ses éditions s'appelle « DLC » (Diablo 4 Lord of
-    Hatred Xbox Series, formation du 30/09/2026), ou son nom le dit. Les listes et CatalogV2 typent
-    pourtant ces pages « game » sur console."""
-    editions = {norm(e.get("name", "")) for e in (trans.get("editions") or {}).values()}
+def dlc_page_kind(trans, product):
+    """« page » : la page AllKeyShop est celle d'un DLC, toutes ses éditions sont du DLC (Diablo 4 Lord of Hatred,
+    formation du 30/09/2026 : éditions DLC, Deluxe et Ultimate, pas de Standard) ; son nom le dit, ou son édition
+    « DLC » a au moins autant d'offres que ses éditions de base. « edition » : la page d'un jeu qui a aussi une petite
+    édition « DLC » (Hearts of Iron 4 : 1 offre DLC pour 55 en Standard ; Age of Wonders 4, Resident Evil 4 PS5) : seule
+    cette édition attend du DLC (audit du 02/10/2026 : toute la page en était exemptée). None : page d'un jeu.
+    Les listes et CatalogV2 typent pourtant ces pages « game » sur console."""
     words = set(norm(product).split("-"))
-    return "dlc" in editions or bool(words & {"dlc", "expansion"}) or "season-pass" in norm(product)
+    if words & {"dlc", "expansion"} or "season-pass" in norm(product):
+        return "page"
+    editions = {str(k): e.get("name", "") for k, e in (trans.get("editions") or {}).items()}
+    dlc_ids = {k for k, name in editions.items() if norm(name) == "dlc"}
+    if not dlc_ids:
+        return None
+    on_sale = [p for p in trans.get("prices") or [] if p.get("price") != NO_PRICE and p.get("dispo", 1)]
+    if not on_sale:
+        return "page"  # sans offres à compter : comme avant, l'édition « DLC » fait la page
+    dlc_n = sum(1 for p in on_sale if str(p.get("edition")) in dlc_ids)
+    base_n = sum(1 for p in on_sale if str(p.get("edition")) not in dlc_ids
+                 and is_base_edition(editions.get(str(p.get("edition")), "")) and not is_bundle(editions.get(str(p.get("edition")), "")))
+    return "page" if dlc_n >= base_n else "edition"
+
+
+def is_dlc_page(trans, product):
+    return dlc_page_kind(trans, product) == "page"
+
+
+def offer_on_dlc_page(kind, offer):
+    """Le DLC est attendu pour cette offre : page d'un DLC, ou offre rangée dans l'édition « DLC » d'une page de jeu."""
+    return kind == "page" or (kind == "edition" and norm(offer.get("edition") or "") == "dlc")
 
 
 def page_offers(trans, per_edition=1):
@@ -1117,6 +1140,8 @@ def analyze(product, offer, text, source, region=None):
     if er:
         reason("edition", er)
     dlc = [w for w in DLC_WORDS if has(w)]
+    if "season-pass" in dlc and "pass" in dlc:
+        dlc.remove("pass")  # le même mot
     # « pre-order-bonus-dlc » est le bonus vendu avec le jeu ; « Standard + DLC Bundle » l'annonce ;
     # sur la page d'un DLC (édition « DLC » présente), le mot est attendu
     if (dlc and not has("bonus") and not announces_extra_content(offer["edition"]) and not offer.get("page_dlc")
@@ -1827,7 +1852,7 @@ def recheck_flagged(label, rank, product, page_url, trans, state, notify, checke
         return
     on_page = {str(o["id"]): o for o in page_offers(trans, None)}
     listed = {str(p.get("id")) for p in trans.get("prices") or []}
-    page_dlc = is_dlc_page(trans, product)
+    page_dlc = dlc_page_kind(trans, product)
     for key, entry in flagged.items():
         check_stop()
         if merchant_config("", entry.get("merchant")).get("skip"):  # marchand ignoré par sa config (Amazon)
@@ -1845,7 +1870,7 @@ def recheck_flagged(label, rank, product, page_url, trans, state, notify, checke
                          verdict="OK", seen=now, last_recheck=stamp, removed_at=stamp)
             outcome["removed"].append(entry)
             continue
-        offer["page_dlc"] = page_dlc
+        offer["page_dlc"] = offer_on_dlc_page(page_dlc, offer)
         try:
             res = checker(product, offer)
         except Exception as e:
@@ -1954,7 +1979,7 @@ def run_cycle(targets, notify, state, checker=None, save=None, per_edition=1, be
             _, _, page_html = http_get(page_url, AKS_UA)
             trans = parse_game_page(page_html)
             offers = page_offers(trans, per_edition)
-            page_dlc = is_dlc_page(trans, product)
+            page_dlc = dlc_page_kind(trans, product)
         except Exception as e:
             log.warning("%s : %s", product, e)
             continue
@@ -1968,7 +1993,7 @@ def run_cycle(targets, notify, state, checker=None, save=None, per_edition=1, be
             alerted[0] = True
         for offer in offers:
             check_stop()
-            offer["page_dlc"] = page_dlc
+            offer["page_dlc"] = offer_on_dlc_page(page_dlc, offer)
             key = str(offer["id"])
             if merchant_config("", offer["merchantName"]).get("skip"):
                 state["checked"].pop(key, None)  # marchand ignoré par sa config (Amazon) : ni contrôle, ni report

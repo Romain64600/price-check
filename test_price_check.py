@@ -1971,6 +1971,35 @@ class TestDetectionAudit20261002(unittest.TestCase):
                          ["région : AllKeyShop GLOBAL, marchand UK"])
         self.assertEqual(pc.analyze("Among Us VR", offer(), pc.url_text("https://www.loaded.com/among-us-3d-vr-pc-steam"), "URL")["reasons"], [])
 
+    def test_dlc_page_or_game_page_with_a_dlc_edition(self):
+        # pages réelles du 02/10/2026 : Hearts of Iron 4 (55 offres Standard, 1 DLC) est la page d'un jeu ; Diablo 4 Lord of
+        # Hatred (DLC 19, Deluxe 17, Ultimate 15, pas de Standard) et le DLC Pokémon Scarlet (DLC 27, Standard 1) sont des DLC
+        def trans(**counts):
+            names = {"standard": "Standard", "dlc": "DLC", "deluxe": "Deluxe", "ultimate": "Ultimate", "bundle": "Bundle"}
+            prices = [{"edition": key, "price": 10.0, "dispo": 1} for key, n in counts.items() for _ in range(n)]
+            return {"editions": {key: {"name": names[key]} for key in counts}, "prices": prices}
+        self.assertEqual(pc.dlc_page_kind(trans(standard=55, dlc=1), "Hearts of Iron 4"), "edition")
+        self.assertEqual(pc.dlc_page_kind(trans(dlc=19, deluxe=17, ultimate=15), "Diablo 4 Lord of Hatred"), "page")
+        self.assertEqual(pc.dlc_page_kind(trans(dlc=27, standard=1, bundle=1), "Pokemon Scarlet The Hidden Treasure of Area Zero"), "page")
+        self.assertEqual(pc.dlc_page_kind(trans(standard=3), "Farming Simulator 25 Year 1 Season Pass"), "page")  # son nom le dit
+        self.assertIsNone(pc.dlc_page_kind(trans(standard=3, deluxe=2), "Hearts of Iron 4"))
+        self.assertTrue(pc.offer_on_dlc_page("edition", {"edition": "DLC"}))
+        self.assertFalse(pc.offer_on_dlc_page("edition", {"edition": "Standard"}))  # un DLC rangé en Standard : alerte
+        url = "https://www.eneba.com/steam-hearts-of-iron-iv-no-step-back-dlc-pc-steam-key-global"
+        o = offer(page_dlc=pc.offer_on_dlc_page("edition", {"edition": "Standard"}))
+        self.assertEqual(pc.analyze("Hearts of Iron 4", o, pc.url_text(url), "URL")["reasons"], ["contenu additionnel : dlc"])
+
+    def test_pass_and_add_on_are_extra_content(self):
+        # le Booster Course Pass vendu sur la page du jeu de base, sans le mot « dlc »
+        r = pc.analyze("Mario Kart 8 Deluxe Nintendo Switch", offer(platform="nintendo-eshop", region="EUROPE"),
+                       pc.url_text("https://www.g2a.com/mario-kart-8-deluxe-booster-course-pass-nintendo-switch-nintendo-eshop-key-europe-i1"), "URL")
+        self.assertEqual(r["reasons"], ["contenu additionnel : pass"])
+        r = pc.analyze("Cities Skylines 2", offer(), pc.url_text("https://shop.example/cities-skylines-2-beach-properties-add-on-pc-steam"), "URL")
+        self.assertEqual(r["reasons"], ["contenu additionnel : add-on"])
+        # « season-pass » ne compte qu'une fois ; le season pass de l'édition « Year 1 » reste le jeu (arbitrage du 01/10)
+        r = pc.analyze("Farming Simulator 25", offer(), pc.url_text("https://shop.example/farming-simulator-25-season-pass-pc-steam"), "URL")
+        self.assertEqual(r["reasons"], ["contenu additionnel : season-pass"])
+
     def test_aliases_of_the_audit(self):
         pc._PRODUCT_ALIASES = None
         self.assertEqual(self.match("Diablo 4 Lord of Hatred Xbox Series",
