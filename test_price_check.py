@@ -1849,6 +1849,116 @@ def itertools_count(start=10_000.0, step=200.0):
         yield tick()
 
 
+class TestTopOffersTrueErrors20261001(unittest.TestCase):
+    """Les vraies erreurs du premier jour de Top Offers (docs/precedents.md, 01-02/10/2026) qui n'avaient pas de test
+    (audit des tests du 02/10/2026 : casser la règle qui les attrape laissait la suite verte)."""
+
+    def reasons(self, product, url, **kw):
+        return pc.analyze(product, offer(**kw), pc.url_text(url), "URL")["reasons"]
+
+    def test_crusader_kings_3_eneba_eu_key_shown_english_only(self):
+        # « IN ENGLISH ONLY » (STEAM ENG ONLY) est une clé mondiale pour AllKeyShop ; Eneba vend une clé EUROPE
+        self.assertEqual(self.reasons("Crusader Kings 3", "https://www.eneba.com/steam-crusader-kings-iii-starter-edition-pc-steam-key-europe",
+                                      edition="Starter Edition", region="IN ENGLISH ONLY", region_filter="STEAM ENG ONLY"),
+                         ["région : AllKeyShop IN ENGLISH ONLY, marchand EU"])
+
+    def test_hunt_showdown_gameseal_emea_shown_row(self):
+        self.assertEqual(self.reasons("Hunt Showdown", "https://gameseal.com/hunt-showdown-1896-pc-steam-key-emea",
+                                      region="ROW", region_filter="STEAM ROW"), ["région : AllKeyShop ROW, marchand EMEA"])
+
+    def test_black_ops_3_gamivo_eu_gift_shown_row(self):
+        self.assertEqual(self.reasons("Call of Duty Black Ops 3", "https://www.gamivo.com/product/call-of-duty-black-ops-iii-zombies-chronicles-edition-eu",
+                                      edition="Limited", region="ROW", region_filter="STEAM ROW"), ["région : AllKeyShop ROW, marchand EU"])
+
+    def test_monster_hunter_wilds_g2a_row_shown_europe(self):
+        self.assertEqual(self.reasons("Monster Hunter Wilds", "https://www.g2a.com/en/monster-hunter-wilds-deluxe-edition-pc-steam-key-row-i10000507334026",
+                                      edition="Deluxe", region="EUROPE", region_filter="STEAM EU"), ["région : AllKeyShop EUROPE, marchand ROW"])
+
+    def test_space_marine_2_anniversary_package_in_gold(self):
+        # Steam /sub/997629 : le paquet « 1-Year Anniversary Edition » rangé en Gold, alors que la page a cette édition
+        o = offer(edition="Gold", region="GLOBAL", region_filter="STEAM GLOBAL",
+                  page_editions=["Standard", "Gold", "1 Year Anniversary Edition", "Ultra"])
+        r = pc.analyze("Warhammer 40k Space Marine 2", o, "Warhammer 40,000: Space Marine 2 - 1-Year Anniversary Edition on Steam",
+                       "titre de la page")
+        self.assertEqual(r["reasons"], ["édition : rangée en Gold, le marchand vend anniversary (la page a une édition 1 Year Anniversary Edition)"])
+
+
+class TestDetectionAudit20261002(unittest.TestCase):
+    """Audit de la détection du 02/10/2026 : rejeu des 3 614 URL marchand en mémoire contre les 495 pages suivies ;
+    824 paires (page A, vraie URL du produit B) passaient le contrôle du nom, 84 après ces règles. La crainte de
+    Romain : « Sonic 1 ou un vieux Mario sur la page du dernier Sonic »."""
+
+    def match(self, product, url, edition="Standard"):
+        return pc.analyze(product, offer(edition=edition), pc.url_text(url), "URL")["match"]
+
+    def test_no_acronym_of_the_whole_name(self):
+        # « ron » (Ready Or Not) était trouvé dans « hearts-of-iron », « ace » (Assetto Corsa EVO) dans « ace-combat »,
+        # « eft » (Escape From Tarkov) dans « grand-theft-auto » : des URL réelles, toutes jugées OK
+        self.assertIsNone(self.match("Ready Or Not", "https://www.eneba.com/steam-hearts-of-iron-iv-pc-steam-key-europe"))
+        self.assertIsNone(self.match("Assetto Corsa EVO", "https://www.gamivo.com/product/ace-combat-8-wings-of-theve-pc-steam-global"))
+        self.assertIsNone(self.match("Escape from Tarkov", "https://www.gamivo.com/product/grand-theft-auto-v-gta-5-rockstar-eu"))
+        self.assertNotIn("mns", pc.name_variants("Minecraft Nintendo Switch"))  # jamais un sigle sur un suffixe de plateforme
+        self.assertIn("aot 3", pc.name_variants("Attack on Titan 3"))  # un sigle suivi du reste du nom reste
+        self.assertEqual(self.match("Attack on Titan 3", "https://shop.example/a-o-t-3-pc-steam"), "exact")
+
+    def test_whole_words_and_never_a_sequel(self):
+        self.assertIsNone(self.match("Rust", "https://shop.example/rusty-lake-hotel-pc-steam"))
+        self.assertIsNone(self.match("Titanfall", "https://www.kinguin.net/category/25568/titanfall-2-deluxe-edition-ea-app-cd-key"))
+        self.assertIsNone(self.match("GTA 5", "https://shop.example/grand-theft-auto-vi-ps5"))
+        self.assertIsNone(self.match("Red Dead Redemption", "https://gameboost.com/red-dead-redemption-2-euus-00-1"))
+        self.assertIsNone(self.match("Football Manager 2024", "https://shop.example/football-manager-2023-pc-steam"))
+        self.assertIsNone(self.match("The Last of Us Part I", "https://www.driffle.com/the-last-of-us-part-ii-remastered-pc-steam-p1"))
+        # ce qui n'est pas une suite : « 1-year », le « -1 » final de GAMIVO, l'année écrite à deux chiffres
+        self.assertEqual(self.match("SnowRunner", "https://shop.example/snowrunner-1-year-anniversary-edition-pc-steam"), "exact")
+        self.assertEqual(self.match("Stardew Valley", "https://www.gamivo.com/product/stardew-valley-1"), "exact")
+        self.assertEqual(self.match("EA Sports WRC 2023", "https://kinguin.net/category/192006/ea-sports-wrc-23-steam-altergift"), "partial")
+        self.assertEqual(self.match("Titanfall 2", "https://www.kinguin.net/category/25568/titanfall-2-deluxe-edition-ea-app-cd-key"), "exact")
+
+    def test_never_an_old_game_for_the_new_one(self):
+        # le dernier mot manquant, c'est le nouveau jeu ; un autre mot à la place d'un mot du nom, c'est un autre produit
+        self.assertIsNone(self.match("Super Mario Party Jamboree Nintendo Switch", "https://www.eneba.com/nintendo-super-mario-party-nintendo-switch-europe"))
+        self.assertIsNone(self.match("Star Wars Jedi Survivor", "https://shop.example/star-wars-jedi-fallen-order-pc-ea-app"))
+        self.assertIsNone(self.match("Oblivion Remastered", "https://shop.example/oblivion-goty-pc-steam"))
+        self.assertIsNone(self.match("Final Fantasy VII Remake", "https://shop.example/final-fantasy-vii-pc-steam"))
+        self.assertIsNone(self.match("EA Sports UFC 5 PS5", "https://vidaplayer.com/product/playstation-4-5/ea-sports-fc-26-ps5"))
+        # vraie erreur en production (GameBoost, offre 138007132, 1er prix de l'édition Standard le 02/10/2026)
+        r = pc.analyze("Pokemon Scarlet The Hidden Treasure of Area Zero Nintendo Switch", offer(platform="nintendo-eshop", region="EUROPE"),
+                       pc.url_text("https://gameboost.com/pokemon-violet-the-hidden-treasure-of-area-zero-switch-eu-00-12005"), "URL")
+        self.assertTrue(r["reasons"][0].startswith("autre produit chez le marchand : « Pokemon Violet"), r["reasons"])
+        # la tolérance d'un mot absent reste quand rien ne prend sa place (« pokmon » : à une lettre près, déjà testé)
+        self.assertEqual(self.match("Heroes of Might and Magic Olden Era", "https://shop.example/heroes-of-might-and-magic-era-pc"), "partial")
+
+    def test_short_page_title_only_the_end_of_the_name(self):
+        o = offer(platform="playstation-store", region="PS5")
+        self.assertIsNone(pc.analyze("God of War Ragnarok PS5", o, "God of War | Standard Edition", "titre de la page")["match"])
+        self.assertIsNone(pc.analyze("Call of Duty Black Ops 7", offer(), "Call of Duty: Black Ops | Steam", "titre de la page")["match"])
+        self.assertEqual(pc.analyze("Ace Combat 8 Wings of Theve", offer(), "Wings of Theve | Steam", "titre de la page")["match"], "partial")
+
+    def test_straight_apostrophe(self):
+        # AllKeyShop écrit « Marvel's » : norm donnait « marvel-s », et le préfixe facultatif « marvels » ne s'appliquait pas
+        self.assertEqual(pc.norm("Marvel's Spider-Man 2"), pc.norm("Marvel’s Spider-Man 2"))
+        self.assertEqual(pc.analyze("Marvel's Spider-Man 2 PS5", offer(platform="playstation", region="EUROPE"),
+                                    pc.url_text("https://shop.example/spider-man-2-ps5-psn-eu"), "URL")["reasons"], [])
+        self.assertEqual(self.match("Sid Meier's Civilization VII", "https://shop.example/civilization-vii-pc-steam"), "exact")
+
+    def test_slugs_decoded_and_extensions_dropped(self):
+        # CJS CDKeys encode deux fois (« E%252dDay ») ; Mmoga finit par « .html » (« 2.html » donnait « 2html »)
+        url = "https://www.cjs-cdkeys.com/products/Gears-of-War-E%252dDay-Premium-Edition-Digital-Download-Key-%28Xbox-%7B47%7D-Windows%29.html"
+        self.assertEqual(self.match("Gears of War E-Day", url, edition="Premium"), "exact")
+        self.assertEqual(self.match("Planet Zoo 2", "https://www.mmoga.com/Steam-Games/Planet-Zoo-2.html"), "exact")
+        self.assertEqual(self.match("SnowRunner PS5", "https://www.cjs-cdkeys.com/products/SnowRunner-1%252dYear-Anniversary-Edition-PSN-Download-Key-%28Playstation%29-UNITED-STATES.html",
+                                    edition="1 Year Anniversary Edition"), "exact")
+
+    def test_aliases_of_the_audit(self):
+        pc._PRODUCT_ALIASES = None
+        self.assertEqual(self.match("Diablo 4 Lord of Hatred Xbox Series",
+                                    "https://www.instant-gaming.com/en/21849-buy-diablo-iv-age-of-hatred-collection-xbox-one-xbox-series-x-s-microsoft-store/",
+                                    edition="Hatred Edition"), "exact")
+        self.assertEqual(self.match("Dynasty Warriors 3 Complete Edition Remastered",
+                                    "https://www.gamingdragons.com/en/game/buy-dynasty-warriors-3-complete-edition-steam-key.html"), "exact")
+        self.assertEqual(self.match("Resident Evil Requiem", "https://www.gamingdragons.com/en/game/buy-resident-evil-requiem-9-steam-key.html"), "exact")
+
+
 class TestSecurityAudit20261002(unittest.TestCase):
     """Audit sécurité du 02/10/2026 : le moniteur tourne en root."""
 
