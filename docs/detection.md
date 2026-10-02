@@ -46,7 +46,16 @@ Sur chaque page suivie, pour chaque édition, les **3 offres de clé les moins c
 
 ### 2. Nouvelle offre retenue → contrôle
 
-Le moniteur garde dans `state.json` les id d'offre déjà contrôlés, avec leur verdict. Une offre en tête déjà contrôlée ne coûte rien. Une offre jamais vue déclenche le contrôle. Les verdicts sont oubliés 30 jours après la dernière fois où l'offre a été vue en tête.
+Le moniteur garde dans `state.json` les id d'offre déjà contrôlés, avec leur verdict. Une offre retenue déjà contrôlée ne coûte rien. Une offre jamais vue déclenche le contrôle. Les verdicts sont oubliés 30 jours après la dernière fois où l'offre a été vue.
+
+**Recontrôle** (Romain, 02/10/2026 : « il faut qu'il contrôle les offres déjà vues, comme ça on saura si elles sont réparées ou pas … toutes les offres concernées par le top check, pareil pour l'autre check ») :
+
+| Quand | Quelles offres | Discord |
+|---|---|---|
+| Passage lancé depuis l'admin (bouton) | **toutes** les offres retenues des pages du mode, déjà vues ou non | récapitulatif « 🔁 Recontrôle de toutes les offres » |
+| Passages automatiques, une fois par heure | les offres **signalées** (SUSPECT, À VÉRIFIER, NON VÉRIFIABLE) des pages du mode, même sorties du top 3 de leur édition | récapitulatif seulement si une offre est réparée ou une nouvelle erreur apparaît |
+
+Chaque offre recontrôlée est comparée à son verdict précédent : **réparée** (signalée, maintenant OK, ou retirée de sa page : `fixed_at`, `fixed_how`, `fixed_from`), **toujours en erreur** (`still_wrong_at`), ou **nouvelle erreur** (OK, maintenant fausse : alerte comme une première fois). Une offre notée NON VÉRIFIABLE trouvée SUSPECT est alertée. Un faux positif tranché dans l'admin n'est jamais recontrôlé.
 
 ### 3. Contrôle, du moins cher au plus cher
 
