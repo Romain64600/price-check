@@ -920,6 +920,27 @@ class TestConfirmOnMerchantPage(unittest.TestCase):
         self.assertEqual(res["verdict"], "SUSPECT")
         self.assertEqual(res["reasons"], ["offre en rupture chez le marchand : le lien redirige vers une autre fiche "
                                           "(https://www.kinguin.net/category/25568/titanfall-2-pc-ea-app-key), mais le prix reste dans le feed"])
+        # une fiche seulement RENOMMÉE (même nom, région, plateforme, édition : 24 des 25 redirections en mémoire le 02/10)
+        # n'est pas une rupture : une note, pas d'alerte
+        dayz = "https://www.kinguin.net/category/55338/dayz-eu-steam-altergift/"
+        with mock.patch.object(pc, "http_get", side_effect=[(200, None, self.page(dayz)), (301, "/category/55338/dayz-eu-pc-steam-altergift", "")]):
+            res = pc.check_offer("Dayz", offer(merchantName="Kinguin", region="GIFT EU", region_filter="STEAM GIFT EU"))
+        self.assertEqual((res["verdict"], res["reasons"]), ("OK", []))
+        self.assertTrue(any(n.startswith("fiche renommée chez le marchand") for n in res["notes"]), res["notes"])
+        # le jeu renommé par son éditeur (« Crimson Desert Enhanced », aliases.toml) : un renommage, pas une rupture
+        pc._PRODUCT_ALIASES = None
+        crimson = "https://www.kinguin.net/en/category/471878/crimson-desert-deluxe-edition-eu-xbox-series-x-s-cd-key"
+        with mock.patch.object(pc, "http_get", side_effect=[(200, None, self.page(crimson)),
+                                                            (301, "/en/category/471878/crimson-desert-enhanced-deluxe-edition-eu-xbox-series-x-s-cd-key", "")]):
+            res = pc.check_offer("Crimson Desert Xbox Series", offer(merchantName="Kinguin", edition="Deluxe", region="EU XBOX X|S",
+                                                                      region_filter="XBOX X|S EUROPE", platform="xbox"))
+        self.assertEqual((res["verdict"], res["reasons"]), ("OK", []))
+        # mais « eu » -> « de » (Rust) ou un autre identifiant de fiche (Ace Combat 8) : une autre offre, alerte
+        rust = "https://www.kinguin.net/category/55259/rust-eu-steam-altergift/"
+        with mock.patch.object(pc, "http_get", side_effect=[(200, None, self.page(rust)), (301, "/category/55259/rust-de-pc-steam-altergift", "")]):
+            res = pc.check_offer("Rust", offer(merchantName="Kinguin", region="GIFT EU", region_filter="STEAM GIFT EU"))
+        self.assertEqual(res["verdict"], "SUSPECT")
+        self.assertTrue(res["reasons"][0].startswith("offre en rupture chez le marchand"), res)
         en = "https://www.kinguin.net/en/category/360568/helldivers-2-super-citizen-edition-eu-xbox-series-x-s-cd-key"
         with mock.patch.object(pc, "http_get", side_effect=[(200, None, self.page(en)), (301, "/category/360568/helldivers-2-super-citizen-edition-eu-xbox-series-x-s-cd-key", "")]):
             res = pc.check_offer("Helldivers 2 Xbox Series", offer(merchantName="Kinguin", edition="Super Citizen", region="EU XBOX X|S",

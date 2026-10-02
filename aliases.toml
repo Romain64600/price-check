@@ -15,3 +15,5 @@
 # « World of » est facultatif pour tous les produits (OPTIONAL_PREFIXES dans price_check.py).
 # Titre de travail de Tears of the Kingdom, gardé dans l'URL Instant Gaming (« …-breath-of-the-wild-2 », 02/10/2026)
 "The Legend of Zelda Tears of the Kingdom" = ["The Legend of Zelda Breath of the Wild 2"]
+# Le jeu s'appelle désormais « Crimson Desert Enhanced » (PS Store, Kinguin « crimson-desert-enhanced-… », 02/10/2026)
+"Crimson Desert" = ["Crimson Desert Enhanced"]

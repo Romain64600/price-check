@@ -934,7 +934,8 @@ def analyze(product, offer, text, source, region=None):
     cr = currency_reason(offer, words, normed)
     if cr:
         reason("currency", cr)
-    return {"match": match, "reasons": reasons, "kinds": kinds, "notes": notes, "label": result_label}
+    return {"match": match, "reasons": reasons, "kinds": kinds, "notes": notes, "label": result_label,
+            "zones": sorted(found), "platforms": sorted(url_groups), "editions": merchant_editions}
 
 
 def confirmed(kind, product, offer, page_text):
@@ -1140,12 +1141,25 @@ def moved(url, served):
     return norm(url_text(url)) != norm(url_text(urllib.parse.urljoin(url, served)))
 
 
+def offer_signature(result):
+    """Ce qu'une URL dit de l'offre : nom reconnu, zones, plateformes, éditions (hors « standard ») et écarts relevés.
+    Deux URL de même signature désignent la même offre, au nom près."""
+    return (result["match"] is not None, tuple(result.get("zones", ())), tuple(result.get("platforms", ())),
+            tuple(e for e in result.get("editions", ()) if e != "standard"), frozenset(result["kinds"]) - {"name", "stock"})
+
+
 def flag_out_of_stock(result, product, offer, served):
-    """Groupe Kinguin : le lien mène à une autre fiche. Alerte « en rupture, le prix reste dans le feed » (Romain,
-    02/10/2026) ; la région n'est plus reprochée quand la fiche servie, ce que l'acheteur obtient, correspond à
-    l'affichage (Stellaris, 01/10/2026)."""
+    """Groupe Kinguin : le lien mène à une autre fiche. Si elle dit la même chose de l'offre (nom, région, plateforme,
+    édition), Kinguin a seulement renommé sa fiche (« dayz-eu-steam-altergift » -> « dayz-eu-pc-steam-altergift » :
+    24 des 25 redirections en mémoire le 02/10/2026) : une note. Sinon, c'est une autre offre servie à la place d'une
+    fiche en rupture : alerte « en rupture, le prix reste dans le feed » (Romain, 02/10/2026 ; Stellaris : la clé EU
+    du lien remplacée par la globale, Rust : « eu » -> « de »). La région n'est plus reprochée quand la fiche servie,
+    ce que l'acheteur obtient, correspond à l'affichage (Stellaris, 01/10/2026)."""
+    again = analyze(product, offer, url_text(served), "URL de la fiche servie")
+    if offer_signature(again) == offer_signature(result):
+        result["notes"].append("fiche renommée chez le marchand : %s" % served)
+        return
     if "zone" in result["kinds"]:
-        again = analyze(product, offer, url_text(served), "URL de la fiche servie")
         if again["match"] and "zone" not in again["kinds"]:
             kept = [(r, k) for r, k in zip(result["reasons"], result["kinds"]) if k != "zone"]
             result["reasons"], result["kinds"] = [r for r, _ in kept], [k for _, k in kept]
