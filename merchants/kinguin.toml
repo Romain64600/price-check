@@ -1,11 +1,15 @@
-# Kinguin (kinguin.net) — arbitrage du 01/10/2026, Stellaris Bundle 1 (offre 135046199).
-# Le lien AllKeyShop garde l'ancien nom de la fiche (« …/172478/stellaris-starter-pack-eu-steam-cd-key ») alors
-# que Kinguin sert désormais la fiche globale : URL canonique « …/172478/stellaris-starter-pack-bundle-2023-pc-
-# steam-cd-key », titre « Stellaris: Starter Pack Bundle 2023 PC Steam CD Key ». Romain : « C'est bien EU même si
-# maintenant ça redirige sur l'offre globale » ; le marchand doit passer l'offre EU en rupture dans son feed (ou
-# l'API). Pour une alerte de région, la fiche canonique fait foi quand elle a remplacé celle du lien.
+# Kinguin (kinguin.net) — groupe des marchands dont les redirections ne se suivent pas (Romain, 02/10/2026) :
+# « Kinguin redirige vers une autre offre quand l'offre est out of stock, donc pour Kinguin on ne se fie pas aux
+# redirections. » Une redirection (ou une fiche servie sous une autre URL canonique) mène à UNE AUTRE OFFRE : elle ne
+# dit rien de l'offre AllKeyShop. Le moniteur juge le lien lui-même ; la cible d'une redirection ne sert ni à accuser
+# (« autre produit ») ni à blanchir le nom.
+# Cas fondateur, Stellaris Bundle 1 (offre 135046199, 01/10/2026) : lien « …/172478/stellaris-starter-pack-eu-steam-cd-key »
+# affiché GLOBAL, Kinguin sert la fiche globale (« …-starter-pack-bundle-2023-pc-steam-cd-key »). Romain : « C'est bien EU
+# même si maintenant ça redirige sur l'offre globale », faux positif, le marchand doit passer l'offre EU en rupture dans
+# son feed. Pour la RÉGION, la fiche servie (ce que l'acheteur obtient) fait foi.
+# D'autres marchands rejoindront ce groupe au fil de l'apprentissage : copier ce fichier.
 name = "Kinguin"
 hosts = ["kinguin.net"]
 
-[page]
-canonical = true
+[redirect]
+means = "out-of-stock"  # l'autre groupe (défaut) : la redirection mène à la fiche actuelle de la même offre (Instant Gaming)

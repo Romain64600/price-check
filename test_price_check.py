@@ -893,6 +893,28 @@ class TestConfirmOnMerchantPage(unittest.TestCase):
         self.assertIsNone(pc.name_match(pc.name_variants("The Legend of Zelda Tears of the Kingdom Nintendo Switch"),
                                         pc.norm("the-legend-of-zelda-breath-of-the-wild-nintendo-switch")))
 
+    def test_two_merchant_groups_for_redirects(self):
+        # Romain, 02/10/2026 : « Kinguin redirige vers une autre offre quand l'offre est out of stock, donc pour Kinguin
+        # on ne se fie pas aux redirections ; il nous faudra deux groupes »
+        self.assertTrue(pc.redirect_untrusted(pc.merchant_config("https://www.kinguin.net/category/1/x", "Kinguin")))
+        self.assertFalse(pc.redirect_untrusted(pc.merchant_config("https://www.instant-gaming.com/en/1-/", "Instant Gaming")))
+        o = offer(merchantName="Kinguin", edition="Deluxe", region="IN ENGLISH ONLY", region_filter="EA ENG/POL/RUS ONLY", platform="ea-app")
+        link = "https://www.kinguin.net/category/25568/titanfall-deluxe-edition-en-language-only-ea-app-cd-key"
+        right = "https://www.kinguin.net/category/25568/titanfall-2-deluxe-edition-ea-app-cd-key"
+        # le lien nomme un autre produit : alerte, même si une redirection mène à une fiche du bon produit (autre offre)
+        with mock.patch.object(pc, "http_get", side_effect=[(200, None, self.page(link)), (301, right, "")]):
+            res = pc.check_offer("Titanfall 2", o)
+        self.assertEqual(res["verdict"], "SUSPECT")
+        self.assertIn("Titanfall Deluxe Edition", res["reasons"][0])
+        # le lien ne nomme rien, la redirection mène à une fiche du produit : pas blanchi non plus, la redirection est ignorée
+        bare = "https://www.kinguin.net/category/25568/x"
+        with mock.patch.object(pc, "http_get", side_effect=[(200, None, self.page(bare)), (301, right, ""), (503, None, "")]), \
+             mock.patch.object(pc, "page_title", return_value=None), mock.patch.object(pc, "chromium_dom", return_value=None):
+            res = pc.check_offer("Titanfall 2", o)
+        self.assertEqual(res["verdict"], "À VÉRIFIER")
+        self.assertTrue(any(n.startswith("redirection du marchand ignorée") for n in res.get("notes", []) + res["reasons"]) or
+                        res["method"] == "aucune", res)
+
     def test_kinguin_serves_another_page_than_the_link(self):
         # arbitrage du 01/10/2026, Stellaris (offre 135046199) : le lien « …-starter-pack-eu-steam-cd-key » sert la
         # fiche globale « …-starter-pack-bundle-2023-pc-steam-cd-key » (URL canonique) : la fiche servie fait foi
@@ -910,7 +932,7 @@ class TestConfirmOnMerchantPage(unittest.TestCase):
              mock.patch.object(pc, "page_title", return_value=None):
             res = pc.check_offer("Stellaris", o)
         self.assertEqual(res["reasons"], ["région : AllKeyShop GLOBAL, marchand EU"])
-        self.assertEqual(pc.merchant_config(link, "Kinguin")["page"]["canonical"], True)
+        self.assertEqual(pc.merchant_config(link, "Kinguin")["redirect"]["means"], "out-of-stock")
 
     def test_region_field_in_the_page_body(self):
         # K4G, 30/09/2026 : slug « playstation-5-europe », page « Steam CD Key », champs PLATFORM Steam / REGION Global
@@ -989,7 +1011,7 @@ class TestCheckOffer(unittest.TestCase):
             return 301, full, ""
 
         with mock.patch.object(pc, "http_get", side_effect=fake_get):
-            res = pc.check_offer("EA SPORTS FC 27", offer(platform="ea-app"))
+            res = pc.check_offer("EA SPORTS FC 27", offer(merchantName="Instant Gaming", platform="ea-app"))  # groupe « même offre »
         self.assertEqual((res["verdict"], res["method"], res["url"]), ("OK", "URL après 301 marchand", full))
 
     def test_page_fallback(self):
@@ -1031,6 +1053,46 @@ class TestCheckOffer(unittest.TestCase):
 
 @mock.patch.object(pc, "REQUEST_DELAY", 0)
 @mock.patch.object(pc, "PAGE_DELAY", 0)
+class TestGameCurrency20261002(unittest.TestCase):
+    """Romain, 02/10/2026 : « ajoute la règle pour la monnaie de jeu » — points, coins, V-Bucks, Shark Cards vendus sur la
+    page d'un jeu, dont l'URL contient le nom."""
+
+    def reasons(self, product, url, **kw):
+        return pc.analyze(product, offer(**kw), pc.url_text(url), "URL")["reasons"]
+
+    def test_currency_sold_as_the_game(self):
+        cod = "Call of Duty Black Ops 6"
+        self.assertEqual(self.reasons(cod, "https://shop.example/call-of-duty-black-ops-6-5000-cod-points-xbox-live", platform="xbox", region="XBOX X|S"),
+                         ["monnaie de jeu chez le marchand : cod-points"])
+        self.assertEqual(self.reasons(cod, "https://shop.example/black-ops-6-2400-points-pc-battle-net", platform="battle-net"),
+                         ["monnaie de jeu chez le marchand : points"])  # mot seul + quantité
+        self.assertEqual(self.reasons("Fortnite", "https://shop.example/fortnite-1000-v-bucks-pc", platform="epic-store"),
+                         ["monnaie de jeu chez le marchand : v-bucks"])
+        self.assertEqual(self.reasons("EA SPORTS FC 26", "https://shop.example/ea-sports-fc-26-12000-fc-points-pc-ea-app", platform="ea-app"),
+                         ["monnaie de jeu chez le marchand : fc-points"])
+        self.assertEqual(self.reasons("Elden Ring", "https://shop.example/elden-ring-steam-wallet-code-50-eur"),
+                         ["monnaie de jeu chez le marchand : wallet"])
+
+    def test_currency_that_is_expected(self):
+        # l'édition AllKeyShop est la monnaie (GTA 5) ; un bonus promo (G2A : 2 gold coins) ; une offre WALLET (PS Store via recharge)
+        self.assertEqual(self.reasons("GTA 5", "https://www.gamivo.com/product/grand-theft-auto-v-gta-5-premium-online-edition-and-great-white-shark-card-bundle",
+                                      edition="Premium + Great White Card", platform="rockstar"), [])
+        self.assertEqual(self.reasons("GTA 5", "https://www.eneba.com/steam-grand-theft-auto-v-great-white-shark-cash-card-rockstar-social-club-key-europe",
+                                      edition="GTA 5 + GTAO Great White Shark Cash Card", region="EUROPE", region_filter="ROCKSTAR EUROPE", platform="rockstar"), [])
+        self.assertEqual(self.reasons("Euro Truck Simulator 2", "https://www.g2a.com/euro-truck-simulator-2-gold-edition-steam-key-global-2-gold-coins-i10000044284002",
+                                      edition="Gold"), [])
+        self.assertEqual(self.reasons("GTA 5", "https://www.kinguin.net/category/65946/grand-theft-auto-v-criminal-enterprise-starter-pack-megalodon-shark-card",
+                                      edition="GTA 5 + Criminal + Megalodon", platform="rockstar"), [])  # la carte nommée par son requin
+        self.assertEqual(self.reasons("EA SPORTS FC 26 PS5", "https://shop.example/ea-sports-fc-26-ps5-psn-wallet-top-up-de",
+                                      region="WALLET DE", region_filter="PSN WALLET DE", platform="playstation-store"), [])
+        # un jeu dont le nom contient un mot de monnaie (Tarot Tokens) : les mots du nom ne comptent pas
+        self.assertEqual(self.reasons("Tarot Tokens Nintendo Switch", "https://www.nintendo.com/fr-fr/Jeux/Tarot-Tokens-3185728.html",
+                                      platform="nintendo-eshop"), [])
+        # la monnaie seule, sans le nom du jeu : « autre produit », pas un doublon
+        res = pc.analyze(cod := "Call of Duty Black Ops 6", offer(platform="battle-net"), pc.url_text("https://shop.example/cod-points-5000-pc"), "URL")
+        self.assertEqual(res["kinds"], ["name", "currency"])
+
+
 class TestOfferModes20261001(unittest.TestCase):
     """Deux modes d'offres (Romain, 01/10/2026) : Top Offers (3 premiers prix de chaque édition) et Full Page
     (toutes les offres de la page) ; un webhook par mode de pages ; les top games passent pendant la homepage ;

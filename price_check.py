@@ -179,6 +179,20 @@ OPTIONAL_PREFIXES = ("ea sports", "call of duty", "the legend of", "warhammer 40
 # Mots qui distinguent un produit d'un autre : jamais tolérés comme « le mot manquant » d'un nom long
 # (le titre du jeu de base ne passe pas pour « Forza Horizon 6 Premium Upgrade Bundle », étude du 30/09/2026)
 NEVER_MISSING = {"upgrade", "dlc", "expansion", "season", "pass", "soundtrack", "ost", "demo", "vr", "remake", "remastered"}
+# Monnaie de jeu vendue comme le jeu (Romain, 02/10/2026) : l'URL « call-of-duty-black-ops-6-5000-cod-points » contient le
+# nom du jeu. Une expression compte toujours ; un mot seul (« coins ») compte avec une quantité (500, 5000…), pas pour
+# un bonus (« 2 gold coins » de G2A). Pas de comparaison quand l'édition AllKeyShop est elle-même la monnaie
+# (« Standard + Great White Shark Card »). Sur une offre WALLET (prix PS Store via une recharge), les mots de recharge
+# sont attendus.
+CURRENCY_PHRASES = ("cod-points", "v-bucks", "vbucks", "apex-coins", "fut-points", "fc-points", "fifa-points", "shark-card",
+                    "cash-card", "riot-points", "robux", "minecoins", "gift-card", "prepaid-card", "psn-card", "eshop-card",
+                    "playstation-network-card", "wallet", "top-up", "topup")
+CURRENCY_WORDS = ("points", "coins", "credits", "gems", "tokens", "crystals", "shards")
+WALLET_PHRASES = ("wallet", "top-up", "topup", "gift-card", "prepaid-card", "psn-card", "playstation-network-card", "eshop-card")
+# Éditions AllKeyShop qui sont elles-mêmes de la monnaie : « Standard + Great White Shark Card », « GTA 5 + Criminal + Megalodon »
+# (les Shark Cards de GTA Online sont nommées par leur requin : Megalodon, Whale, Great White, Bull, Tiger, Red)
+CURRENCY_EDITION_PHRASES = ("card", "points", "coins", "credits", "bucks", "shark", "cash", "currency", "gems", "tokens", "wallet",
+                            "megalodon", "whale", "great-white", "bull-shark", "tiger-shark", "red-shark")
 # Autres noms d'un produit (titre européen, titre localisé...), appris au fil de la formation : aliases.toml
 ALIASES_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "aliases.toml")
 ROMAN = {1: "i", 2: "ii", 3: "iii", 4: "iv", 5: "v", 6: "vi", 7: "vii", 8: "viii", 9: "ix", 10: "x",
@@ -413,6 +427,13 @@ def merchant_config(url, merchant_name):
                 or (name and any(name.startswith(norm(prefix)) for prefix in cfg.get("name_prefixes", [])))):
             return cfg
     return {}
+
+
+def redirect_untrusted(cfg):
+    """Groupe Kinguin (Romain, 02/10/2026) : chez ce marchand, une redirection mène à UNE AUTRE OFFRE, parce que la
+    fiche du lien est en rupture. Elle ne dit rien de l'offre AllKeyShop : on ne s'y fie ni pour l'accuser, ni pour la
+    blanchir. L'autre groupe (défaut : Instant Gaming, Fanatical…) redirige vers la fiche actuelle de la même offre."""
+    return (cfg.get("redirect") or {}).get("means") == "out-of-stock"
 
 
 def region_text(url, cfg):
@@ -793,6 +814,21 @@ def year_pass_edition(edition_name, words):
     return bool(m) and re.search(r"(?:^|-)year-%s-season-pass(?:-|$)" % m.group(1), words) is not None
 
 
+def currency_reason(offer, words, normed):
+    """Raison de SUSPECT « monnaie de jeu », ou None (voir CURRENCY_PHRASES). Les expressions se cherchent dans tout le
+    texte (`normed` : « cod-points » contient « cod », un alias du nom du jeu), les mots seuls hors des mots du nom
+    (`words` : « Tarot Tokens » est un jeu)."""
+    edition = norm(offer["edition"])
+    if any(re.search(r"(^|-)%s(-|$)" % p, edition) for p in CURRENCY_EDITION_PHRASES):
+        return None
+    wallet = "WALLET" in ("%s %s" % (offer.get("region_filter") or "", offer.get("region") or "")).upper()
+    found = [p for p in CURRENCY_PHRASES if re.search(r"(^|-)%s(-|$)" % re.escape(p), normed) and not (wallet and p in WALLET_PHRASES)]
+    numbers = [int(w) for w in words.split("-") if w.isdigit() and len(w) >= 3]
+    if any(n >= 100 and not 1980 <= n <= 2035 for n in numbers):  # une quantité, pas une année
+        found += [w for w in CURRENCY_WORDS if re.search(r"(^|-)%s(-|$)" % w, words) and not any(w in p for p in found)]
+    return "monnaie de jeu chez le marchand : " + ", ".join(found) if found else None
+
+
 def announces_extra_content(edition_name):
     words = set(norm(edition_name).split("-"))
     return any(w in words for w in EXTRA_CONTENT_WORDS)
@@ -876,6 +912,9 @@ def analyze(product, offer, text, source, region=None):
     if (dlc and not has("bonus") and not announces_extra_content(offer["edition"]) and not offer.get("page_dlc")
             and not year_pass_edition(offer["edition"], words)):
         reason("dlc", "contenu additionnel : " + ", ".join(dlc))
+    cr = currency_reason(offer, words, normed)
+    if cr:
+        reason("currency", cr)
     return {"match": match, "reasons": reasons, "kinds": kinds, "notes": notes, "label": result_label}
 
 
@@ -1148,9 +1187,13 @@ def check_offer(product, offer):
         time.sleep(REQUEST_DELAY)
         if location:
             url2 = unwrap_affiliate(urllib.parse.urljoin(url, location))
-            result2 = analyze(product, offer, url_text(url2), "URL après redirection du marchand", region=region_text(url2, cfg))
-            if result2["match"] or result2.get("label"):  # la fiche finale nomme le produit, ou un autre
-                result, method, url = result2, "URL après 301 marchand", url2
+            if redirect_untrusted(cfg):
+                if moved(url, url2):
+                    result["notes"].append("redirection du marchand ignorée (fiche du lien en rupture, autre offre servie) : %s" % url2)
+            else:
+                result2 = analyze(product, offer, url_text(url2), "URL après redirection du marchand", region=region_text(url2, cfg))
+                if result2["match"] or result2.get("label"):  # la fiche finale nomme le produit, ou un autre
+                    result, method, url = result2, "URL après 301 marchand", url2
 
     if (result["match"] is None and result.get("label") and not (cfg.get("page") or {}).get("parser")
             and not cfg.get("localized") and not (cfg.get("product_name") or {}).get("hreflang")):
@@ -1198,9 +1241,10 @@ def check_offer(product, offer):
                 result["notes"].append("la page ne dit rien sur ce point : %s" % page_text[:120])
             result["reasons"] = [r for r, _ in kept]
             result["kinds"] = [k for _, k in kept]
-        if "zone" in result["kinds"] and (cfg.get("page") or {}).get("canonical"):
-            # le lien garde l'ancien nom d'une fiche que le marchand a remplacée : la fiche servie fait foi
-            # (Kinguin, arbitrage du 01/10/2026 : Stellaris « …-eu-… » sert la fiche globale)
+        if "zone" in result["kinds"] and redirect_untrusted(cfg):
+            # groupe Kinguin : la fiche du lien est en rupture, le marchand sert une autre fiche (URL canonique différente).
+            # Pour la région, c'est ce que l'acheteur obtient qui compte (arbitrage du 01/10/2026 : Stellaris
+            # « …-eu-… » sert la fiche globale affichée GLOBAL = faux positif)
             canonical = page_canonical(url, cfg)
             if moved(url, canonical):
                 canonical = urllib.parse.urljoin(url, canonical)

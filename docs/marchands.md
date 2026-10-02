@@ -28,14 +28,14 @@ Toute exception propre à un marchand vit dans un fichier `merchants/<marchand>.
 | `[product_name] hreflang` | | Boutique localisée : contrôler le nom sur la version de la page dans cette langue, via son lien `<link rel="alternate" hreflang>` (Nintendo : `en-GB`) |
 | `[page] parser` | | Lecteur spécial de la page : `playstation` (nom du produit et libellé d'édition dans le JSON du PS Store), `selected-option` (option cochée d'une page multi-produits, LDShop) |
 | `[page] locale_from`, `locale_to` | | Réécriture de l'URL avant de lire la page (PS Store : `/es-es/` → `/en-gb/`, pour un titre en anglais) |
-| `[page] canonical` | `false` | `true` : pour une alerte de région, lire aussi l'URL canonique de la page ; si c'est une autre fiche que celle du lien, sa région fait foi (Kinguin) |
+| `[redirect] means` | `same-offer` | Les **deux groupes de marchands** pour les redirections (Romain, 02/10/2026). `same-offer` (défaut : Instant Gaming, Fanatical, Ubisoft Store) : une redirection mène à la fiche actuelle de la même offre, c'est l'URL finale qu'on juge. `out-of-stock` (Kinguin) : une redirection, ou une fiche servie sous une autre URL canonique, mène à **une autre offre** parce que celle du lien est en rupture ; on ne s'y fie ni pour accuser (« autre produit ») ni pour blanchir : le lien est jugé tel quel. Pour une alerte de région seulement, la fiche servie dit ce que l'acheteur obtient (Stellaris, faux positif du 01/10) |
 | `localized` | `false` | `true` : titres traduits (Amazon.fr) ; un nom non reconnu dans le titre donne À VÉRIFIER au lieu de SUSPECT |
 
 Exceptions en place :
 
 - **`wyrel.toml`** (formation du 30/09/2026) : le slug de l'URL est générique (`...-starter-pack-bundle-eu-37543` pour une offre Global) ; la région affichée par la page est celle du paramètre `region=` de l'URL : 1 → global, 4 → eu, 5 → row, 19 → germany (relevé sur 38 offres, sans contradiction). Page derrière Cloudflare, `browser = false`.
 - **`amazon.toml`** : éditions physiques (région BOX), nom tronqué dans l'URL, page qui bloque Chromium et renvoie souvent un captcha : `browser = false`, `localized = true` (titres français, voir `aliases.toml`). **Ignoré depuis le 01/10/2026** (`skip = true`, arbitrage de Romain : « on skip tous les Amazon jusqu'à modifier notre façon de requêter leurs pages ») : plus de contrôle, d'alerte ni de ligne NON VÉRIFIABLE. Conséquence connue : Elden Ring Xbox Series (Amazon.fr, URL « …-PlayStation ») n'est plus signalé. À retirer quand les pages Amazon seront lisibles.
-- **`kinguin.toml`** (arbitrage du 01/10/2026, Stellaris) : un lien peut garder l'ancien nom d'une fiche que Kinguin a remplacée (`…/172478/stellaris-starter-pack-eu-steam-cd-key` sert la fiche globale `…/172478/stellaris-starter-pack-bundle-2023-pc-steam-cd-key`) ; pour une alerte de région, l'URL canonique de la page fait foi quand elle a changé (`[page] canonical = true`).
+- **`kinguin.toml`** (Romain, 02/10/2026 : « Kinguin redirige vers une autre offre quand l'offre est out of stock, donc pour Kinguin on ne se fie pas aux redirections ») : `[redirect] means = "out-of-stock"`. Cas fondateur, Stellaris (01/10) : le lien `…/172478/stellaris-starter-pack-eu-steam-cd-key` sert la fiche globale `…-starter-pack-bundle-2023-pc-steam-cd-key` ; faux positif, le marchand doit passer l'offre EU en rupture dans son feed. Titanfall 2 (02/10, vrai positif) : le lien `…/25568/titanfall-deluxe-edition-…` nomme le premier Titanfall, alerte sur le lien lui-même. D'autres marchands au même comportement rejoindront ce groupe : copier le fichier.
 - **`nintendo.toml`** : eShop Nintendo FR/IT/DE/ES, URL et titre localisés ; le nom se contrôle sur la version anglaise (`hreflang = "en-GB"`), page lisible en HTTP simple. Depuis le 01/10/2026, la config reconnaît aussi les anciens domaines (`nintendo.es`, `nintendo.de`, `nintendo.it`…, qui redirigent vers `nintendo.com`) et tout marchand « Nintendo eShop … » (`name_prefixes`) : avant, un lien `nintendo.es` sortait en « autre produit » sur son titre espagnol (Ni no Kuni).
 - **`ldshop.toml`** (01/10/2026) : une page regroupe plusieurs produits (Standard, Deluxe, Premium Upgrade…), le lien en choisit un par `skuId` ; le titre est celui du jeu de base, on lit en plus l'option cochée (`aria-checked`). Page lisible avec Chromium.
 - **`playstation.toml`** (étude du 30/09/2026) : l'URL ne contient qu'un code produit ; la page se lit en HTTP simple, son JSON donne le nom et le libellé d'édition (« Crimson Desert Enhanced » + « Standard Edition ») ; les boutiques européennes sont lues en en-gb. Chromium n'est pas utilisé (« Access Denied »).
@@ -79,38 +79,109 @@ Testé sur les pages EA SPORTS FC 27 (Popular #1) et Dynasty Warriors 3 Complete
 | EA.com | URL directe, nom partiel | partiel (`ea-sports-fc` + `fc-27`) | — | `www.ea.com/games/ea-sports-fc/fc-27/buy/checkout` | URL partielle : `/ea-sports-fc/fc-27/buy/checkout`. Les mots `ea`, `sports`, `fc`, `27` y sont tous : nom partiel, accepté avec une note. |
 | Epic Games | URL | oui (01/10/2026) | — | `store.epicgames.com/p/fc-27-e149fb` | `/p/fc-27-e149fb` : « FC 27 » est reconnu depuis le 01/10/2026 (préfixe « EA Sports » facultatif). Une URL Epic sans nom passe par la page (HTTP, puis Chromium). |
 
-### Pas encore monitorés
+## État au 02/10/2026 : ce que le moniteur a constaté (`--coverage`)
 
+64 marchands rencontrés en deux jours de `both` et un jour de `top-offers` (3 595 offres contrôlées). Méthode qui a marché, nombre de contrôles, dernier contrôle et une URL d'exemple. « URL » = le nom, la région et la plateforme lus dans l'URL ; « URL après 301 marchand » = l'URL finale après la redirection du marchand (groupe `same-offer`) ; « URL de la version en-GB » = Nintendo eShop ; « page (HTTP) » / « page (Chromium) » = la page a dû être lue. Amazon.fr est ignoré depuis le 01/10/2026 (ses contrôles sont antérieurs).
+
+| Marchand | Méthodes (nombre de contrôles) | Dernier contrôle | Exemple d'URL |
+|---|---|---|---|
+| Allyouplay | URL (8), page (Chromium) (1) | 2026-10-02 00:04 | `https://www.allyouplay.com/xbox/ace-combat-8-wings-of-theve-standard-edition-pre-purchase-xbox-series-xs-game-ep2-88615-ep2-88615` |
+| Amazon.fr | URL (14), page (HTTP) (4) | 2026-10-01 07:45 | `https://www.amazon.fr/L%C3%A9gendes-Pok%C3%A9mon-Arceus-Nintendo-Switch/dp/B09FQ8RMMV/` |
+| Amazon.Fr | URL (4), page (HTTP) (1) | 2026-10-01 12:54 | `https://www.amazon.fr/Minecraft-Dungeons-2-Deluxe-Edition/dp/B0H4V5NXV9/` |
+| Battle.net | URL (3) | 2026-10-02 05:19 | `https://eu.shop.battle.net/en-gb/product/diablo-iv` |
+| CJS CDKeys | URL (129), page (Chromium) (1) | 2026-10-02 12:49 | `https://www.cjs-cdkeys.com/products/007-First-Light-PSN-Download-Key-%28Playstation%29-UNITED-STATES.html` |
+| Dreamgame EU | URL (9), page (Chromium) (1) | 2026-10-01 16:38 | `https://www.dreamgame.com/en/dynasty-warriors-3-complete-edition-remastered-digital-deluxe-edition` |
+| Driffle | URL (261) | 2026-10-02 12:49 | `https://www.driffle.com/the-first-berserker-khazan-row-pc-steam-digital-key-p9933857` |
+| EA.com | URL (2) | 2026-09-30 14:26 | `https://www.ea.com/games/ea-sports-fc/fc-27/buy/checkout` |
+| Eneba | URL (334), page (HTTP) (4) | 2026-10-02 13:23 | `https://www.eneba.com/steam-wild-west-pioneers-companion-edition-steam-key-pc-global` |
+| eTail.Market EU | URL (2) | 2026-10-02 07:19 | `https://etail.market/dredge-complete-edition-3` |
+| eTailcard | URL (1) | 2026-09-30 14:37 | `https://etailcard.com/minecraft-java-deluxe-global-minecraft-java-deluxe-edition-2005597` |
+| Fanatical | URL après 301 marchand (5) | 2026-10-01 15:27 | `https://www.fanatical.com/en/game/persona-4-revival` |
+| G2A | URL (340), page (Chromium) (7) | 2026-10-02 12:19 | `https://www.g2a.com/sid-meiers-civilization-vii-settlers-edition-pc-steam-key-europe-i10000507321066` |
+| GameBillet EU | URL (8) | 2026-10-02 04:49 | `https://www.gamebillet.com/persona-4-revival-z` |
+| GameBoost | URL (141), page (Chromium) (3) | 2026-10-02 13:23 | `https://gameboost.com/borderlands-4-xbox-series-xs-eu-00-36639` |
+| Gamers Outlet | URL (18) | 2026-10-02 05:19 | `https://www.gamers-outlet.net/en/buy-titanfall-2-cd-key-ea-origin-html` |
+| GamersGate | URL (3) | 2026-10-02 11:34 | `https://www.gamersgate.com/product/ace-combat-8-wings-of-theve/` |
+| GAMESEAL | URL (125) | 2026-10-02 13:20 | `https://gameseal.com/hearts-of-iron-iv-cadet-edition-pc-steam-key-global` |
+| Gamesplanet DE | page (Chromium) (1) | 2026-09-30 14:26 | `https://de.gamesplanet.com/game/a-plague-tale-bundle-steam-key--6084-1` |
+| Gamesplanet FR | URL (3) | 2026-10-01 15:27 | `https://fr.gamesplanet.com/game/gears-of-war-e-day-microsoft-store-download--8767-1` |
+| Gamesplanet UK | URL (3) | 2026-10-01 14:58 | `https://uk.gamesplanet.com/game/stupid-never-dies-steam-key--8727-1` |
+| Gamesplanet US | URL (15) | 2026-10-01 19:49 | `https://us.gamesplanet.com/game/hunt-showdown-1896-deluxe-edition-steam-key--3495-10` |
+| Gamingdragons | URL (79) | 2026-10-02 11:49 | `http://www.gamingdragons.com/en/game/buy-baldurs-gate-3-xbox-sx.html` |
+| GAMIVO | URL (317), page (Chromium) (5) | 2026-10-02 13:05 | `https://www.gamivo.com/product/baldurs-gate-3-xbox-xboxseries-eu-en-standard` |
+| Gog.com | URL (3), page (HTTP) (1) | 2026-10-01 14:58 | `https://www.gog.com/en/game/a_plague_tale_bundle` |
+| Greenmangaming | URL (7) | 2026-10-01 19:08 | `https://www.greenmangaming.com/games/dynasty-warriors-3-complete-edition-remastered-pc/` |
+| HRK | URL (82) | 2026-10-02 13:20 | `https://www.hrkgame.com/en/product/clair-obscur-expedition-33-deluxe-edition-row` |
+| Instant Gaming | URL après 301 marchand (84), URL (5), page (HTTP) (1) | 2026-10-02 11:49 | `https://www.instant-gaming.com/en/19062-buy-donkey-kong-bananza-switch-2-nintendo-eshop/` |
+| K4G | URL (139), page (Chromium) (1), page (HTTP) (1) | 2026-10-02 13:05 | `https://k4g.com/product/the-first-berserker-khazan-steam-global-cd-key-deluxe-edition-cd-key-37FA2664` |
+| Keycense | URL (12) | 2026-10-02 05:19 | `https://www.keycense.com/nba-2k27-europe-steam` |
+| KEYEKEY | URL (1) | 2026-09-30 14:37 | `https://www.keyekey.com/official-site/farming-simulator-25-pc-giants-key-global` |
+| Kinguin | URL (245), page (Chromium) (6) | 2026-10-02 11:19 | `https://www.kinguin.net/en/category/360568/helldivers-2-super-citizen-edition-eu-xbox-series-x-s-cd-key` |
+| LDShop | page (Chromium) (4), URL (1) | 2026-10-01 15:27 | `https://www.ldshop.gg/card/nba-twoktwoseven-xbox.html` |
+| Loaded | URL (101) | 2026-10-02 11:34 | `https://www.loaded.com/nba-2k27-deluxe-edition-pc-steam` |
+| Lootbar | URL (33) | 2026-10-02 08:49 | `https://www.lootbar.com/game-key/dune-awakening-xbox` |
+| Mmoga | URL (29) | 2026-10-02 05:19 | `https://www.mmoga.com/Xbox-Live/Xbox-One-Game-Keys/Diablo-IV-Ultimate-Edition-Xbox-One-Series-XS-Download-Code.html` |
+| Muve | URL (7) | 2026-10-02 12:19 | `https://muve.games/p/grand-theft-auto-v-premium-edition-xbox-3e36f5` |
+| Nintendo eShop DE | URL (75), URL de la version en-GB (4), page (Chromium) (1), page (HTTP) (1) | 2026-10-02 05:19 | `https://www.nintendo.com/de-de/Spiele/Nintendo-Switch-2-Spiele/CRYMELIGHT-3199777.html` |
+| Nintendo eShop ES | URL (14), URL de la version en-GB (2), page (HTTP) (1) | 2026-10-01 16:38 | `https://www.nintendo.com/es-es/Juegos/Juegos-de-Nintendo-Switch-2/Village-in-the-Shade-3171181.html` |
+| Nintendo eShop FR | URL (80), URL de la version en-GB (4), page (Chromium) (3) | 2026-10-02 05:19 | `https://www.nintendo.com/fr-fr/Jeux/Jeux-Nintendo-Switch-2/CRYMELIGHT-3199777.html` |
+| Nintendo eShop IT | URL (67), URL de la version en-GB (5), page (Chromium) (1), page (HTTP) (1) | 2026-10-02 05:19 | `https://www.nintendo.com/it-it/Giochi/Giochi-per-Nintendo-Switch-2/CRYMELIGHT-3199777.html` |
+| PlanetPlay | page (Chromium) (3) | 2026-10-01 14:58 | `https://planetplay.com/store/games/6a6cb903475ecb8f34e03402/` |
+| Playerland | URL (10) | 2026-10-01 15:27 | `https://player.land/en/p-5415/8229-fable-pre-purchase-xbox-series-x-s-microsoft-store` |
+| PremiumCDkeys | URL (5) | 2026-10-01 14:58 | `https://www.premiumcdkeys.com/products/doom-the-dark-ages-pre-order-bonus-dlc-steam-pc-steam-cd-key-global` |
+| PS Store DE | page (HTTP) (60), URL (25), page (Chromium) (1) | 2026-10-01 16:08 | `https://store.playstation.com/de-de/product/EP0082-PPSA37334_00-0139969750985353` |
+| PS Store ES | page (HTTP) (49), URL (30), page (Chromium) (29) | 2026-10-01 16:08 | `https://store.playstation.com/es-es/product/JP0700-PPSA09840_00-MAINGAME00000000` |
+| PS Store FR | page (HTTP) (37), URL (16) | 2026-10-01 20:49 | `https://store.playstation.com/fr-fr/product/UP0006-PPSA34015_00-27STANDARDBUNDLE` |
+| PS Store IT | page (HTTP) (3) | 2026-10-01 16:08 | `https://store.playstation.com/it-it/product/UP6312-PPSA31381_00-0730774904492744` |
+| PS Store UK | page (Chromium) (29), page (HTTP) (22), URL (13) | 2026-10-02 01:04 | `https://store.playstation.com/en-gb/product/EP0001-PPSA34056_00-STBSTD0000000000` |
+| PS Store US | page (Chromium) (36), URL (21), page (HTTP) (21) | 2026-10-01 16:08 | `https://store.playstation.com/en-us/product/UP6312-PPSA22327_00-0547256477986893` |
+| Royal CD Keys | URL (38) | 2026-10-02 13:38 | `https://royalcdkeys.com/products/clair-obscur-expedition-33-deluxe-edition-steam-cd-key` |
+| Steam | URL (36), page (Chromium) (13), page (HTTP) (5) | 2026-10-02 05:19 | `https://store.steampowered.com/bundle/60799/Active_Matter__Deluxe_Edition/` |
+| Ubisoft Store ES | URL après 301 marchand (1) | 2026-10-01 14:58 | `https://store.ubisoft.com/fr/rayman-legends-retold/69d81be7c446d004fbdc1525.html` |
+| Ubisoft Store EU | URL après 301 marchand (1) | 2026-10-01 14:58 | `https://store.ubisoft.com/fr/rayman-legends-retold-%C3%A9dition-deluxe/69fbdb73d696ba353e764433.html` |
+| Ubisoft Store FR | URL après 301 marchand (1) | 2026-10-01 14:58 | `https://store.ubisoft.com/fr/rayman-legends-retold-%C3%A9dition-deluxe/69fbdb73d696ba353e764433.html` |
+| Vidaplayer | URL (38) | 2026-10-02 05:04 | `https://www.vidaplayer.com/product/game-playstation-5-germany/dragon-ball-sparking-zero-standard-edition` |
+| WinGameStore | URL (6) | 2026-10-02 12:49 | `https://www.wingamestore.com/product/18465/ACE-COMBAT-8-WINGS-OF-THEVE/` |
+| Wyrel | URL (36), page (Chromium) (1) | 2026-10-02 12:49 | `https://wyrel.com/en/buy-desevyh-titanfall-2-pc-708` |
+| Xbox DE | URL (57), page (Chromium) (1) | 2026-10-02 06:19 | `https://www.xbox.com/de-de/games/store/creepy-tale-snow-child/9nv8g3rhnwnt` |
+| Xbox ES | URL (8) | 2026-10-01 15:27 | `https://www.xbox.com/es-es/games/store/warrior-cats-clans-of-the-forest/9n9rtllldnd7` |
+| Xbox FR | URL (56), page (HTTP) (1) | 2026-10-02 06:19 | `https://www.xbox.com/fr-fr/games/store/creepy-tale-snow-child/9nv8g3rhnwnt` |
+| Xbox IT | URL (47) | 2026-10-02 06:19 | `https://www.xbox.com/it-it/games/store/creepy-tale-snow-child/9nv8g3rhnwnt` |
+| YUPLAY | URL (36), page (Chromium) (1) | 2026-10-02 12:34 | `https://www.yuplay.com/product/red-dead-redemption/` |
+
+### Pas encore monitorés, ou contrôlés sur leur page seulement
+
+- **PlanetPlay** : URL = identifiant (`/store/games/6a6cb903…`), la page s'ouvre avec Chromium ; 3 contrôles, OK.
+- **Steam `/sub/` et `/bundle/`** (packs) : URL = numéro, la page donne le titre (Chromium ou HTTP).
+- **PS Store** : URL = code produit, page lue en HTTP (JSON : nom et édition), en en-gb pour les boutiques européennes.
+- **Driffle, Loaded, Wyrel** : pages illisibles (anti-robot), l'URL fait foi : elle nomme presque toujours le produit. Une URL Driffle sans nom (code seul) sortirait en NON VÉRIFIABLE.
 - **EA.com** : l'analyseur reconnaît le nom en partie (`ea-sports-fc` + `fc-27`), verdict OK avec la note « nom partiel ».
-- **Marchands qui n'ont pas encore eu d'offre en tête** sur les 9 pages : non vérifiés. Le moniteur note la méthode utilisée pour chaque marchand rencontré (`--coverage`) ; compléter cette table quand un nouveau marchand apparaît.
+- **Amazon** : ignoré (`skip = true`) depuis l'arbitrage du 01/10/2026.
 
 ## Offres non vérifiables
 
-Offres contrôlées que le moniteur n'a pas pu vérifier : ni l'URL ni la page ne donnent le nom. Elles sont notées `NON VÉRIFIABLE`, sans alerte (formation du 30/09/2026), sauf premier prix de toute la page d'un top ou d'un coming soon, y compris quand l'offre le devient plus tard (elle passe alors À VÉRIFIER et part sur Discord). Liste générée par `python3 price_check.py --unverified`, état au 01/10/2026 le matin ; les lignes Amazon sont sorties le 01/10/2026 avec le marchand (voir `amazon.toml`) :
+Offres contrôlées que le moniteur n'a pas pu vérifier : ni l'URL ni la page ne donnent le nom. Elles sont notées `NON VÉRIFIABLE`, sans alerte (formation du 30/09/2026), sauf premier prix de toute la page d'un top ou d'un coming soon, y compris quand l'offre le devient plus tard (elle passe alors À VÉRIFIER et part sur Discord). Liste générée par `python3 price_check.py --unverified`, état au 02/10/2026 :
 
 | Jeu | Édition | Marchand | Prix | Pourquoi | URL marchand | Vu le |
 |---|---|---|---|---|---|---|
-| Animal Crossing New Horizons Nintendo Switch | Bundle | Amazon.de | 70.41 € | URL sans nom du produit et page marchand illisible | `https://www.amazon.de/-/en/dp/B09L2P3Y3H/` | 2026-09-30 16:05 |
-| Animal Crossing New Horizons Nintendo Switch | Bonus | Amazon.de | 84.98 € | URL sans nom du produit et page marchand illisible | `https://www.amazon.de/-/en/dp/B09LDDSP33/` | 2026-09-30 16:05 |
-| Biomutant PS4 | Atomic Edition | Amazon.fr | 296.60 € | URL sans nom du produit et page marchand illisible | `https://www.amazon.fr/gp/product/B07WDCSNBG/ref=as_li_tl` | 2026-10-01 06:45 |
-| Mario Kart 8 Deluxe Nintendo Switch | Standard | Amazon.fr | 43.99 € | URL sans nom du produit et page marchand illisible | `https://www.amazon.fr/gp/product/B01N223WHL/ref=as_li_tl` | 2026-09-30 16:05 |
-| Minecraft Dungeons Nintendo Switch | Hero Edition | Amazon.fr | 59.99 € | URL sans nom du produit et page marchand illisible | `https://www.amazon.fr/Nintendo-Game-2/dp/B07TZS3SP6/` | 2026-10-01 07:45 |
-| Minecraft Nintendo Switch | Standard | Amazon.fr | 22.49 € | URL sans nom du produit et page marchand illisible | `https://www.amazon.fr/gp/product/B07D3ZW98F/ref=as_li_tl` | 2026-10-01 07:45 |
-| Pokemon Lets Go Pikachu Nintendo Switch | Standard | Amazon.fr | 43.19 € | URL sans nom du produit et page marchand illisible | `https://www.amazon.fr/gp/product/B07DF4HGBY/ref=as_li_tl` | 2026-09-30 16:05 |
-| Pokemon Scarlet The Hidden Treasure of Area Zero Nintendo Switch | Bundle | Amazon.fr | 168.33 € | URL sans nom du produit et page marchand illisible | `https://www.amazon.fr/Nintendo-Pok%C3%A9mon-Scarlet-Violet-SteelBook/dp/B0B34V3Z8Y/` | 2026-10-01 07:45 |
-| Super Mario Odyssey Nintendo Switch | Standard | Amazon.fr | 44.49 € | URL sans nom du produit et page marchand illisible | `https://www.amazon.fr/gp/product/B072KJWYL9/ref=as_li_tl` | 2026-09-30 16:05 |
-| Super Smash Bros Ultimate Nintendo Switch | Limited | Amazon.fr | 281.29 € | URL sans nom du produit et page marchand illisible | `https://www.amazon.fr/gp/product/B07GBTDS57/ref=as_li_tl` | 2026-09-30 16:05 |
-| The Legend of Zelda Breath of the Wild Nintendo Switch | Limited | Amazon.fr | 81.89 € | URL sans nom du produit et page marchand illisible | `https://www.amazon.fr/gp/product/B01MS6R9FG/ref=as_li_tl` | 2026-10-01 07:45 |
+| Escape from Tarkov | Unheard Edition | BattlestateGames | 203.40 € | URL sans nom du produit et page marchand illisible | `https://www.escapefromtarkov.com/preorder-page` | 2026-10-01 14:58 |
 | A Plague Tale Requiem | Bundle | G2A | 20.93 € | URL sans nom du produit et page marchand illisible | `https://www.g2a.com/en/a-plague-tale-bundle-pc-steam-key-global-i10000337512001` | 2026-10-01 07:00 |
+| Assetto Corsa Competizione | Trilogy Bundle | G2A | 40.60 € | URL sans nom du produit et page marchand illisible | `https://www.g2a.com/assetto-corsa-trilogy-pc-steam-key-europe-i10000511542002` | 2026-10-01 14:58 |
+| Assetto Corsa Competizione | Complete Trilogy | G2A | 56.85 € | URL sans nom du produit et page marchand illisible | `https://www.g2a.com/assetto-corsa-complete-trilogy-pc-steam-key-europe-i10000511548002` | 2026-10-01 14:58 |
+| Assetto Corsa EVO | Trilogy Bundle | G2A | 40.60 € | URL sans nom du produit et page marchand illisible | `https://www.g2a.com/assetto-corsa-trilogy-pc-steam-key-europe-i10000511542002` | 2026-10-01 14:58 |
+| Assetto Corsa EVO | Complete Trilogy | G2A | 56.85 € | URL sans nom du produit et page marchand illisible | `https://www.g2a.com/assetto-corsa-complete-trilogy-pc-steam-key-europe-i10000511548002` | 2026-10-01 14:58 |
+| DREDGE | Bundle | G2A | 18.51 € | URL sans nom du produit et page marchand illisible | `https://www.g2a.com/en/dredging-diving-bundle-pc-steam-key-europe-i10000506453005` | 2026-10-01 14:58 |
+| EA Sports WRC 2023 | Standard | HRK | 29.57 € | URL sans nom du produit et page marchand illisible | `https://www.hrkgame.com/en/product/wrc-23-origin` | 2026-10-01 15:27 |
+| Cyberpunk 2077 PS5 | Ultimate | PS Store FR | 69.99 € | URL sans nom du produit et page marchand illisible | `https://store.playstation.com/fr-fr/product/EP4497-PPSA04029_00-EXPANSION1B00000` | 2026-10-01 15:27 |
 
-Toutes chez Amazon sauf une (G2A), dont la page renvoie un captcha et dont l'URL ne porte souvent qu'un code produit (`gp/product/B01N223WHL`).
+Au 02/10/2026 : des bundles G2A (le nom d'un bundle n'est pas celui du jeu : non contrôlé), Escape from Tarkov vendu par son éditeur (URL `preorder-page`), un code produit PS Store illisible, EA Sports WRC chez HRK (`wrc-23-origin`, nom trop court). Les six offres Amazon de la liste du 01/10 sont sorties avec le marchand.
 
 ## Lecture des pages marchand (étude du 30/09/2026)
 
 | Marchand | HTTP simple (UA navigateur) | Chromium sans écran |
 |---|---|---|
 | PS Store | OK : titre et JSON (nom, édition) | titre seul, h1 « Access Denied » |
-| Steam, Instant Gaming, Eneba, Gamingdragons, Nintendo eShop, Gamers Outlet | OK | non nécessaire |
+| Steam, Instant Gaming, Eneba, Gamingdragons, Nintendo eShop, Gamers Outlet, K4G, Keycense, Gog.com | OK | non nécessaire |
 | Kinguin, GAMIVO, LDShop | 403 (Akamai, Cloudflare) | OK |
 | Driffle | « Blocked - Driffle » | « Blocked - Driffle » |
 | Loaded, go.loaded.com | 403 | 403 |

@@ -27,7 +27,8 @@ Une offre peut être ajoutée sur une page produit alors qu'elle ne devrait pas 
 - **Autre produit** : Sonic 1 ou un vieux Mario sur la page du dernier Sonic. **C'est surtout ce cas qui fait peur.**
 - **Région non affichable** : le bon produit, mais dans une région qu'on n'est pas censé afficher sur notre marché.
 - **Compte saisi comme clé** : sur la page du marchand, c'est un compte, mais nous l'avons saisi en tant que clé.
-- **Mauvaise édition ou DLC** : Deluxe saisie en Standard, season pass saisi comme le jeu.
+- **Mauvaise édition ou DLC** : Deluxe saisie en Standard, season pass saisi comme le jeu ; et l'inverse, une Complete Edition rangée en Standard (arbitrage du 01/10/2026 : erreur même si l'acheteur reçoit plus).
+- **Monnaie de jeu vendue comme le jeu** (règle du 02/10/2026) : des COD Points, des V-Bucks ou une Shark Card sur la page du jeu, dont l'URL contient pourtant le nom.
 
 Si cette offre est la moins chère, elle devient le premier prix affiché, et ce premier prix est faux. L'écart avec l'offre suivante n'est pas un critère : il peut être d'un centime. Il faut donc contrôler l'offre elle-même, ce que permet son lien de redirection AllKeyShop : il donne l'URL du marchand, qui contient presque toujours le nom du produit, la région et la plateforme.
 
@@ -47,7 +48,11 @@ Python 3 seulement, aucune dépendance. Chromium (déjà sur le serveur) sert de
 
 1. Toutes les 30 min, il relit les listes de chaque mode via l'API JSON `getLists`, en ne gardant que les jeux, une seule fois par page.
 2. À chaque passage du mode, il lit les offres de chaque page produit (`var gamePageTrans` dans le HTML, user agent `AKS/Staff`) et retient celles du mode d'offres : les 3 offres de clé les moins chères de chaque édition (`top-offers`), ou toutes les offres en vente (`full-page`).
-3. Toute offre retenue **jamais contrôlée** est contrôlée une fois : redirection AllKeyShop (`AKS/Staff`) → URL marchand → le nom du produit doit y être, et les mots de région, plateforme et édition doivent être compatibles avec l'offre. Si l'URL ne dit rien : le 301 du marchand, puis sa page (HTTP, puis Chromium avec le user agent Chrome). Si l'URL contredit AllKeyShop sur la plateforme ou la région, la page du marchand tranche avant l'alerte.
+3. Toute offre retenue **jamais contrôlée** est contrôlée une fois : redirection AllKeyShop (`AKS/Staff`) → URL marchand → le nom du produit doit y être, et les mots de région, plateforme, édition et monnaie doivent être compatibles avec l'offre.
+   - **L'URL nomme un autre produit** (Titanfall sur la page de Titanfall 2) : alerte tout de suite, sans lire la page (Romain, 02/10/2026 : « on a déjà un problème détecté à la base »).
+   - **L'URL ne nomme rien** (un code, un numéro) : le 301 du marchand, puis sa page (HTTP, puis Chromium avec le user agent Chrome).
+   - **Deux groupes de marchands pour les redirections** (`merchants/*.toml`, clé `[redirect] means`) : chez la plupart (Instant Gaming, Fanatical), une redirection mène à la fiche actuelle de la même offre et c'est elle qu'on juge ; chez Kinguin, elle mène à **une autre offre** parce que la fiche du lien est en rupture : on ne s'y fie ni pour accuser ni pour blanchir, on juge le lien. D'autres marchands rejoindront ce groupe au fil de l'apprentissage.
+   - Si l'URL contredit AllKeyShop sur la plateforme ou la région, la page du marchand peut écarter une URL trompeuse connue (Gamingdragons : `steam-key` pour une clé EA App), jamais retenir une alerte pour autre chose.
 4. Verdict : 🟢 `OK`, 🔴 `SUSPECT` (avec la raison), 🟠 `À VÉRIFIER` (impossible de conclure, sur le premier prix d'une page d'un top ou d'un coming soon), ⚪ `NON VÉRIFIABLE` (impossible de conclure ailleurs : noté, sans alerte). SUSPECT et À VÉRIFIER partent sur Discord ; OK et NON VÉRIFIABLE restent dans le journal et l'état (`--unverified` pour la liste).
 
 Détails et exemple d'alerte : [docs/detection.md](docs/detection.md). Le moniteur ne fait que des GET, jamais de wp-admin ; `AKS/Staff` n'est utilisé que sur AllKeyShop.
@@ -58,21 +63,35 @@ Chaque report jugé (par Romain ou par l'étude) est consigné dans le [registre
 
 - une mauvaise édition est une erreur même si l'acheteur reçoit plus (GTA 4, Zero Company) ;
 - Amazon est ignoré jusqu'à ce que ses pages soient lisibles ;
-- chez Kinguin, la fiche servie fait foi quand elle a remplacé celle du lien (Stellaris) ;
+- chez Kinguin, une redirection mène à une autre offre (fiche en rupture) : Stellaris n'était pas une erreur de saisie ;
 - « Year 1 Season Pass » = « Year 1 Edition » (Farming Simulator 25).
 
-Les reports sont aussi tranchés dans l'admin de l'executor (page « Price check »).
+Premier jour de `top-offers` (01–02/10/2026) : 21 alertes sur les 2e et 3e prix, 11 vraies erreurs (dont Titanfall 1 vendu sur la page de Titanfall 2, un autre jeu de la série, et Horse Spirit Valley 2 sur la page de TCG Card Shop Simulator), 10 faux positifs tous devenus des règles. Arbitrages du 02/10/2026 :
+
+- un problème vu dans l'URL suffit : on alerte sans lire la page du marchand ;
+- les noms raccourcis par les marchands (« UFC 5 », « Black Ops 6 », « Onimusha: WotS ») sont une règle générale, pas un alias par produit, parce qu'il y aura beaucoup de marchands ;
+- deux groupes de marchands pour les redirections (voir Fonctionnement) ;
+- la monnaie de jeu vendue comme le jeu est une erreur.
+
+## Trancher les reports : la page Price check de l'admin
+
+Depuis le 02/10/2026, les reports se tranchent dans l'admin de l'executor, onglet **Price check** (`https://169.58.5.63.sslip.io/executor/price-check`) : chaque report y est une carte avec le verdict, la raison, le rang de l'offre dans son édition, la page AllKeyShop et l'URL du marchand, et trois boutons **Vrai positif**, **Faux positif**, **À discuter**, avec une note.
+
+- Le moniteur écrit `reports.json` dans `/var/lib/price-check` à chaque passage ; la page le lit.
+- Une décision ajoute une ligne à `decisions.jsonl` (signée de l'identifiant de connexion) ; le moniteur la relit avant son passage suivant et la reporte dans sa mémoire et dans l'export. La dernière décision par offre l'emporte.
+- Un **Faux positif** ou un **À discuter** avec sa note devient ensuite une règle, une config marchand ou un alias, avec son test, et une ligne dans le [registre des précédents](docs/precedents.md). Un **Vrai positif** confirme l'alerte.
+
+Format des fichiers : [docs/exploitation.md](docs/exploitation.md#reports-pour-ladmin).
 
 ## Couverture des marchands
 
-État au 30/09/2026, sur 30 marchands testés :
+État au 02/10/2026 : **64 marchands rencontrés** par le moniteur (3 595 offres contrôlées).
 
-- **29 contrôlables par l'URL seule**, dont 2 après le 301 du marchand lui-même (Instant Gaming, Fanatical) et 1 par nom partiel (EA.com).
-- **Epic Games**, longtemps non couvert (URL partielle `/p/fc-27-e149fb`) : reconnu par l'URL depuis le 01/10/2026, « FC 27 » valant « EA SPORTS FC 27 ».
-- **Packs et bundles** (Steam `/sub/`, trilogie G2A) : page ouverte avec Chromium, OK au passage réel.
-- **Non vérifiés** : les marchands qui n'ont pas encore eu d'offre en tête.
-
-Premier passage réel du 30/09/2026 sur les 9 pages : 31 offres en tête contrôlées, 31 OK, 0 alerte.
+- **La plupart se contrôlent par l'URL seule** ; Instant Gaming, Fanatical et Ubisoft Store après leur propre 301 ; EA.com par nom partiel.
+- **La page est nécessaire** pour le PS Store (URL = code produit ; page lue en HTTP, en anglais), les packs Steam (`/sub/`, `/bundle/`), les bundles G2A, PlanetPlay (URL = identifiant), LDShop (page multi-produits, option cochée).
+- **Pages illisibles** (Driffle, Loaded, Wyrel : blocage anti-robot) : l'URL fait foi, elle nomme presque toujours le produit.
+- **Ignoré** : Amazon (arbitrage du 01/10/2026, pages illisibles et URL sans nom).
+- **Spécificités** : Wyrel (région dans `region=`), Nintendo eShop (version anglaise de la fiche, anciens domaines `nintendo.es`…), Kinguin (redirections non suivies), LDShop (option cochée), PS Store (JSON de la page, lu en en-gb).
 
 Table détaillée, méthode par méthode, et configs marchands : [docs/marchands.md](docs/marchands.md). Elle doit être mise à jour à chaque marchand qui oblige à ouvrir sa page, pour qu'on sache toujours qui est monitoré et qui ne l'est pas encore. `python3 price_check.py --coverage` affiche ce que le moniteur a constaté.
 
@@ -94,7 +113,7 @@ Table détaillée, méthode par méthode, et configs marchands : [docs/marchands
 | `test_price_check.py` | Tests hors ligne : `python3 -m unittest -v` |
 | `bot/` | Bot Discord : parler à Claude Code depuis le salon des alertes et développer le projet depuis Discord. Voir [bot/README.md](bot/README.md) |
 | `aliases.toml` | Autres noms des produits qu'aucune règle ne peut deviner (titre européen, titre de travail, formulation d'un marchand), appris au fil de la formation ; les préfixes omis par les marchands (« EA Sports », « Call of Duty »…) sont une règle générale, pas des alias |
-| `merchants/` | Une exception par marchand (TOML) : Wyrel (région dans le paramètre `region=`), Amazon (ignoré depuis le 01/10/2026), Nintendo (version anglaise), PlayStation (page lue en en-gb), LDShop (option cochée d'une page multi-produits), Kinguin (fiche canonique). Voir [docs/marchands.md](docs/marchands.md#configs-marchands-merchantstoml) |
+| `merchants/` | Une exception par marchand (TOML) : Wyrel (région dans le paramètre `region=`), Amazon (ignoré depuis le 01/10/2026), Nintendo (version anglaise, anciens domaines), PlayStation (page lue en en-gb), LDShop (option cochée d'une page multi-produits), Kinguin (groupe « redirections non suivies »). Voir [docs/marchands.md](docs/marchands.md#configs-marchands-merchantstoml) |
 | `price-check.service` | Service systemd |
 | `docs/` | Documentation |
 | `samples/` | Réponses brutes du site, utilisées par les tests |
