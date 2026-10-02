@@ -964,10 +964,10 @@ class TestConfirmOnMerchantPage(unittest.TestCase):
         with mock.patch.object(pc, "http_get", side_effect=[(200, None, self.page(rust)), (301, "/category/55259/rust-de-pc-steam-altergift", "")]):
             res = pc.check_offer("Rust", o)
         self.assertEqual(res["evidence"], {"served": pc.norm(pc.url_text("https://www.kinguin.net/category/55259/rust-de-pc-steam-altergift")),
-                                           "page": ""})
+                                           "page": "", "via": ""})
         with mock.patch.object(pc, "http_get", side_effect=[(200, None, self.page(rust)), (200, None, "")]):
             res = pc.check_offer("Rust", o)
-        self.assertEqual((res["verdict"], res["evidence"]), ("OK", {"served": "", "page": ""}))
+        self.assertEqual((res["verdict"], res["evidence"]), ("OK", {"served": "", "page": "", "via": ""}))
         with mock.patch.object(pc, "http_get", side_effect=[(200, None, self.page(rust)), OSError("timed out")]):
             with self.assertRaises(pc.CheckError):
                 pc.check_offer("Rust", o)
@@ -1190,6 +1190,8 @@ class TestGameCurrency20261002(unittest.TestCase):
         self.assertEqual(res["kinds"], ["name", "currency"])
 
 
+@mock.patch.object(pc, "REQUEST_DELAY", 0)
+@mock.patch.object(pc, "PAGE_DELAY", 0)
 class TestOfferModes20261001(unittest.TestCase):
     """Deux modes d'offres (Romain, 01/10/2026) : Top Offers (3 premiers prix de chaque édition) et Full Page
     (toutes les offres de la page) ; un webhook par mode de pages ; les top games passent pendant la homepage ;
@@ -1437,7 +1439,8 @@ class TestOfferModes20261001(unittest.TestCase):
         # 3. sans recontrôle : rien
         with mock.patch.object(pc, "http_get", return_value=(200, None, self.PAGE)), mock.patch.object(pc, "NOTIFY_OK", False):
             outcome = pc.run_cycle(self.TARGETS, lambda m: None, pc.load_state("/nonexistent"), self.ok)
-        self.assertEqual(outcome, {"checked": 0, "fixed": [], "removed": [], "rules": [], "still": [], "new": [], "unknown": []})
+        self.assertEqual({k: v for k, v in outcome.items() if k != "first_checked"},
+                         {"checked": 0, "fixed": [], "removed": [], "rules": [], "verified": [], "still": [], "new": [], "unknown": []})
         self.assertIn("Rien à signaler", pc.format_recheck("Price check top", "", outcome))
 
     def test_recheck_tells_a_repair_behind_the_same_link(self):
@@ -1561,8 +1564,192 @@ class TestOfferModes20261001(unittest.TestCase):
         self.assertEqual(sum(bool(r["page_first"]) for r in reports), 1)
 
 
+def aks_page(prices, product="Jeu"):
+    """Une page produit AllKeyShop minimale : gamePageTrans avec ces offres (édition Standard, région STEAM GLOBAL)."""
+    base = {"merchant": 47, "merchantName": "Kinguin", "edition": "1", "region": "412", "dispo": 1, "account": False,
+            "activationPlatform": "steam"}
+    trans = {"editions": {"1": {"name": "Standard"}}, "regions": {"412": {"region_name": "GLOBAL", "filter_name": "STEAM GLOBAL"}},
+             "merchants": {}, "prices": [dict(base, priceCard=p.get("price", 10.0), **p) for p in prices]}
+    return "<html><script>var gamePageTrans = %s;\n</script></html>" % json.dumps(trans)
+
+
 @mock.patch.object(pc, "REQUEST_DELAY", 0)
 @mock.patch.object(pc, "PAGE_DELAY", 0)
+class TestLoopAudit20261002(unittest.TestCase):
+    """Audit de la boucle, de l'état et du recontrôle (02/10/2026)."""
+    PAGE = "https://www.allkeyshop.com/blog/buy-jeu-cd-key-compare-prices/"
+    TARGETS = [("Popular", 1, "Jeu", PAGE)]
+
+    def setUp(self):
+        pc.FAILURES.clear()
+
+    @staticmethod
+    def flagged(**kw):
+        return dict({"verdict": "SUSPECT", "product": "Jeu", "edition": "Standard", "merchant": "Kinguin", "page": TestLoopAudit20261002.PAGE,
+                     "reasons": ["autre produit chez le marchand : « Autre » au lieu de « Jeu » (URL)"], "url": "https://www.kinguin.net/category/1/autre",
+                     "region": "GLOBAL", "region_filter": "STEAM GLOBAL", "platform": "steam", "at": "2026-10-01 10:00", "seen": pc.time.time()}, **kw)
+
+    def cycle(self, page_html, state, checker, recheck=False, sent=None):
+        with mock.patch.object(pc, "http_get", return_value=(200, None, page_html)), mock.patch.object(pc, "NOTIFY_OK", False):
+            return pc.run_cycle(self.TARGETS, (sent if sent is not None else []).append, state, checker, per_edition=3, recheck=recheck)
+
+    def test_an_offer_without_price_is_not_repaired_and_a_removed_one_is_rechecked_when_back(self):
+        # constat 1 : une offre signalée passée « sans prix » (0.02) devenait « réparée », puis n'était plus contrôlée
+        state = pc.load_state("/nonexistent")
+        state["checked"]["1001"] = self.flagged()
+        calls = []
+        wrong = lambda product, o: calls.append(o["id"]) or {"verdict": "SUSPECT", "reasons": ["autre produit"], "notes": [],
+                                                              "url": "https://www.kinguin.net/category/1/autre", "method": "URL"}
+        other = {"id": 1002, "price": 12.0}
+        outcome = self.cycle(aks_page([{"id": 1001, "price": 0.02}, other]), state, wrong, recheck="flagged")
+        e = state["checked"]["1001"]
+        self.assertEqual((e["verdict"], e.get("fixed_at"), outcome["removed"]), ("SUSPECT", None, []))
+        self.assertEqual(outcome["unknown"][0][1], "offre momentanément sans prix sur la page")
+        # page servie sans offres : rien n'est « retiré »
+        outcome = self.cycle(aks_page([]), state, wrong, recheck="flagged")
+        self.assertEqual((state["checked"]["1001"]["verdict"], outcome["removed"]), ("SUSPECT", []))
+        # vraiment retirée de la page : réparée, et marquée pour être recontrôlée si elle revient
+        outcome = self.cycle(aks_page([other]), state, wrong, recheck="flagged")
+        self.assertEqual((e["verdict"], e["fixed_how"], bool(e.get("removed_at"))), ("OK", "offre retirée de la page", True))
+        # elle revient au premier prix : recontrôlée tout de suite, même sans recontrôle prévu, et alertée si elle est fausse
+        calls.clear()
+        sent = []
+        outcome = self.cycle(aks_page([{"id": 1001, "price": 9.0}, other]), state, wrong, recheck=False, sent=sent)
+        self.assertIn(1001, calls)
+        self.assertEqual(([x["product"] for x in outcome["new"]], e["verdict"], e.get("fixed_at"), "removed_at" in e),
+                         (["Jeu"], "SUSPECT", None, False))
+        self.assertTrue(any("**Jeu**" in m for m in sent))
+
+    def test_an_unexpected_error_never_stops_the_pass(self):
+        # constat 2 : une exception autre que CheckError (IncompleteRead, InvalidURL…) arrêtait le passage, à chaque fois
+        state = pc.load_state("/nonexistent")
+        state["checked"]["1001"] = self.flagged()
+        seen = []
+
+        def checker(product, o):
+            seen.append(o["id"])
+            if o["id"] == 1001:
+                raise ValueError("URL can't contain control characters")
+            return {"verdict": "OK", "reasons": [], "notes": [], "url": "https://x.example/jeu", "method": "URL"}
+        outcome = self.cycle(aks_page([{"id": 1001, "price": 9.0}, {"id": 1002, "price": 12.0}]), state, checker, recheck="all")
+        self.assertEqual(seen, [1001, 1002])  # la suite du passage a eu lieu
+        self.assertEqual((pc.FAILURES.get("1001"), outcome["unknown"][0][1][:13]), (1, "contrôle raté"))
+        self.assertEqual(state["checked"]["1001"]["verdict"], "SUSPECT")
+        with mock.patch.object(pc.urllib.request.OpenerDirector, "open", side_effect=pc.http.client.IncompleteRead(b"x", 10)):
+            with self.assertRaises(OSError):
+                pc.http_get("https://www.kinguin.net/category/1/x", pc.BROWSER_UA)
+        self.assertEqual(pc.quote_url("https://www.example.com/p/12345 6?q=é&r=%20"), "https://www.example.com/p/12345%206?q=%C3%A9&r=%20")
+
+    def test_a_failed_discord_send_is_queued_never_lost(self):
+        # constat 4 : une nouvelle erreur trouvée au recontrôle dont l'envoi échouait n'était jamais renvoyée
+        state = pc.load_state("/nonexistent")
+        with mock.patch.object(pc, "MUTE_UNTIL", ""), mock.patch.object(pc, "send_discord", side_effect=OSError("503")) as send:
+            notify = pc.make_notifier("https://hook", state, "homepage")
+            notify("alerte 1")
+            notify("alerte 2")  # la file n'est pas vide : elle passe après, sans essai
+        self.assertEqual((state["queued"], send.call_count), ([["homepage", "alerte 1"], ["homepage", "alerte 2"]], 1))
+        sent = []
+
+        def send_or_refuse(msg, channel):
+            if msg == "alerte 1":
+                raise pc.urllib.error.HTTPError("https://hook", 400, "Bad Request", {}, None)
+            sent.append(msg)
+        with mock.patch.object(pc.time, "sleep"):
+            pc.flush_queue(state, send_or_refuse)
+        self.assertEqual((sent, state["queued"]), (["alerte 2"], []))  # refusée pour de bon : retirée, pas bloquante
+
+    def test_send_discord_cuts_long_messages_and_waits_on_429(self):
+        bodies = []
+
+        def urlopen(req, timeout=30):
+            bodies.append(json.loads(req.data)["content"])
+            if len(bodies) == 1:
+                raise pc.urllib.error.HTTPError(req.full_url, 429, "Too Many Requests", {}, __import__("io").BytesIO(b'{"retry_after": 0.01}'))
+            return mock.MagicMock()
+        with mock.patch.object(pc.urllib.request, "urlopen", side_effect=urlopen), mock.patch.object(pc.time, "sleep") as sleep:
+            pc.send_discord("https://hook", "x" * 5000)
+        self.assertEqual((len(bodies), len(bodies[-1])), (2, 2000))
+        sleep.assert_called_once()
+
+    def test_a_corrupt_state_is_kept_aside_and_taken_from_the_backup(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as d:
+            path = os.path.join(d, "state.json")
+            self.assertEqual(pc.load_state(path)["checked"], {})  # absent : vide (on recontrôle tout), jamais la copie
+            with open(path + ".bak", "w") as f:
+                json.dump({"checked": {"1": {"verdict": "OK"}}}, f)
+            self.assertEqual(pc.load_state(path)["checked"], {})
+            with open(path, "w") as f:
+                f.write('{"checked": {"1": ')  # coupé en pleine écriture
+            self.assertEqual(pc.load_state(path)["checked"], {"1": {"verdict": "OK"}})
+            self.assertTrue(any(n.startswith("state.json.corrupt-") for n in os.listdir(d)))
+
+    def test_shared_files_never_block_nor_crash(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as d:
+            os.mkfifo(os.path.join(d, "run-homepage.request"))  # un tube nommé bloquait la boucle
+            self.assertEqual(pc.take_requests(d, ["homepage"]), [("homepage", "admin")])
+            with open(os.path.join(d, "run-top-games.request"), "w") as f:
+                f.write("[]")  # JSON valide mais pas un objet : plantait le service en boucle
+            self.assertEqual(pc.take_requests(d, ["top-games"]), [("top-games", "admin")])
+            with open(os.path.join(d, "decisions.jsonl"), "wb") as f:
+                f.write(b'{"offer": "1", "decision": "faux", "note": "caf\xe9"}\n{"offer": "2", "decision": "vrai"}\n')
+            self.assertEqual(sorted(pc.read_decisions(d)), ["1", "2"])  # un octet non UTF-8 ne coupe plus tout
+
+    def test_recheck_classification_fixes(self):
+        o = offer(region="GLOBAL", region_filter="STEAM GLOBAL", edition_rank=1, page_first=True)
+        ok = {"verdict": "OK", "reasons": [], "notes": [], "url": "https://www.kinguin.net/category/1/jeu", "method": "URL"}
+
+        def recheck(entry, res=ok):
+            outcome = {"checked": 0, "fixed": [], "removed": [], "rules": [], "verified": [], "still": [], "new": [], "unknown": []}
+            pc.apply_recheck(entry, "Popular", 1, "Jeu", self.PAGE, o, res, lambda m: None, "2026-10-02 22:00", pc.time.time(), outcome)
+            return entry, outcome
+        base = dict(self.flagged(), url="https://www.kinguin.net/category/1/jeu")
+        # (a) une offre qui n'avait pas pu être vérifiée, trouvée OK : vérifiée, ni « réparée » ni « faux positif levé »
+        e, outcome = recheck(dict(base, verdict="NON VÉRIFIABLE"))
+        self.assertEqual((e["fixed_kind"], len(outcome["verified"]), e["fixed_how"]), ("verified", 1, "vérifiée OK au recontrôle"))
+        # (b) une entrée ancienne sans nom de filtre n'a pas « changé de région »
+        e, _ = recheck(dict(base, region_filter=""))
+        self.assertEqual(e["fixed_kind"], "rule")
+        e, _ = recheck(dict(base, region="EUROPE", region_filter="STEAM EU"))
+        self.assertEqual((e["fixed_kind"], e["fixed_how"]), ("repaired", "recontrôle OK, l'offre a changé (région)"))
+        # (c) une offre réparée redevenue fausse perd son classement
+        wrong = dict(ok, verdict="SUSPECT", reasons=["autre produit"])
+        e, outcome = recheck(dict(base, verdict="OK", fixed_at="2026-10-02 18:00", fixed_kind="rule", still_wrong_at="2026-10-02 17:00"), wrong)
+        self.assertEqual((e.get("fixed_kind"), e.get("still_wrong_at"), len(outcome["new"])), (None, None, 1))
+        recap = pc.format_recheck("Price check top", "", {"checked": 2, "fixed": [e], "removed": [], "rules": [], "verified": [],
+                                                          "still": [], "new": [e], "unknown": []})
+        self.assertLess(recap.index("🆕 Nouvelles erreurs"), recap.index("✅ Réparées"))  # le plus important d'abord
+
+    def test_a_false_positive_decision_is_never_alerted(self):
+        # audit des tests : une offre NON VÉRIFIABLE jugée « faux » partait quand même en À VÉRIFIER au premier prix
+        state = pc.load_state("/nonexistent")
+        state["checked"]["1001"] = self.flagged(verdict="NON VÉRIFIABLE", decision={"decision": "faux", "by": "romain"})
+        sent = []
+        self.cycle(aks_page([{"id": 1001, "price": 9.0}]), state, lambda p, o: self.fail("jamais recontrôlée"), sent=sent)
+        self.assertEqual(sent, [])
+        state["checked"]["1001"].pop("decision")
+        self.cycle(aks_page([{"id": 1001, "price": 9.0}]), state, lambda p, o: self.fail("jamais recontrôlée"), sent=sent)
+        self.assertEqual(len(sent), 1)  # sans la décision : la règle des offres non vérifiables s'applique
+
+    def test_ignored_merchant_and_entries_without_page(self):
+        state = pc.load_state("/nonexistent")
+        state["checked"]["2001"] = self.flagged(merchant="Amazon")
+        old = self.flagged()
+        old.pop("page")  # entrée d'avant le 01/10 : sans sa page
+        state["checked"]["2002"] = old
+        calls = []
+        checker = lambda p, o: calls.append(o["id"]) or {"verdict": "OK", "reasons": [], "notes": [], "url": "https://www.kinguin.net/category/1/jeu",
+                                                         "method": "URL"}
+        page = aks_page([{"id": 1, "price": 5.0}, {"id": 2, "price": 6.0}, {"id": 3, "price": 7.0}, {"id": 2001, "price": 8.0, "merchantName": "Amazon"},
+                         {"id": 2002, "price": 9.0}])
+        outcome = self.cycle(page, state, checker, recheck="flagged")
+        self.assertNotIn("2001", state["checked"])  # marchand ignoré : ni recontrôle, ni report
+        self.assertNotIn(2001, calls)
+        self.assertEqual((state["checked"]["2002"]["page"], state["checked"]["2002"]["verdict"]), (self.PAGE, "OK"))
+        self.assertIn(2002, calls)
+
+
 class TestSecurityAudit20261002(unittest.TestCase):
     """Audit sécurité du 02/10/2026 : le moniteur tourne en root."""
 
@@ -1651,6 +1838,8 @@ class TestSecurityAudit20261002(unittest.TestCase):
                 self.assertEqual(json.load(f)["checked"], {"1": {}})
 
 
+@mock.patch.object(pc, "REQUEST_DELAY", 0)
+@mock.patch.object(pc, "PAGE_DELAY", 0)
 class TestCycle(unittest.TestCase):
     PAGE = sample("prod_popular1_ea-fc-27.html")
     TARGETS = [("Popular", 1, "EA SPORTS FC 27", "https://www.allkeyshop.com/blog/buy-ea-sports-fc-27-key-compare-prices/")]
@@ -1753,8 +1942,14 @@ class TestCycle(unittest.TestCase):
     def test_periodic_save_during_a_pass(self):
         saves = []
         targets = [("Popular", i, "EA SPORTS FC 27", "https://www.allkeyshop.com/blog/p%d/" % i) for i in range(1, 2 * pc.SAVE_EVERY + 2)]
-        pc.run_cycle(targets, lambda m: None, pc.load_state("/nonexistent"), self.ok, save=lambda: saves.append(1))
+        with mock.patch.object(pc, "NOTIFY_OK", False), mock.patch.object(pc, "PAGE_DELAY", 0):
+            pc.run_cycle(targets, lambda m: None, pc.load_state("/nonexistent"), self.ok, save=lambda: saves.append(1))
         self.assertEqual(len(saves), 2)
+        # audit du 02/10/2026 : une page qui a envoyé une alerte est sauvegardée aussitôt (un redémarrage ne la renvoie pas)
+        suspect = lambda product, o: {"verdict": "SUSPECT", "reasons": ["x"], "notes": [], "url": "https://x/y", "method": "URL"}
+        saves.clear()
+        pc.run_cycle(targets[:1], lambda m: None, pc.load_state("/nonexistent"), suspect, save=lambda: saves.append(1))
+        self.assertEqual(len(saves), 1)
 
     def test_discord_pause_queues_alerts_then_flushes(self):
         state = pc.load_state("/nonexistent")
@@ -1813,12 +2008,11 @@ class TestCycle(unittest.TestCase):
     def test_state_roundtrip_and_prune(self):
         state = pc.load_state("/nonexistent")
         pc.run_cycle(self.TARGETS, lambda m: None, state, self.ok)
-        path = os.path.join(SAMPLES, "_state_test.json")
-        try:
+        import tempfile
+        with tempfile.TemporaryDirectory() as d:
+            path = os.path.join(d, "state.json")
             pc.save_state(path, state)
             loaded = pc.load_state(path)
-        finally:
-            os.remove(path)
         self.assertEqual(loaded["checked"].keys(), state["checked"].keys())
         pc.prune_state(loaded, pc.time.time() + (pc.STATE_TTL_DAYS + 1) * 86400)
         self.assertEqual(loaded["checked"], {})

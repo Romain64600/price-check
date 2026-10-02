@@ -23,6 +23,7 @@ Voir docs/detection.md et docs/marchands.md.
 import argparse
 import glob
 import html
+import http.client
 import ipaddress
 import json
 import logging
@@ -30,6 +31,7 @@ import os
 import pwd
 import re
 import shutil
+import stat
 import subprocess
 import sys
 import tempfile
@@ -264,13 +266,26 @@ def http_get(url, ua, follow=True, timeout=30):
         raise OSError("cible refusée : %s" % (url or "")[:120])
     if ua == AKS_UA and not is_aks_host(url):
         raise OSError("UA AKS/Staff hors d'AllKeyShop refusé : %s" % url[:120])
-    req = urllib.request.Request(url, headers=request_headers(ua))
     opener = urllib.request.build_opener(GuardedRedirect if follow else NoRedirect)
     try:
+        req = urllib.request.Request(quote_url(url), headers=request_headers(ua))
         with opener.open(req, timeout=timeout) as resp:
             return resp.status, resp.headers.get("Location"), resp.read().decode("utf-8", "replace")
     except urllib.error.HTTPError as e:
         return e.code, e.headers.get("Location"), ""
+    except (http.client.HTTPException, ValueError) as e:
+        # IncompleteRead, BadStatusLine, LineTooLong, InvalidURL, UnicodeEncodeError : une erreur réseau comme une
+        # autre (audit du 02/10/2026 : elles arrêtaient le passage entier, à chaque passage, au même endroit)
+        raise OSError("%s : %s" % (type(e).__name__, e)) from e
+
+
+def quote_url(url):
+    """L'URL avec ses espaces et ses caractères non ASCII encodés (« %xx » déjà présents gardés tels quels) : un lien de
+    feed « …/p/12345 6 » ou accentué ne fait plus échouer la requête."""
+    parts = urllib.parse.urlsplit(url)
+    safe = "/:@!$&'()*+,;=%~-._"
+    return urllib.parse.urlunsplit((parts.scheme, parts.netloc, urllib.parse.quote(parts.path, safe=safe),
+                                    urllib.parse.quote(parts.query, safe=safe + "?/"), urllib.parse.quote(parts.fragment, safe=safe + "?/")))
 
 
 # ---- AllKeyShop : listes, page produit, redirection ---------------------------
@@ -1242,11 +1257,13 @@ class CheckError(Exception):
     """Contrôle impossible pour l'instant (réseau, redirection AllKeyShop en erreur) : à réessayer."""
 
 
-def evidence_of(served, page_text):
+def evidence_of(served, page_text, page_via=None):
     """Ce que le contrôle a vu au-delà du lien : la fiche servie à sa place (groupe Kinguin : rupture ; Nintendo : la
-    version anglaise) et le titre de la page lue. Le recontrôle s'en sert pour dire si l'offre a changé chez le
-    marchand alors que le lien est le même (fiche Kinguin de nouveau en stock : réparée, pas un faux positif)."""
-    return {"served": norm(url_text(served)) if served else "", "page": norm(page_text)[:300] if page_text else ""}
+    version anglaise) et le titre de la page lue, avec la façon de le lire (HTTP ou Chromium : deux lectures d'une même
+    page peuvent différer). Le recontrôle s'en sert pour dire si l'offre a changé chez le marchand alors que le lien
+    est le même (fiche Kinguin de nouveau en stock : réparée, pas un faux positif)."""
+    return {"served": norm(url_text(served)) if served else "", "page": norm(page_text)[:300] if page_text else "",
+            "via": page_via or ""}
 
 
 def check_offer(product, offer):
@@ -1254,11 +1271,11 @@ def check_offer(product, offer):
 
     Renvoie {"verdict", "reasons", "notes", "url", "method", "evidence"}.
     """
-    served = page_text = None  # fiche servie à la place du lien, texte de la page lue : voir evidence_of
+    served = page_text = page_via = None  # fiche servie à la place du lien, page lue et comment : voir evidence_of
 
     def done(verdict, method, reasons, notes, **extra):
         return dict({"verdict": verdict, "url": url, "method": method, "reasons": reasons, "notes": notes,
-                     "evidence": evidence_of(served, page_text)}, **extra)
+                     "evidence": evidence_of(served, page_text, page_via)}, **extra)
 
     for attempt in (1, 2):
         try:
@@ -1339,6 +1356,7 @@ def check_offer(product, offer):
     if result["match"] is None:
         # 2e repli : lire la page marchand (HTTP simple, puis Chromium si la config le permet)
         page_text, page_method = merchant_page_text(url, cfg)
+        page_via = page_method
         if page_text is None:
             others = [r for r, k in zip(result["reasons"], result["kinds"]) if k != "name"]
             if others:  # le nom ne se vérifie pas, mais l'URL montre déjà un autre problème (Elden Ring : « PlayStation »)
@@ -1357,7 +1375,7 @@ def check_offer(product, offer):
                    or (k == "dlc" and "+" in offer["edition"])]
     if confirmable and method.startswith("URL") and not (cfg.get("region") or {}).get("from") == "query":
         # l'URL contredit AllKeyShop : avant d'alerter, on regarde la page (URL trompeuse chez Gamingdragons)
-        page_text, _ = merchant_page_text(url, cfg)
+        page_text, page_via = merchant_page_text(url, cfg)
         if page_text:
             kept = [(r, k) for r, k in zip(result["reasons"], result["kinds"])
                     if not (k in confirmable and contradicted(k, product, offer, page_text))]
@@ -1413,13 +1431,31 @@ def format_alert(label, rank, product, page_url, offer, res):
     return "\n".join(lines)
 
 
+DISCORD_LIMIT = 2000  # caractères d'un message Discord : au-delà, le webhook répond 400
+
+
 def send_discord(webhook, content):
+    """Envoie un message sur le webhook. Un message trop long est coupé (sinon 400, et l'alerte ne partirait jamais) ;
+    un 429 (trop de messages) est réessayé une fois après le délai demandé par Discord."""
+    if len(content) > DISCORD_LIMIT:
+        content = content[:DISCORD_LIMIT - 2] + " …"
     body = json.dumps({"content": content, "allowed_mentions": {"parse": []}}).encode()
-    req = urllib.request.Request(
-        webhook, data=body, method="POST",
-        headers={"Content-Type": "application/json", "User-Agent": "price-check (Discord webhook)"},
-    )
-    urllib.request.urlopen(req, timeout=30).close()
+    for attempt in (1, 2):
+        req = urllib.request.Request(
+            webhook, data=body, method="POST",
+            headers={"Content-Type": "application/json", "User-Agent": "price-check (Discord webhook)"},
+        )
+        try:
+            urllib.request.urlopen(req, timeout=30).close()
+            return
+        except urllib.error.HTTPError as e:
+            if e.code != 429 or attempt == 2:
+                raise
+            try:
+                wait = float(json.loads(e.read() or b"{}").get("retry_after") or e.headers.get("Retry-After") or 2)
+            except (ValueError, AttributeError):
+                wait = 2.0
+            time.sleep(min(max(wait, 0.5), 30))
 
 
 def muted():
@@ -1432,32 +1468,63 @@ def webhook_for(mode):
 
 
 def make_notifier(webhook, state, channel=""):
-    """Envoie sur Discord, ou met en attente pendant une pause (`DISCORD_MUTE_UNTIL`). `channel` : le mode de
-    pages dont le webhook enverra l'alerte mise en attente."""
+    """Envoie sur Discord, ou met en attente pendant une pause (`DISCORD_MUTE_UNTIL`), ou quand Discord ne répond pas
+    (audit du 02/10/2026 : une nouvelle erreur trouvée au recontrôle dont l'envoi échouait n'était jamais renvoyée) :
+    la file `queued` de state.json, envoyée dans l'ordre dès que possible. `channel` : le mode de pages dont le
+    webhook enverra l'alerte mise en attente."""
     def notify(msg):
         if muted():
             state["queued"].append([channel, msg] if channel else msg)
             log.info("Discord en pause jusqu'au %s : alerte mise en attente (%d)", MUTE_UNTIL, len(state["queued"]))
-        else:
+            return
+        if state["queued"]:  # des alertes attendent déjà : celle-ci passe après elles, l'ordre est gardé
+            state["queued"].append([channel, msg] if channel else msg)
+            return
+        try:
             send_discord(webhook, msg)
+        except Exception as e:
+            state["queued"].append([channel, msg] if channel else msg)
+            log.error("Envoi Discord impossible (%s) : alerte mise en file, renvoyée dès que Discord répond (%d en file)",
+                      e, len(state["queued"]))
     return notify
 
 
 def flush_queue(state, send):
-    """Envoie les alertes mises en attente pendant la pause, dans l'ordre : `send(msg, channel)`."""
+    """Envoie les alertes mises en attente (pause, ou Discord injoignable), dans l'ordre : `send(msg, channel)`. Une
+    alerte refusée par Discord (4xx autre que 429 : elle ne passera jamais) est retirée de la file, pas bloquante."""
     while state["queued"]:
         item = state["queued"][0]
         channel, msg = item if isinstance(item, list) else ("", item)
-        send(msg, channel)
+        try:
+            send(msg, channel)
+        except urllib.error.HTTPError as e:
+            if not 400 <= e.code < 500 or e.code == 429:
+                raise
+            log.error("Alerte refusée par Discord (HTTP %s), retirée de la file : %s", e.code, msg[:200])
         state["queued"].pop(0)
         time.sleep(1)
 
 
 def load_state(path):
+    """L'état. Absent : vide (c'est ainsi qu'on recontrôle tout). Illisible : mis de côté (`.corrupt-<date>`) et repris
+    de la copie horaire `state.json.bak` (audit du 02/10/2026 : un état illisible repartait de zéro sans un mot)."""
+    state = {}
     try:
         with open(path) as f:
             state = json.load(f)
-    except (OSError, ValueError):
+    except FileNotFoundError:
+        pass
+    except (OSError, ValueError) as e:
+        aside = "%s.corrupt-%s" % (path, time.strftime("%Y%m%d-%H%M%S"))
+        log.error("%s illisible (%s) : mis de côté en %s, reprise de %s.bak", path, e, aside, path)
+        try:
+            os.replace(path, aside)
+            with open(path + ".bak") as f:
+                state = json.load(f)
+        except (OSError, ValueError) as e2:
+            log.error("pas de copie lisible (%s) : état vide, toutes les offres seront recontrôlées", e2)
+            state = {}
+    if not isinstance(state, dict):
         state = {}
     state.setdefault("checked", {})  # id d'offre -> verdict rendu
     state.setdefault("merchants", {})  # marchand -> méthodes de contrôle qui ont marché
@@ -1472,10 +1539,19 @@ BACKUP_EVERY = 3600  # copie de state.json, une fois par heure (audit du 02/10/2
 
 
 def save_state(path, state):
-    tmp = path + ".tmp"
-    with open(tmp, "w") as f:
-        json.dump(state, f, ensure_ascii=False, indent=1)
-    os.replace(tmp, path)
+    fd, tmp = tempfile.mkstemp(dir=os.path.dirname(os.path.abspath(path)), prefix=os.path.basename(path) + ".", suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w") as f:  # un fichier temporaire à soi : deux écritures simultanées ne se mélangent pas
+            json.dump(state, f, ensure_ascii=False, indent=1)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp, path)
+    except BaseException:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        raise
     backup = path + ".bak"
     try:
         if not os.path.exists(backup) or time.time() - os.path.getmtime(backup) >= BACKUP_EVERY:
@@ -1530,6 +1606,7 @@ def apply_recheck(entry, label, rank, product, page_url, offer, res, notify, sta
     VÉRIFIABLE) ne change rien au verdict : un OK vérifié reste OK (G2A, The Witcher Trilogy Pack, 02/10/2026 :
     « Access Denied » au recontrôle, alors que la page avait été lue le 30/09)."""
     was = entry.get("verdict")
+    entry.pop("removed_at", None)  # revenue sur sa page : ce recontrôle-ci la juge
     before = offer_facts(entry.get("url"), entry.get("region"), entry.get("region_filter"), entry.get("platform"), entry.get("edition"))
     after = offer_facts(res.get("url") or entry.get("url"), offer.get("region"), offer.get("region_filter"), offer.get("platform"),
                         offer.get("edition"))
@@ -1538,7 +1615,8 @@ def apply_recheck(entry, label, rank, product, page_url, offer, res, notify, sta
         entry["seen"] = now
         outcome["unknown"].append((entry, (res.get("reasons") or ["recontrôle sans conclusion"])[0]))
         return
-    changed = [name for name, a, b in zip(("URL", "région", "plateforme", "édition"), before, after) if a and b and a != b]
+    names = ("URL", "région", "région", "plateforme", "édition")  # région : son nom, et son nom de filtre, chacun au sien
+    changed = list(dict.fromkeys(name for name, a, b in zip(names, before, after) if a and b and a != b))
     changed += seen_changes(entry, res)
     entry.update(reasons=res["reasons"], notes=res["notes"], method=res["method"], url=res["url"] or entry.get("url"),
                  edition_rank=offer.get("edition_rank"), page_first=offer.get("page_first", False), seen=now,
@@ -1546,7 +1624,11 @@ def apply_recheck(entry, label, rank, product, page_url, offer, res, notify, sta
                  platform=offer["platform"], price=offer["price"], evidence=res.get("evidence"))
     outcome["checked"] += 1
     if res["verdict"] == "OK":
-        if was in REPORTED:
+        if was in ("À VÉRIFIER", "NON VÉRIFIABLE"):  # elle n'avait pas pu être vérifiée : vérifiée OK, ni réparée ni levée
+            entry.update(fixed_at=stamp, fixed_kind="verified", fixed_from=was, verdict="OK",
+                         fixed_how="vérifiée OK au recontrôle" + (" (l'offre a changé : %s)" % ", ".join(changed) if changed else ""))
+            outcome["verified"].append(entry)
+        elif was in REPORTED:
             if changed:  # l'offre a changé chez AllKeyShop ou chez le marchand : une vraie réparation
                 entry.update(fixed_at=stamp, fixed_kind="repaired", fixed_how="recontrôle OK, l'offre a changé (%s)" % ", ".join(changed),
                              fixed_from=was, verdict="OK")
@@ -1564,7 +1646,7 @@ def apply_recheck(entry, label, rank, product, page_url, offer, res, notify, sta
         outcome["still"].append(entry)
         alert = res["verdict"] == "SUSPECT" and was != "SUSPECT"  # une offre notée devient une erreur avérée
     else:  # était OK (ou réparée) : nouvelle erreur
-        entry.update(at=stamp, fixed_at=None, fixed_how=None, fixed_from=None)
+        entry.update(at=stamp, fixed_at=None, fixed_how=None, fixed_from=None, fixed_kind=None, still_wrong_at=None)
         outcome["new"].append(entry)
         alert = res["verdict"] not in NOT_SENT
     if alert:
@@ -1588,16 +1670,17 @@ def seen_changes(entry, res):
     changes = []
     if "served" in new and (old.get("served") or "") != (new.get("served") or ""):
         changes.append("fiche servie")
-    if old.get("page") and new.get("page") and old["page"] != new["page"]:
+    if old.get("page") and new.get("page") and old["page"] != new["page"] and old.get("via") == new.get("via"):
         changes.append("page marchand")
     return changes
 
 
 def offer_facts(url, region, region_filter, platform, edition):
     """Ce qui identifie une offre pour dire si elle a changé entre deux contrôles : chemin de l'URL marchand (sans les
-    paramètres de suivi), région, plateforme, édition."""
+    paramètres de suivi), région (son nom et son nom de filtre, comparés chacun au sien : une entrée ancienne n'a pas
+    de nom de filtre), plateforme, édition."""
     path = norm(url_text(unwrap_affiliate(url))) if url else ""
-    return (path, norm(region_filter or region or ""), norm(platform or ""), norm(edition or ""))
+    return (path, norm(region or ""), norm(region_filter or ""), norm(platform or ""), norm(edition or ""))
 
 
 def recheck_flagged(label, rank, product, page_url, trans, state, notify, checker, stamp, now, outcome, skip=()):
@@ -1608,19 +1691,32 @@ def recheck_flagged(label, rank, product, page_url, trans, state, notify, checke
     if not flagged:
         return
     on_page = {str(o["id"]): o for o in page_offers(trans, None)}
+    listed = {str(p.get("id")) for p in trans.get("prices") or []}
     page_dlc = is_dlc_page(trans, product)
     for key, entry in flagged.items():
+        check_stop()
+        if merchant_config("", entry.get("merchant")).get("skip"):  # marchand ignoré par sa config (Amazon)
+            state["checked"].pop(key, None)
+            continue
         offer = on_page.get(key)
         if offer is None:
-            entry.update(fixed_at=stamp, fixed_kind="repaired", fixed_how="offre retirée de la page", fixed_from=entry["verdict"],
-                         verdict="OK", seen=now, last_recheck=stamp)
+            if key in listed or not listed:
+                # encore sur la page, mais « sans prix » (0.02) ou hors vente, ou page servie sans offres : pas une
+                # réparation (audit du 02/10/2026) ; le verdict reste, l'offre sera recontrôlée en revenant en vente
+                outcome["unknown"].append((entry, "offre momentanément sans prix sur la page" if listed else "page servie sans offres"))
+                continue
+            # retirée de la page : réparée, et recontrôlée tout de suite si elle revient (removed_at)
+            entry.update(fixed_at=stamp, fixed_kind="repaired", fixed_how=REMOVED_HOW, fixed_from=entry["verdict"],
+                         verdict="OK", seen=now, last_recheck=stamp, removed_at=stamp)
             outcome["removed"].append(entry)
             continue
         offer["page_dlc"] = page_dlc
         try:
             res = checker(product, offer)
-        except CheckError as e:
-            outcome["unknown"].append((entry, str(e)))
+        except Exception as e:
+            if not isinstance(e, CheckError):
+                log.exception("%s / %s : %s (%s) : erreur imprévue", product, offer["edition"], offer["merchantName"], key)
+            outcome["unknown"].append((entry, "contrôle raté : %s" % e))
             continue
         if res["verdict"] == "À VÉRIFIER":
             res = dict(res, verdict=unverifiable_verdict(offer, label, page_url, res.get("unverifiable", "first-price")))
@@ -1634,24 +1730,29 @@ def format_recheck(label, by, outcome, full=False):
     lines = ["🔁 **%s** · %s%s · %d offre(s) recontrôlée(s)" % (
         what, label, " (demandé depuis l'admin par %s)" % by if by else "", outcome["checked"])]
     item = lambda e: "%s · %s · %s" % (e.get("product"), e.get("edition"), e.get("merchant"))
-    fixed = ["%s — %s" % (item(e), e.get("fixed_how")) for e in outcome["removed"] + outcome["fixed"]]
-    if fixed:
-        lines.append("✅ Réparées (%d) : %s%s" % (len(fixed), " ; ".join(fixed[:15]), " ; …" if len(fixed) > 15 else ""))
-    rules = [item(e) for e in outcome.get("rules", [])]
-    if rules:
-        lines.append("🧹 Anciens faux positifs levés par les règles, rien n'a changé (%d) : %s%s" % (
-            len(rules), " ; ".join(rules[:10]), " ; …" if len(rules) > 10 else ""))
+    # le plus important d'abord : le message est coupé à 1 900 caractères (limite Discord)
     new = ["%s (%s)" % (item(e), (e.get("reasons") or ["?"])[0][:90]) for e in outcome["new"]]
     if new:
         lines.append("🆕 Nouvelles erreurs (%d) : %s%s" % (len(new), " ; ".join(new[:15]), " ; …" if len(new) > 15 else ""))
     still = ["%s (%s)" % (item(e), (e.get("reasons") or ["?"])[0][:90]) for e in outcome["still"]]
     if still:
         lines.append("🔴 Toujours en erreur (%d) : %s%s" % (len(still), " ; ".join(still[:15]), " ; …" if len(still) > 15 else ""))
+    fixed = ["%s — %s" % (item(e), e.get("fixed_how")) for e in outcome["removed"] + outcome["fixed"]]
+    if fixed:
+        lines.append("✅ Réparées (%d) : %s%s" % (len(fixed), " ; ".join(fixed[:15]), " ; …" if len(fixed) > 15 else ""))
+    verified = [item(e) for e in outcome.get("verified", [])]
+    if verified:
+        lines.append("🔎 Vérifiées OK, elles n'avaient pas pu être vérifiées (%d) : %s%s" % (
+            len(verified), " ; ".join(verified[:10]), " ; …" if len(verified) > 10 else ""))
+    rules = [item(e) for e in outcome.get("rules", [])]
+    if rules:
+        lines.append("🧹 Anciens faux positifs levés par les règles, rien n'a changé (%d) : %s%s" % (
+            len(rules), " ; ".join(rules[:10]), " ; …" if len(rules) > 10 else ""))
     if outcome["unknown"]:
         unknown = ["%s (%s)" % (item(e), why[:70]) for e, why in outcome["unknown"]]
         lines.append("⚪ Recontrôle sans conclusion, verdict inchangé (%d) : %s%s" % (
             len(unknown), " ; ".join(unknown[:5]), " ; …" if len(unknown) > 5 else ""))
-    if not (fixed or rules or new or still or outcome["unknown"]):
+    if not (fixed or verified or rules or new or still or outcome["unknown"]):
         lines.append("Rien à signaler : aucune offre réparée ni en erreur.")
     return "\n".join(lines)[:1900]
 
@@ -1659,10 +1760,27 @@ def format_recheck(label, by, outcome, full=False):
 def recap_due(requested, outcome):
     """Le récapitulatif du recontrôle part toujours après un passage demandé ; après un passage automatique,
     seulement s'il y a du nouveau : une offre réparée, retirée, levée par une règle, ou une nouvelle erreur."""
-    return bool(requested or outcome["fixed"] or outcome["removed"] or outcome["rules"] or outcome["new"])
+    return bool(requested or outcome["fixed"] or outcome["removed"] or outcome["rules"] or outcome.get("verified")
+                or outcome["new"])
 
 
-def run_cycle(targets, notify, state, checker=None, save=None, per_edition=1, between=None, progress=None, recheck=False):
+class Stop(Exception):
+    """Arrêt demandé (SIGTERM) : le passage s'interrompt entre deux offres, l'état est sauvegardé."""
+
+
+STOP = {"asked": False}  # posé par le gestionnaire de SIGTERM (main)
+
+
+def check_stop():
+    if STOP["asked"]:
+        raise Stop()
+
+
+REMOVED_HOW = "offre retirée de la page"
+
+
+def run_cycle(targets, notify, state, checker=None, save=None, per_edition=1, between=None, progress=None, recheck=False,
+              resume_after=None):
     """Lit chaque page suivie et contrôle toute offre retenue (`per_edition` : voir page_offers) pas encore
     contrôlée. `recheck` : "all" recontrôle aussi toutes les offres retenues déjà vues (passage demandé depuis
     l'admin : Romain, 02/10/2026, « toutes les offres concernées par le top check, pareil pour l'autre check ») ;
@@ -1671,29 +1789,50 @@ def run_cycle(targets, notify, state, checker=None, save=None, per_edition=1, be
     `save()` est appelé toutes les SAVE_EVERY pages : un long passage interrompu ne repart pas de zéro.
     `between()` est appelé entre deux pages : un mode urgent (les top games) y passe pendant un long passage.
     `progress(count, total)` est appelé à chaque page : l'avancement publié pour l'admin.
+    `resume_after` : reprise d'un recontrôle complet interrompu (redémarrage) : les offres déjà recontrôlées depuis
+    cette date ne le sont pas une seconde fois.
     """
     checker = checker or check_offer
+    outcome = {"checked": 0, "fixed": [], "removed": [], "rules": [], "verified": [], "still": [], "new": [], "unknown": [],
+               "first_checked": 0}
+    # entrées d'avant le 01/10/2026 sans leur page (TORO 2, F1 25, Dawnwalker…) : la page de leur produit, sinon le
+    # recontrôle des offres signalées ne les voit jamais (audit du 02/10/2026)
+    by_product = {}
+    for label, rank, product, page_url in targets:
+        by_product.setdefault(product, (label, rank, page_url))
+    for entry in state["checked"].values():
+        if not entry.get("page") and entry.get("product") in by_product:
+            label, rank, page_url = by_product[entry["product"]]
+            entry.update(page=page_url, list=entry.get("list") or label, rank=entry.get("rank") or rank)
     now = time.time()
-    stamp = time.strftime("%Y-%m-%d %H:%M", time.localtime(now))
-    outcome = {"checked": 0, "fixed": [], "removed": [], "rules": [], "still": [], "new": [], "unknown": []}
     for count, (label, rank, product, page_url) in enumerate(targets, 1):
+        check_stop()
         if between and count > 1:
             between()
         if progress:
             progress(count, len(targets))
         if save and count % SAVE_EVERY == 0:
             save()
+        now = time.time()  # l'heure de la page : un long passage ne date pas tout de son début
+        stamp = time.strftime("%Y-%m-%d %H:%M", time.localtime(now))
         try:
             _, _, page_html = http_get(page_url, AKS_UA)
             trans = parse_game_page(page_html)
+            offers = page_offers(trans, per_edition)
+            page_dlc = is_dlc_page(trans, product)
         except Exception as e:
             log.warning("%s : %s", product, e)
             continue
         finally:
             time.sleep(PAGE_DELAY)
-        page_dlc = is_dlc_page(trans, product)
         handled = set()
-        for offer in page_offers(trans, per_edition):
+        alerted = [False]
+
+        def page_notify(msg):
+            notify(msg)
+            alerted[0] = True
+        for offer in offers:
+            check_stop()
             offer["page_dlc"] = page_dlc
             key = str(offer["id"])
             if merchant_config("", offer["merchantName"]).get("skip"):
@@ -1701,23 +1840,32 @@ def run_cycle(targets, notify, state, checker=None, save=None, per_edition=1, be
                 continue
             entry = state["checked"].get(key)
             handled.add(key)  # une offre retenue est traitée ici, une fois ; recheck_flagged ne voit que les autres
-            # une offre déjà vue est recontrôlée sur un passage complet ("all"), ou si elle est signalée ("flagged") ;
-            # jamais si l'admin l'a jugée faux positif
+            if entry is not None and not entry.get("page"):  # entrée ancienne sans sa page : jamais recontrôlée sinon
+                entry.update(page=page_url, list=label, rank=rank)
+            # une offre déjà vue est recontrôlée sur un passage complet ("all"), si elle est signalée ("flagged"), ou si
+            # elle revient sur sa page après en avoir été retirée ; jamais si l'admin l'a jugée faux positif
             again = entry is not None and (entry.get("decision") or {}).get("decision") != "faux" and (
-                recheck == "all" or (recheck == "flagged" and entry.get("verdict") in REPORTED and not entry.get("fixed_at")))
+                entry.get("removed_at")
+                or (recheck == "all" and not (resume_after and (entry.get("last_recheck") or "") >= resume_after))
+                or (recheck == "flagged" and entry.get("verdict") in REPORTED and not entry.get("fixed_at")))
             if entry is not None and not again:
                 entry["seen"] = now
                 policy = entry.get("unverifiable") or merchant_config("", entry.get("merchant")).get("unverifiable", "first-price")
                 if (entry.get("verdict") == "NON VÉRIFIABLE" and policy == "first-price"
+                        and (entry.get("decision") or {}).get("decision") != "faux"  # jugée faux positif : jamais alertée
                         and unverifiable_verdict(offer, label, page_url) == "À VÉRIFIER"):
-                    promote_unverifiable(entry, label, rank, product, page_url, offer, notify)
+                    promote_unverifiable(entry, label, rank, product, page_url, offer, page_notify)
                 continue
             try:
                 res = checker(product, offer)
-            except CheckError as e:
+            except Exception as e:  # CheckError, ou toute erreur imprévue : l'offre est retentée, le passage continue
+                if not isinstance(e, CheckError):
+                    log.exception("%s / %s : %s (%s) : erreur imprévue", product, offer["edition"], offer["merchantName"], key)
                 FAILURES[key] = FAILURES.get(key, 0) + 1
                 log.warning("%s / %s : %s (%s) : %s", product, offer["edition"], offer["merchantName"], key, e)
                 if FAILURES[key] < MAX_CHECK_FAILURES:
+                    if entry is not None:
+                        outcome["unknown"].append((entry, "contrôle raté : %s" % e))
                     continue
                 res = {"verdict": "À VÉRIFIER", "url": None, "method": "aucune", "notes": [],
                        "reasons": ["contrôle impossible : %s" % e]}
@@ -1725,16 +1873,17 @@ def run_cycle(targets, notify, state, checker=None, save=None, per_edition=1, be
             if res["verdict"] == "À VÉRIFIER":
                 res = dict(res, verdict=unverifiable_verdict(offer, label, page_url, res.get("unverifiable", "first-price")))
             if entry is not None:  # recontrôle d'une offre déjà vue
-                apply_recheck(entry, label, rank, product, page_url, offer, res, notify, stamp, now, outcome)
+                apply_recheck(entry, label, rank, product, page_url, offer, res, page_notify, stamp, now, outcome)
                 continue
             msg = format_alert(label, rank, product, page_url, offer, res)
             log.info("%s", msg.replace("\n", " | "))
             if res["verdict"] not in NOT_SENT or (res["verdict"] == "OK" and NOTIFY_OK):
                 try:
-                    notify(msg)
+                    page_notify(msg)
                 except Exception as e:
                     log.error("Envoi Discord impossible, nouvel essai au prochain passage : %s", e)
                     continue
+            outcome["first_checked"] += 1
             state["checked"][key] = {
                 "verdict": res["verdict"], "reasons": res["reasons"], "notes": res["notes"], "product": product,
                 "edition": offer["edition"], "region": offer["region"], "region_filter": offer.get("region_filter", ""),
@@ -1750,7 +1899,9 @@ def run_cycle(targets, notify, state, checker=None, save=None, per_edition=1, be
                 m["methods"][res["method"]] = m["methods"].get(res["method"], 0) + 1
                 m.update(url=res["url"], at=stamp)
         if recheck:
-            recheck_flagged(label, rank, product, page_url, trans, state, notify, checker, stamp, now, outcome, skip=handled)
+            recheck_flagged(label, rank, product, page_url, trans, state, page_notify, checker, stamp, now, outcome, skip=handled)
+        if alerted[0] and save:  # une alerte partie : l'état est écrit tout de suite (un redémarrage ne la renverra pas)
+            save()
     prune_state(state, now)
     return outcome
 
@@ -1802,12 +1953,19 @@ def write_shared(path, payload):
     with os.fdopen(fd, "w", encoding="utf-8") as f:
         os.fchmod(f.fileno(), 0o644)
         json.dump(payload, f, ensure_ascii=False, indent=1)
+        f.flush()
+        os.fsync(f.fileno())
     os.replace(tmp, path)
 
 
 def open_shared(path):
-    """Lit un fichier du dossier partagé sans suivre de lien symbolique (OSError sinon)."""
-    return os.fdopen(os.open(path, os.O_RDONLY | os.O_NOFOLLOW), encoding="utf-8")
+    """Lit un fichier du dossier partagé : jamais à travers un lien symbolique, jamais un tube nommé ou un périphérique
+    (il bloquerait la boucle), un octet non UTF-8 remplacé plutôt que fatal (OSError sinon)."""
+    fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    if not stat.S_ISREG(os.fstat(fd).st_mode):
+        os.close(fd)
+        raise OSError("%s : pas un fichier ordinaire" % path)
+    return os.fdopen(fd, encoding="utf-8", errors="replace")
 
 
 def write_status(directory, status):
