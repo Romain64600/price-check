@@ -17,3 +17,13 @@
 "The Legend of Zelda Tears of the Kingdom" = ["The Legend of Zelda Breath of the Wild 2"]
 # Le jeu s'appelle désormais « Crimson Desert Enhanced » (PS Store, Kinguin « crimson-desert-enhanced-… », 02/10/2026)
 "Crimson Desert" = ["Crimson Desert Enhanced"]
+# Instant Gaming vend l'édition « Hatred Edition » de Diablo 4 Lord of Hatred sous le nom « Diablo IV: Age of Hatred
+# Collection » (étude des 80 reports, 30/09/2026 ; offre 139777205). Depuis le 02/10/2026, un mot du nom remplacé par un
+# autre (« Age » pour « Lord ») n'est plus toléré : l'alias garde ce cas OK. À confirmer par Romain.
+"Diablo 4 Lord of Hatred" = ["Diablo IV Age of Hatred"]
+# Gamingdragons écrit « dynasty-warriors-3-complete-edition » pour le remaster (le Dynasty Warriors 3 d'origine n'a jamais
+# été vendu en clé PC) ; depuis le 02/10/2026, « Remastered » compte dans le nom (l'original n'est pas le remaster).
+"Dynasty Warriors 3 Complete Edition Remastered" = ["Dynasty Warriors 3 Complete Edition"]
+# Resident Evil Requiem est le 9e épisode : Gamingdragons écrit « resident-evil-requiem-9 » (un numéro après le nom ne
+# passe plus depuis le 02/10/2026 : c'est d'ordinaire une suite)
+"Resident Evil Requiem" = ["Resident Evil Requiem 9", "Resident Evil 9 Requiem"]

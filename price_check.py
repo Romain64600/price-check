@@ -529,6 +529,7 @@ def region_text(url, cfg):
 def norm(text):
     """« EA SPORTS FC 27 » -> « ea-sports-fc-27 » ; « S.T.A.L.K.E.R. 2 » -> « stalker-2 »."""
     text = re.sub(r"[\u2122\u00ae\u00a9\u2120]", " ", text)  # ™ ® © ℠ (NFKD ferait de ™ les lettres « TM »)
+    text = text.replace("'", "")  # « Marvel's » -> « marvels », comme « Marvel’s » et les URL (audit du 02/10/2026)
     text = unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode()
     text = re.sub(r"(?<=\d)\.(?=\d)", " ", text)  # « HD 1.5+2.5 » -> « 1-5-2-5 », comme les URL (02/10/2026)
     text = re.sub(r"\b(\w)\.", r"\1", text)  # sigle pointé : S.T.A.L.K.E.R. -> STALKER, A.O.T. -> AOT
@@ -547,7 +548,21 @@ def url_text(url):
     (rejeu du 02/10/2026) : le ™ collé au mot (Eneba « pokemontm ») est retiré, un sigle écrit lettre par
     lettre (GAMIVO « s-t-a-l-k-e-r-2 ») est recollé."""
     segments = [s for s in urllib.parse.urlparse(url).path.split("/") if s and not LOCALE_SEGMENT_RE.match(s)]
-    return " ".join(repair_slug(urllib.parse.unquote(s)) for s in segments)
+    return " ".join(repair_slug(PAGE_EXTENSION_RE.sub("", unquote_all(s))) for s in segments)
+
+
+PAGE_EXTENSION_RE = re.compile(r"\.(?:html?|php|aspx?)$", re.IGNORECASE)  # « Planet-Zoo-2.html » : pas de « 2html »
+
+
+def unquote_all(segment):
+    """Décode jusqu'à stabilité : CJS CDKeys encode deux fois (« E%252dDay » -> « E%2dDay » -> « E-Day ») ; audit du
+    02/10/2026, le nom n'était reconnu que grâce à la tolérance d'un mot manquant."""
+    for _ in range(3):
+        decoded = urllib.parse.unquote(segment)
+        if decoded == segment:
+            break
+        segment = decoded
+    return segment
 
 
 def repair_slug(segment):
@@ -606,13 +621,19 @@ def name_variants(product):
             if norm(variant) != norm(name) and variant not in names:
                 names.append(variant)
     for name in list(names):
-        # sigle des premiers mots : « Attack on Titan 3 » -> « AOT 3 » (PS Store : « A.O.T. 3 »)
+        # sigle des premiers mots : « Attack on Titan 3 » -> « AOT 3 » (PS Store : « A.O.T. 3 »). Toujours suivi du
+        # reste du nom : un sigle du nom entier (« ron », « ace », « eft ») se trouvait dans n'importe quelle URL
+        # (« hearts-of-iron » sur la page Ready or Not), et jamais sur un nom à suffixe de plateforme (« mns »,
+        # « vxs ») : audit de la détection du 02/10/2026
         words = norm(name).split("-")
+        if has_platform_suffix(name) or norm(name).endswith("-switch-ii"):
+            continue
         run = 0
         while run < len(words) and words[run].isalpha() and words[run] not in ARABIC:  # pas de chiffre romain
             run += 1
         for k in range(3, run + 1):
-            names.append(" ".join(["".join(w[0] for w in words[:k])] + words[k:]))
+            if words[k:]:
+                names.append(" ".join(["".join(w[0] for w in words[:k])] + words[k:]))
         # sigle de tous les mots après le premier : « Onimusha Way of the Sword » -> « Onimusha WotS » (PS Store,
         # 01/10/2026). Deux mots au plus, donc jamais de mot toléré absent ; jamais sur un nom à suffixe de
         # plateforme, ni sur un mot distinctif (« Premium Upgrade Bundle » ne devient pas « pub »)
@@ -637,30 +658,112 @@ def has_word(word, tokens):
     return word in tokens or (len(word) >= 6 and not word.isdigit() and any(len(t) >= 5 and near(word, t) for t in tokens))
 
 
-def name_match(names, normed):
-    """« exact » si un des noms est dans le texte, « partial » si ses mots significatifs y sont.
+# Audit de la détection du 02/10/2026 (rejeu des 3 614 URL en mémoire contre les 495 pages suivies : 824 paires
+# « page A, vraie URL du produit B » passaient le contrôle du nom ; 80 après ces règles) :
+REMASTER_WORDS = {"remastered", "remaster", "remake", "hd"}  # du nom, ils comptent : l'original n'est pas le remaster
+PLATFORM_HEADS = {"switch", "playstation", "ps", "windows", "win", "xbox"}  # « switch-2 » n'est pas un 2e épisode
+NOT_EPISODE_AFTER = {"year", "years", "month", "months", "pack", "packs", "player", "players", "hours", "hour", "day", "days"}
+# mots qui peuvent remplir la place d'un mot absent du nom sans nommer un autre produit (service, plateforme, édition, zone)
+FILLER_WORDS = {"pre", "order", "purchase", "incl", "early", "access", "only", "language", "english", "standard", "version",
+                "full", "instant", "delivery", "activation", "region", "free", "new", "official", "the", "of", "a", "an",
+                "and", "for", "with", "playstation", "nintendo", "switch", "xbox", "series", "one", "pc", "mac", "windows",
+                "win", "steam", "key", "cd", "eshop", "psn", "download", "digital", "code", "global", "europe", "eu", "uk",
+                "us", "na", "row", "ww", "emea", "html", "htm", "php", "aspx", "product", "products", "category", "game",
+                "games", "buy", "cheap", "item", "p"}
 
-    Sur un nom long (4 mots significatifs ou plus), un seul mot peut manquer, sauf un nombre :
-    Amazon tronque (« Zelda-Kingdom-Collector »), mais « Modern Warfare 3 » n'est pas « Modern Warfare 4 ».
+
+def is_episode_marker(tokens, i, product_years):
+    """Un numéro d'épisode (2 à 30, ii à xx) ou une année autre que celle du nom, à la position i du texte : ce qui
+    suit le nom et en fait un autre jeu (« titanfall-2 », « red-dead-redemption-2 », « football-manager-2023 »)."""
+    token = tokens[i]
+    if i + 1 < len(tokens) and tokens[i + 1] in NOT_EPISODE_AFTER:  # « 1-year-anniversary », « 4-pack »
+        return False
+    if token.isdigit():
+        value = int(token)
+        if 1980 <= value <= 2035:
+            return bool(product_years) and token not in product_years
+        if value == 1 and i == len(tokens) - 1:
+            return False  # suffixe de dédoublonnage (GAMIVO « stardew-valley-1 »)
+        return 1 <= value <= 30
+    return token in ARABIC and token not in ("i", "x")
+
+
+def name_core_words(names):
+    """Les mots du nom, sans son suffixe de plateforme (« xbox », « series » ne sont pas le nom)."""
+    out = set()
+    for name in names:
+        words = norm(name).split("-")
+        for suffix in ("nintendo switch ii", "switch ii") + PLATFORM_SUFFIXES:
+            s = norm(suffix).split("-")
+            if len(words) > len(s) and words[-len(s):] == s:
+                words = words[:-len(s)]
+                break
+        out |= set(words)
+    return out
+
+
+def exact_in(c, tokens, core, product_years):
+    """Le nom compacté `c` dans le texte, aligné sur des mots (début et fin), et pas suivi d'un numéro d'épisode ou d'une
+    autre année : « rust » n'est pas dans « rusty-lake », « titanfall » n'est pas « titanfall-2 »."""
+    starts, ends, pos = set(), {}, 0
+    for i, t in enumerate(tokens):
+        starts.add(pos)
+        pos += len(t)
+        ends[pos] = i
+    text = "".join(tokens)
+    j = text.find(c)
+    while j != -1:
+        if j in starts and j + len(c) in ends:
+            nxt = ends[j + len(c)] + 1
+            if not (nxt < len(tokens) and is_episode_marker(tokens, nxt, product_years) and tokens[nxt] not in core):
+                return True
+        j = text.find(c, j + 1)
+    return False
+
+
+def name_match(names, normed, extra_ok=()):
+    """« exact » si un des noms est dans le texte (aligné sur des mots), « partial » si ses mots significatifs y sont.
+
+    Sur un nom long (4 mots significatifs ou plus), un seul mot peut manquer, sauf un nombre, sauf le dernier (c'est
+    lui qui distingue le nouveau jeu : « Super Mario Party Jamboree », « Jedi Survivor »), et sauf si un autre mot
+    occupe sa place (« Pokemon Violet » pour « Pokemon Scarlet ») : un vieux Mario sur la page du dernier Mario, c'est
+    l'erreur à ne jamais laisser passer. `extra_ok` : les mots de l'édition de l'offre, qui peuvent occuper la place.
     """
-    compact_text = normed.replace("-", "")
+    tokens_list = [t for t in normed.split("-") if t]
+    product_tokens = {w for n in names for w in norm(n).split("-")}
+    product_years = {t for t in product_tokens if t.isdigit() and 1980 <= int(t) <= 2035}
+    core = name_core_words(names)
     for name in names:
         c = compact(name)
-        if c and c in compact_text:
+        if c and exact_in(c, tokens_list, core, product_years):
             return "exact"
-    tokens = set(normed.split("-"))
+    # un numéro d'épisode ou une année qui suit un mot du nom, et que le nom n'a pas : un autre jeu de la série
+    allowed = core | {y[2:] for y in product_years}
+    if any(t not in allowed and i > 0 and tokens_list[i - 1] in core and is_episode_marker(tokens_list, i, product_years)
+           for i, t in enumerate(tokens_list)):
+        return None
+    tokens, after_platform = set(), False  # les chiffres d'une plateforme (« switch-2 », « playstation-4-5 ») ne comptent pas
+    for t in tokens_list:
+        if not (t.isdigit() and after_platform):
+            tokens.add(t)
+        after_platform = t in PLATFORM_HEADS or (after_platform and t.isdigit())
     for name in names:
-        significant = [w for w in norm(name).split("-") if w and w not in SOFT_WORDS]
+        significant = [w for w in norm(name).split("-") if w and (w not in SOFT_WORDS or w in REMASTER_WORDS)]
         missing = [w for w in significant if w not in tokens]
         if len(significant) >= 3 and len(missing) == 1 and has_word(missing[0], tokens):
             missing = []  # un seul mot à une lettre près, sur un nom d'au moins 3 mots (« pokmon ») ; pas « Portal 2 » / « mortal »
         if significant and not missing:
             return "partial"
         if (len(significant) >= 4 and len(missing) == 1 and not (missing[0].isdigit() or missing[0] in ARABIC)
-                and missing[0] not in NEVER_MISSING and not has_platform_suffix(name)):
+                and missing[0] not in NEVER_MISSING and not has_platform_suffix(name) and missing[0] != significant[-1]):
             # la tolérance vaut pour le nom sans « Nintendo Switch » : sinon « Pokémon Bouclier »
             # passerait pour « Pokemon Sword Nintendo Switch » (étude du 30/09/2026)
-            return "partial"
+            gone = missing[0]
+            others = [t for t in tokens_list if t not in product_tokens and t not in FILLER_WORDS and t not in LABEL_NOISE
+                      and t not in extra_ok and len(t) >= 3 and not any(ch.isdigit() for ch in t) and gone not in t
+                      and t not in EDITION_WORDS and t not in GENERIC_EDITION_WORDS]
+            if not others:  # le mot est absent, pas remplacé par un autre
+                return "partial"
     return None
 
 
@@ -704,13 +807,22 @@ def has_platform_suffix(name):
 
 
 def title_match(names, text):
-    """Un titre de page court, entièrement contenu dans le nom AllKeyShop (« UFC 5 » pour
-    « EA Sports UFC 5 PS5 »), avec au moins deux mots significatifs : « partial »."""
-    product_tokens = {w for name in names for w in norm(name).split("-")}
+    """Un titre de page court qui est la FIN du nom AllKeyShop, sans son suffixe de plateforme (« UFC 5 » pour « EA Sports
+    UFC 5 PS5 », « Wings of Theve »), avec au moins deux mots significatifs : « partial ». Jamais un début du nom : « God
+    of War » n'est pas « God of War Ragnarok », « Black Ops » n'est pas « Black Ops 7 » (audit du 02/10/2026)."""
     for segment in re.split(r"\s[|\-\u2013\u2014]\s|\|", text):
-        tokens = [w for w in norm(segment).split("-") if w and w not in SOFT_WORDS]
-        if len(tokens) >= 2 and all(w in product_tokens for w in tokens):
-            return "partial"
+        seg = [w for w in norm(segment).split("-") if w and w not in SOFT_WORDS]
+        if len(seg) < 2:
+            continue
+        for name in names:
+            words = [w for w in norm(name).split("-") if w and w not in SOFT_WORDS]
+            for suffix in PLATFORM_SUFFIXES:
+                s = norm(suffix).split("-")
+                if len(words) > len(s) and words[-len(s):] == s:
+                    words = words[:-len(s)]
+                    break
+            if len(seg) < len(words) and words[-len(seg):] == seg:
+                return "partial"
     return None
 
 
@@ -924,7 +1036,7 @@ def analyze(product, offer, text, source, region=None):
     """
     names = name_variants(product)
     normed = norm(text)
-    match = name_match(names, normed)
+    match = name_match(names, normed, extra_ok=set(norm(offer.get("edition") or "").split("-")))
     # Le reste s'analyse sans les mots du nom du produit (« Complete Edition Remastered »...)
     product_words = {w for name in names for w in norm(name).split("-")}
     words = "-".join(drop_language_lists([w for w in normed.split("-") if w and w not in product_words]))

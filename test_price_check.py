@@ -282,7 +282,10 @@ class TestAnalyzeSuspects(unittest.TestCase):
     def test_platform_suffix_of_the_product_name(self):
         # PS Store US, 30/09/2026 : « GTA 6 PS5 », URL EP1004-PPSA01547_00-GTAVIULTIMATE001, titre sans « PS5 »
         url = "https://store.playstation.com/en-us/product/EP1004-PPSA01547_00-GTAVIULTIMATE001?partner=allkeyshopcom"
-        self.assertEqual(self.reasons("GTA 6 PS5", url, edition="Ultimate", region="PS5", platform="playstation-store"), [])
+        # depuis l'audit du 02/10/2026, le nom n'est plus cherché au milieu d'un mot : « gtavi » dans « gtaviultimate001 »
+        # ne prouve rien (« ron » était trouvé dans « iron ») ; au PS Store, c'est le JSON de la page qui décide
+        self.assertEqual(self.reasons("GTA 6 PS5", url, edition="Ultimate", region="PS5", platform="playstation-store"),
+                         ["nom du produit introuvable (URL)"])
         res = pc.analyze("GTA 6 PS5", offer(edition="Ultimate", region="PS5", platform="playstation-store"),
                          "Grand Theft Auto VI Ultimate Edition | PlayStation Store", "titre de la page")
         self.assertEqual((res["match"], res["reasons"]), ("exact", []))
