@@ -209,10 +209,24 @@ class NoRedirect(urllib.request.HTTPRedirectHandler):
         return None
 
 
+def request_headers(ua):
+    """En-têtes d'une requête. Chez les marchands (UA navigateur), le jeu complet qu'envoie Chrome : Akamai (Kinguin)
+    refuse une requête à l'Accept minimal (403) et répond 200, ou 301 vers la fiche servie, au jeu complet
+    (Romain, 02/10/2026 : « on a juste besoin de suivre les redirections »). Sur AllKeyShop : UA AKS/Staff, en-têtes simples."""
+    headers = {"User-Agent": ua, "Accept": "text/html,*/*;q=0.8", "Accept-Language": "en-GB,en;q=0.9"}
+    if ua == BROWSER_UA:
+        major = (re.search(r"Chrome/(\d+)", ua) or [None, "150"])[1]
+        headers.update({
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+            "Accept-Encoding": "identity", "Upgrade-Insecure-Requests": "1", "Sec-Fetch-Dest": "document",
+            "Sec-Fetch-Mode": "navigate", "Sec-Fetch-Site": "none", "Sec-Fetch-User": "?1",
+            "sec-ch-ua": '"Chromium";v="%s", "Not=A?Brand";v="8"' % major, "sec-ch-ua-mobile": "?0", "sec-ch-ua-platform": '"Linux"'})
+    return headers
+
+
 def http_get(url, ua, follow=True, timeout=30):
     """Renvoie (statut HTTP, en-tête Location, corps). Un statut d'erreur ne lève pas."""
-    req = urllib.request.Request(url, headers={
-        "User-Agent": ua, "Accept": "text/html,*/*;q=0.8", "Accept-Language": "en-GB,en;q=0.9"})
+    req = urllib.request.Request(url, headers=request_headers(ua))
     opener = urllib.request.build_opener() if follow else urllib.request.build_opener(NoRedirect)
     try:
         with opener.open(req, timeout=timeout) as resp:
@@ -1070,7 +1084,8 @@ def merchant_page_text(url, cfg):
     time.sleep(REQUEST_DELAY)
     if status == 200 and body:
         text = page_text_from_dom(body, url, page_cfg.get("parser"))
-        if text and not is_block_page(text):
+        # LDShop (option cochée) : le HTML servi en HTTP n'a pas les options, rendues en JavaScript : Chromium
+        if text and not is_block_page(text) and not (page_cfg.get("parser") == "selected-option" and "option choisie" not in text):
             return text, "page (HTTP)"
     if cfg.get("browser", True):
         text = page_title(url, page_cfg.get("parser"))
@@ -1117,10 +1132,26 @@ def page_canonical(url, cfg):
     return canonical_url(chromium_dom(url)) if cfg.get("browser", True) else None
 
 
-def moved(url, canonical):
-    """La page canonique est-elle une autre fiche que celle du lien (chemin différent) ?"""
-    path = lambda u: urllib.parse.urlparse(u).path.rstrip("/").lower()
-    return bool(canonical) and path(url) != path(urllib.parse.urljoin(url, canonical))
+def moved(url, served):
+    """La fiche servie (redirection ou URL canonique) est-elle une autre que celle du lien ? Même chemin aux segments
+    de langue près : Kinguin répond 301 de « /en/category/360568/… » vers « /category/360568/… », c'est la même fiche."""
+    if not served:
+        return False
+    return norm(url_text(url)) != norm(url_text(urllib.parse.urljoin(url, served)))
+
+
+def flag_out_of_stock(result, product, offer, served):
+    """Groupe Kinguin : le lien mène à une autre fiche. Alerte « en rupture, le prix reste dans le feed » (Romain,
+    02/10/2026) ; la région n'est plus reprochée quand la fiche servie, ce que l'acheteur obtient, correspond à
+    l'affichage (Stellaris, 01/10/2026)."""
+    if "zone" in result["kinds"]:
+        again = analyze(product, offer, url_text(served), "URL de la fiche servie")
+        if again["match"] and "zone" not in again["kinds"]:
+            kept = [(r, k) for r, k in zip(result["reasons"], result["kinds"]) if k != "zone"]
+            result["reasons"], result["kinds"] = [r for r, _ in kept], [k for _, k in kept]
+            result["notes"].append("région lue sur la fiche servie, qui correspond à l'affichage")
+    result["reasons"].append(out_of_stock_reason(served))
+    result["kinds"].append("stock")
 
 
 # ---- Contrôle d'une offre ----------------------------------------------------
@@ -1182,24 +1213,27 @@ def check_offer(product, offer):
             return {"verdict": "SUSPECT" if result["reasons"] else "OK", "url": url, "method": method,
                     "reasons": result["reasons"], "notes": result["notes"]}
 
-    if result["match"] is None:
-        # 1er repli : le marchand redirige peut-être vers l'URL complète (Instant Gaming « /en/4860-/ », Fanatical),
-        # ou d'un slug périmé vers la fiche actuelle : c'est l'URL finale qui compte, pas l'ancien nom du lien
+    location = None
+    if redirect_untrusted(cfg) or result["match"] is None:
+        # Une requête chez le marchand sans suivre la redirection. Groupe Kinguin : à CHAQUE offre, une redirection vers
+        # une autre fiche = la fiche du lien est en rupture, le prix reste dans le feed (Romain, 02/10/2026 : « on a juste
+        # besoin de suivre les redirections… si on voit une redirection vers une URL différente, on lance l'alerte »).
+        # Autre groupe : seulement quand l'URL ne nomme pas le produit (Instant Gaming « /en/4860-/ », Fanatical), ou en
+        # nomme un autre (slug périmé) : c'est l'URL finale qui compte.
         try:
             _, location, _ = http_get(url, BROWSER_UA, follow=False)
         except OSError:
             location = None
         time.sleep(REQUEST_DELAY)
-        if location:
-            url2 = unwrap_affiliate(urllib.parse.urljoin(url, location))
-            if redirect_untrusted(cfg):
-                if moved(url, url2):  # Romain, 02/10/2026 : « on aura quand même une alerte »
-                    result["reasons"].append(out_of_stock_reason(url2))
-                    result["kinds"].append("stock")
-            else:
-                result2 = analyze(product, offer, url_text(url2), "URL après redirection du marchand", region=region_text(url2, cfg))
-                if result2["match"] or result2.get("label"):  # la fiche finale nomme le produit, ou un autre
-                    result, method, url = result2, "URL après 301 marchand", url2
+    if location:
+        url2 = unwrap_affiliate(urllib.parse.urljoin(url, location))
+        if redirect_untrusted(cfg):
+            if moved(url, url2):
+                flag_out_of_stock(result, product, offer, url2)
+        elif result["match"] is None:
+            result2 = analyze(product, offer, url_text(url2), "URL après redirection du marchand", region=region_text(url2, cfg))
+            if result2["match"] or result2.get("label"):  # la fiche finale nomme le produit, ou un autre
+                result, method, url = result2, "URL après 301 marchand", url2
 
     if (result["match"] is None and result.get("label") and not (cfg.get("page") or {}).get("parser")
             and not cfg.get("localized") and not (cfg.get("product_name") or {}).get("hreflang")):
@@ -1247,22 +1281,12 @@ def check_offer(product, offer):
                 result["notes"].append("la page ne dit rien sur ce point : %s" % page_text[:120])
             result["reasons"] = [r for r, _ in kept]
             result["kinds"] = [k for _, k in kept]
-        if "zone" in result["kinds"] and redirect_untrusted(cfg):
-            # groupe Kinguin : la fiche du lien est en rupture, le marchand sert une autre fiche (URL canonique différente)
-            # alors que le prix reste dans le feed. Alerte « en rupture » (Romain, 02/10/2026 : « on aura quand même une
-            # alerte ») ; la région n'est plus reprochée si la fiche servie, ce que l'acheteur obtient, correspond à
-            # l'affichage (Stellaris « …-eu-… » sert la fiche globale affichée GLOBAL, 01/10/2026)
+        if "zone" in result["kinds"] and redirect_untrusted(cfg) and "stock" not in result["kinds"]:
+            # repli du groupe Kinguin quand la sonde n'a pas vu de redirection : la fiche servie a-t-elle une autre URL
+            # canonique que le lien ?
             canonical = page_canonical(url, cfg)
             if moved(url, canonical):
-                canonical = urllib.parse.urljoin(url, canonical)
-                again = analyze(product, offer, url_text(canonical), "URL canonique de la page")
-                if again["match"] and "zone" not in again["kinds"]:
-                    kept = [(r, k) for r, k in zip(result["reasons"], result["kinds"]) if k != "zone"]
-                    result["reasons"] = [r for r, _ in kept]
-                    result["kinds"] = [k for _, k in kept]
-                    result["notes"].append("région lue sur la fiche servie, qui correspond à l'affichage")
-                result["reasons"].append(out_of_stock_reason(canonical))
-                result["kinds"].append("stock")
+                flag_out_of_stock(result, product, offer, urllib.parse.urljoin(url, canonical))
 
     return {"verdict": "SUSPECT" if result["reasons"] else "OK", "url": url, "method": method,
             "reasons": result["reasons"], "notes": result["notes"]}

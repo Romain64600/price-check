@@ -756,9 +756,10 @@ class TestConfirmOnMerchantPage(unittest.TestCase):
             TestRedirection.KINGUIN.replace("/", "\\/"), url.replace("/", "\\/"))
 
     def run_check(self, product, o, merchant, merchant_html):
-        # 3e réponse : l'URL canonique, lue quand la config du marchand le demande (Kinguin, offre par défaut)
+        # l'offre par défaut est chez Kinguin (groupe out-of-stock) : 2e réponse = la sonde de redirection (200, pas de
+        # Location), puis la page lue pour la confirmation, puis l'URL canonique
         with mock.patch.object(pc, "http_get", side_effect=[(200, None, self.page(merchant)), (200, None, merchant_html),
-                                                            (200, None, merchant_html)]), \
+                                                            (200, None, merchant_html), (200, None, merchant_html)]), \
              mock.patch.object(pc, "page_title", return_value=None), mock.patch.object(pc, "chromium_dom", return_value=None):
             return pc.check_offer(product, o)
 
@@ -906,6 +907,24 @@ class TestConfirmOnMerchantPage(unittest.TestCase):
             res = pc.check_offer("Titanfall 2", o)
         self.assertEqual(res["verdict"], "SUSPECT")
         self.assertIn("Titanfall Deluxe Edition", res["reasons"][0])
+        self.assertTrue(res["reasons"][1].startswith("offre en rupture chez le marchand"))  # et la redirection est signalée
+        # Romain, 02/10/2026 : « on a juste besoin de suivre les redirections » — à chaque offre Kinguin, une requête sans
+        # suivre la redirection : 200 = fiche en stock, 301 vers une autre fiche = rupture ; un 301 qui ne retire que le
+        # segment de langue (« /en/category/… » -> « /category/… ») est la même fiche
+        ok = offer(merchantName="Kinguin", edition="Deluxe", region="IN ENGLISH ONLY", region_filter="EA ENG/POL/RUS ONLY", platform="ea-app")
+        with mock.patch.object(pc, "http_get", side_effect=[(200, None, self.page(right)), (200, None, "")]) as get:
+            res = pc.check_offer("Titanfall 2", ok)
+        self.assertEqual((res["verdict"], get.call_count), ("OK", 2))
+        with mock.patch.object(pc, "http_get", side_effect=[(200, None, self.page(right)), (301, "/category/25568/titanfall-2-pc-ea-app-key", "")]):
+            res = pc.check_offer("Titanfall 2", ok)
+        self.assertEqual(res["verdict"], "SUSPECT")
+        self.assertEqual(res["reasons"], ["offre en rupture chez le marchand : le lien redirige vers une autre fiche "
+                                          "(https://www.kinguin.net/category/25568/titanfall-2-pc-ea-app-key), mais le prix reste dans le feed"])
+        en = "https://www.kinguin.net/en/category/360568/helldivers-2-super-citizen-edition-eu-xbox-series-x-s-cd-key"
+        with mock.patch.object(pc, "http_get", side_effect=[(200, None, self.page(en)), (301, "/category/360568/helldivers-2-super-citizen-edition-eu-xbox-series-x-s-cd-key", "")]):
+            res = pc.check_offer("Helldivers 2 Xbox Series", offer(merchantName="Kinguin", edition="Super Citizen", region="EU XBOX X|S",
+                                                                   region_filter="XBOX X|S EUROPE", platform="xbox"))
+        self.assertEqual((res["verdict"], res["reasons"]), ("OK", []))
         # le lien ne nomme rien, la redirection mène à une fiche du produit : pas blanchi non plus, la redirection est ignorée
         bare = "https://www.kinguin.net/category/25568/x"
         with mock.patch.object(pc, "http_get", side_effect=[(200, None, self.page(bare)), (301, right, ""), (503, None, "")]), \
@@ -915,15 +934,41 @@ class TestConfirmOnMerchantPage(unittest.TestCase):
         self.assertEqual(res["verdict"], "SUSPECT")
         self.assertTrue(res["reasons"][0].startswith("offre en rupture chez le marchand : le lien redirige vers une autre fiche"), res)
 
+    def test_browser_headers_and_moved(self):
+        # 02/10/2026 : Akamai (Kinguin) répond 403 à l'Accept minimal, 200 ou 301 au jeu complet d'en-têtes de Chrome
+        h = pc.request_headers(pc.BROWSER_UA)
+        self.assertEqual(h["Sec-Fetch-Dest"], "document")
+        self.assertIn('v="150"', h["sec-ch-ua"])
+        self.assertNotIn("Sec-Fetch-Dest", pc.request_headers(pc.AKS_UA))  # AllKeyShop : UA AKS/Staff, en-têtes simples
+        base = "https://www.kinguin.net/en/category/360568/helldivers-2-eu-xbox-cd-key"
+        self.assertFalse(pc.moved(base, "/category/360568/helldivers-2-eu-xbox-cd-key"))  # segment de langue retiré
+        self.assertFalse(pc.moved(base, None))
+        self.assertTrue(pc.moved(base, "https://www.kinguin.net/category/360568/helldivers-2-global-xbox-cd-key"))
+
+    def test_ldshop_http_body_without_the_option_falls_back_to_chromium(self):
+        # 02/10/2026 : avec les en-têtes complets, LDShop répond 200 en HTTP, mais l'option cochée est rendue en JavaScript
+        url = "https://www.ldshop.gg/card/forza-horizon-6.html?compare=ak&skuId=16560&skuLabelId=1"
+        cfg = pc.merchant_config(url, "LDShop")
+        with mock.patch.object(pc, "http_get", return_value=(200, None, "<title>Forza Horizon 6 CD-Key for Xbox & PC – Safe & Fast</title>")), \
+             mock.patch.object(pc, "page_title", return_value="Forza Horizon 6 CD-Key | option choisie : Forza Horizon 6 Premium Upgrade (Global)") as chromium:
+            text, method = pc.merchant_page_text(url, cfg)
+        self.assertEqual(method, "page (Chromium)")
+        self.assertIn("option choisie", text)
+        chromium.assert_called_once()
+
     def test_kinguin_serves_another_page_than_the_link(self):
         # arbitrage du 01/10/2026, Stellaris (offre 135046199) : le lien « …-starter-pack-eu-steam-cd-key » sert la
         # fiche globale « …-starter-pack-bundle-2023-pc-steam-cd-key » (URL canonique) : la fiche servie fait foi
         dom = sample("kinguin_stellaris_172478.html")
         link = "https://www.kinguin.net/category/172478/stellaris-starter-pack-eu-steam-cd-key"
         o = offer(edition="Bundle 1", region="GLOBAL", region_filter="STEAM GLOBAL")
-        with mock.patch.object(pc, "http_get", side_effect=[(200, None, self.page(link)), (200, None, dom), (200, None, dom)]), \
+        # 02/10/2026 : Kinguin répond 301 du lien vers la fiche servie (avec les en-têtes complets de navigateur) : la
+        # sonde suffit, sans ouvrir la page (Romain : « on a juste besoin de suivre les redirections »)
+        with mock.patch.object(pc, "http_get", side_effect=[(200, None, self.page(link)),
+                                                            (301, "/category/172478/stellaris-starter-pack-bundle-2023-pc-steam-cd-key", "")]) as get, \
              mock.patch.object(pc, "page_title", return_value=None):
             res = pc.check_offer("Stellaris", o)
+        self.assertEqual(get.call_count, 2)
         # Romain, 02/10/2026 : « on aura quand même une alerte » — en rupture, le prix reste dans le feed ; la région
         # (lue sur la fiche servie, globale comme l'affichage) n'est plus reprochée
         self.assertEqual(res["verdict"], "SUSPECT")
@@ -931,9 +976,14 @@ class TestConfirmOnMerchantPage(unittest.TestCase):
                                           "(https://www.kinguin.net/category/172478/stellaris-starter-pack-bundle-2023-pc-steam-cd-key), "
                                           "mais le prix reste dans le feed"])
         self.assertTrue(any("fiche servie" in n for n in res["notes"]))
-        # une fiche canonique qui est bien celle du lien, toujours EU : l'alerte reste
+        # repli : pas de redirection vue (200), mais la page servie a une autre URL canonique : même alerte
+        with mock.patch.object(pc, "http_get", side_effect=[(200, None, self.page(link)), (200, None, ""), (200, None, dom), (200, None, dom)]), \
+             mock.patch.object(pc, "page_title", return_value=None):
+            res2 = pc.check_offer("Stellaris", o)
+        self.assertEqual(res2["reasons"], res["reasons"])
+        # une fiche canonique qui est bien celle du lien, toujours EU : l'alerte de région reste
         same = dom.replace("stellaris-starter-pack-bundle-2023-pc-steam-cd-key", "stellaris-starter-pack-eu-steam-cd-key")
-        with mock.patch.object(pc, "http_get", side_effect=[(200, None, self.page(link)), (200, None, same), (200, None, same)]), \
+        with mock.patch.object(pc, "http_get", side_effect=[(200, None, self.page(link)), (200, None, ""), (200, None, same), (200, None, same)]), \
              mock.patch.object(pc, "page_title", return_value=None):
             res = pc.check_offer("Stellaris", o)
         self.assertEqual(res["reasons"], ["région : AllKeyShop GLOBAL, marchand EU"])
