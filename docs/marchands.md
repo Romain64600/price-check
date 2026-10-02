@@ -30,6 +30,12 @@ Toute exception propre à un marchand vit dans un fichier `merchants/<marchand>.
 | `[page] locale_from`, `locale_to` | | Réécriture de l'URL avant de lire la page (PS Store : `/es-es/` → `/en-gb/`, pour un titre en anglais) |
 | `[redirect] means` | `same-offer` | Les **deux groupes de marchands** pour les redirections (Romain, 02/10/2026). `same-offer` (défaut : Instant Gaming, Fanatical, Ubisoft Store) : une redirection mène à la fiche actuelle de la même offre, c'est l'URL finale qu'on juge. `out-of-stock` (Kinguin) : une redirection, ou une fiche servie sous une autre URL canonique, mène à **une autre offre** parce que celle du lien est en rupture ; on ne s'y fie ni pour accuser (« autre produit ») ni pour blanchir : le lien est jugé tel quel. Une redirection constatée est signalée : « offre en rupture chez le marchand, le prix reste dans le feed » (Romain, 02/10) ; la région n'est plus reprochée si la fiche servie correspond à l'affichage (Stellaris) |
 | `localized` | `false` | `true` : titres traduits (Amazon.fr) ; un nom non reconnu dans le titre donne À VÉRIFIER au lieu de SUSPECT |
+| `unverifiable` | `first-price` | Ce que devient une offre dont le nom ne se vérifie pas : `first-price` (notée NON VÉRIFIABLE, alertée À VÉRIFIER si c'est le premier prix de la page dans un top ou un coming soon), `note` (toujours notée, jamais alertée), `report` (toujours alertée À VÉRIFIER) |
+
+Particularités d'URL gérées par la normalisation (pas de config), depuis l'audit du 02/10/2026 :
+- **PS Store** : un code produit (`EP1004-PPSA01547_00-GTAVIULTIMATE001`) ne nomme plus le jeu par une sous-chaîne (« gtavi » au milieu d'un mot) ; c'est le JSON de la page (lecteur `playstation`) qui décide, comme pour les autres codes.
+- **CJS CDKeys** : les slugs sont encodés deux fois (`E%252dDay`, `1%252dYear`) ; ils sont décodés jusqu'à stabilité.
+- **Mmoga** : l'extension de page (`Planet-Zoo-2.html`) est retirée avant la lecture du nom.
 
 Exceptions en place :
 
@@ -76,12 +82,12 @@ Testé sur les pages EA SPORTS FC 27 (Popular #1) et Dynasty Warriors 3 Complete
 | Fanatical | URL après le 301 du marchand | oui | — | `www.fanatical.com/en/game/dynasty-warriors-3-complete-edition-remastered` | 301 du marchand vers l'URL avec le slug. |
 | Lootbar | URL directe | oui | — | `www.lootbar.com/game-key/ace-combat-8-wings-of-theve-emea` | Vu au passage réel du 30/09/2026 (Ace Combat 8 Deluxe). |
 | Instant Gaming | URL après le 301 du marchand | oui | ea-app | `www.instant-gaming.com/en/21656-buy-ea-sports-fc-27-pc-ea-app/` | `/en/21656-/` → 301 vers l'URL avec le slug. Page lisible en HTTP simple. |
-| EA.com | URL directe, nom partiel | partiel (`ea-sports-fc` + `fc-27`) | — | `www.ea.com/games/ea-sports-fc/fc-27/buy/checkout` | URL partielle : `/ea-sports-fc/fc-27/buy/checkout`. Les mots `ea`, `sports`, `fc`, `27` y sont tous : nom partiel, accepté avec une note. |
+| EA.com | URL directe | oui (`fc-27`, préfixe « EA Sports » facultatif) | — | `www.ea.com/games/ea-sports-fc/fc-27/buy/checkout` | URL partielle : `/ea-sports-fc/fc-27/buy/checkout`. Les mots `ea`, `sports`, `fc`, `27` y sont tous : nom partiel, accepté avec une note. |
 | Epic Games | URL | oui (01/10/2026) | — | `store.epicgames.com/p/fc-27-e149fb` | `/p/fc-27-e149fb` : « FC 27 » est reconnu depuis le 01/10/2026 (préfixe « EA Sports » facultatif). Une URL Epic sans nom passe par la page (HTTP, puis Chromium). |
 
 ## État au 02/10/2026 : ce que le moniteur a constaté (`--coverage`)
 
-64 marchands rencontrés en deux jours de `both` et un jour de `top-offers` (3 595 offres contrôlées). Méthode qui a marché, nombre de contrôles, dernier contrôle et une URL d'exemple. « URL » = le nom, la région et la plateforme lus dans l'URL ; « URL après 301 marchand » = l'URL finale après la redirection du marchand (groupe `same-offer`) ; « URL de la version en-GB » = Nintendo eShop ; « page (HTTP) » / « page (Chromium) » = la page a dû être lue. Amazon.fr est ignoré depuis le 01/10/2026 (ses contrôles sont antérieurs).
+63 marchands rencontrés en deux jours de `both` et un jour de `top-offers` (3 595 offres contrôlées ; 3 717 en mémoire le 02/10/2026 au soir). Méthode qui a marché, nombre de contrôles, dernier contrôle et une URL d'exemple. « URL » = le nom, la région et la plateforme lus dans l'URL ; « URL après 301 marchand » = l'URL finale après la redirection du marchand (groupe `same-offer`) ; « URL de la version en-GB » = Nintendo eShop ; « page (HTTP) » / « page (Chromium) » = la page a dû être lue. Amazon.fr est ignoré depuis le 01/10/2026 (ses contrôles sont antérieurs).
 
 | Marchand | Méthodes (nombre de contrôles) | Dernier contrôle | Exemple d'URL |
 |---|---|---|---|
@@ -155,7 +161,7 @@ Testé sur les pages EA SPORTS FC 27 (Popular #1) et Dynasty Warriors 3 Complete
 - **Steam `/sub/` et `/bundle/`** (packs) : URL = numéro, la page donne le titre (Chromium ou HTTP).
 - **PS Store** : URL = code produit, page lue en HTTP (JSON : nom et édition), en en-gb pour les boutiques européennes.
 - **Driffle, Loaded, Wyrel** : pages illisibles (anti-robot), l'URL fait foi : elle nomme presque toujours le produit. Une URL Driffle sans nom (code seul) sortirait en NON VÉRIFIABLE.
-- **EA.com** : l'analyseur reconnaît le nom en partie (`ea-sports-fc` + `fc-27`), verdict OK avec la note « nom partiel ».
+- **EA.com** : `…/ea-sports-fc/fc-27/buy/checkout` ; le nom est reconnu en entier depuis le 01/10/2026 (`fc-27`, le préfixe « EA Sports » est facultatif).
 - **Amazon** : ignoré (`skip = true`) depuis l'arbitrage du 01/10/2026.
 
 ## Offres non vérifiables
@@ -200,7 +206,7 @@ Utile seulement quand la page doit être ouverte.
 |---|---|---|
 | Instant Gaming | OK, titre « Buy EA Sports FC 27 - PC (EA App) » | non testé |
 | Gamers Outlet | OK | OK, « EA SPORTS FC 27 (PC EA App Key - Global) » |
-| Kinguin | 403 Akamai | OK, « EA Sports FC 27 PC Steam Altergift » |
+| Kinguin | 403 Akamai avec un `Accept` minimal ; 200 avec les en-têtes complets de Chrome (depuis le 02/10/2026) | OK, « EA Sports FC 27 PC Steam Altergift » |
 | GAMIVO | 403 Cloudflare | OK, « Get EA Sports FC 27 – Steam Gift (Global) » |
 | G2A (bundle) | non testé | OK, titre lu au passage réel |
 | Steam (`/sub/`) | non testé | OK, « AION 2 » dans le titre |

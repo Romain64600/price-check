@@ -66,12 +66,19 @@ Chaque report jugé (par Romain ou par l'étude) est consigné dans le [registre
 - chez Kinguin, une redirection mène à une autre offre (fiche en rupture) : Stellaris n'était pas une erreur de saisie, mais une rupture à signaler au marchand (alerte « le prix reste dans le feed » depuis le 02/10) ;
 - « Year 1 Season Pass » = « Year 1 Edition » (Farming Simulator 25).
 
-Premier jour de `top-offers` (01–02/10/2026) : 21 alertes sur les 2e et 3e prix, 11 vraies erreurs (dont Titanfall 1 vendu sur la page de Titanfall 2, un autre jeu de la série, et Horse Spirit Valley 2 sur la page de TCG Card Shop Simulator), 10 faux positifs tous devenus des règles. Arbitrages du 02/10/2026 :
+Premier jour de `top-offers` (01–02/10/2026) : 21 alertes, surtout sur les 2e et 3e prix, 11 vraies erreurs (dont Titanfall 1 vendu sur la page de Titanfall 2, un autre jeu de la série, et Horse Spirit Valley 2 sur la page de TCG Card Shop Simulator), 10 faux positifs tous devenus des règles. Arbitrages du 02/10/2026 :
 
 - un problème vu dans l'URL suffit : on alerte sans lire la page du marchand ;
 - les noms raccourcis par les marchands (« UFC 5 », « Black Ops 6 », « Onimusha: WotS ») sont une règle générale, pas un alias par produit, parce qu'il y aura beaucoup de marchands ;
 - deux groupes de marchands pour les redirections (voir Fonctionnement) ;
 - la monnaie de jeu vendue comme le jeu est une erreur.
+
+Audit complet du 02/10/2026 au soir (détection, boucle et recontrôle, sécurité, doc et tests), corrigé et en production le soir même :
+
+- **Le nom se lit sur des mots entiers, et un autre jeu de la série n'est jamais le jeu** : sur les 3 614 URL en mémoire, 824 paires « page A, vraie URL du produit B » passaient le contrôle du nom, 84 ensuite (sigles du nom entier, suites, mot remplacé, dernier mot manquant, titre court pris au début du nom). Vraie erreur trouvée en production : le DLC Pokémon **Violet** premier prix de l'édition Standard de la page Pokémon **Scarlet** (GameBoost), alertée « en doute ». Les lots gardent un mot du nom ; une page de jeu avec une petite édition DLC n'exempte plus toutes ses offres ; zones US et UK lues.
+- **Recontrôle juste** : une offre « sans prix » n'est plus « réparée » ; une rupture Kinguin de nouveau en stock est réparée ; une offre qui n'avait pas pu être vérifiée est « vérifiée » ; nouvelles erreurs en tête du récapitulatif.
+- **Rien ne se perd** : une erreur imprévue n'arrête plus un passage ; une alerte que Discord refuse est mise en file et renvoyée ; un arrêt du service écrit l'état et un passage demandé reprend après un redémarrage.
+- **Sécurité** : Chromium jamais en root (bac à sable actif), `AKS/Staff` jamais hors d'AllKeyShop même par une redirection, seulement des URL `http(s)` vers Internet, dossier partagé protégé des liens symboliques, secrets jamais transmis à `claude` par le bot.
 
 ## Trancher les reports : la page Price check de l'admin
 
@@ -80,7 +87,7 @@ Depuis le 02/10/2026, les reports se tranchent dans l'admin de l'executor, ongle
 - Le moniteur écrit `reports.json` dans `/var/lib/price-check` à chaque passage ; la page le lit.
 - Une décision ajoute une ligne à `decisions.jsonl` (signée de l'identifiant de connexion) ; le moniteur la relit avant son passage suivant et la reporte dans sa mémoire et dans l'export. La dernière décision par offre l'emporte.
 - Deux boutons, **Lancer le price check top** et **Lancer le price check homepage**, déclenchent un passage tout de suite au lieu d'attendre l'heure prévue ; la page montre l'état de chaque mode (en cours, avancement, dernier et prochain passage). L'admin dépose une demande dans le dossier partagé, le moniteur la lit en quelques secondes.
-- Un passage lancé depuis l'admin **recontrôle toutes les offres retenues** de ses pages, déjà vues ou non (Romain, 02/10/2026 : « on saura si elles sont réparées ou pas ») : une offre signalée trouvée OK devient **réparée** si l'offre a changé (URL, région, plateforme, édition) ou si elle a quitté sa page, et **ancien faux positif levé par une règle** si rien n'a changé, ni l'offre ni ce que le contrôle avait vu (fiche servie, titre de la page : une fiche Kinguin de nouveau en stock est réparée) ; une offre signalée trouvée fausse reste « toujours en erreur » ; une offre OK trouvée fausse est une nouvelle alerte ; un recontrôle sans conclusion (page bloquée) ne change pas le verdict. Un récapitulatif « 🔁 Recontrôle » part sur Discord. Seuls les faux positifs tranchés dans l'admin sont exclus. Le passage homepage complet est long (environ 3 000 offres, 2 à 3 h ; les top games passent pendant ce temps).
+- Un passage lancé depuis l'admin **recontrôle toutes les offres retenues** de ses pages, déjà vues ou non (Romain, 02/10/2026 : « on saura si elles sont réparées ou pas ») : une offre signalée trouvée OK devient **réparée** si l'offre a changé (URL, région, plateforme, édition) ou si elle a quitté sa page, **vérifiée** si elle n'avait pas pu être vérifiée, et **ancien faux positif levé par une règle** si rien n'a changé, ni l'offre ni ce que le contrôle avait vu (fiche servie, titre de la page : une fiche Kinguin de nouveau en stock est réparée) ; une offre signalée trouvée fausse reste « toujours en erreur » ; une offre OK trouvée fausse est une nouvelle alerte ; un recontrôle sans conclusion (page bloquée) ne change pas le verdict. Un récapitulatif « 🔁 Recontrôle » part sur Discord. Seuls les faux positifs tranchés dans l'admin sont exclus. Le passage homepage complet est long (2 466 offres en 2 h 30 le 02/10/2026 ; les top games passent pendant ce temps, mais une nouvelle offre homepage peut attendre la fin du passage).
 - En automatique, les offres **signalées** sont recontrôlées une fois par heure ; le récapitulatif ne part que si quelque chose a changé.
 - Un **Faux positif** ou un **À discuter** avec sa note devient ensuite une règle, une config marchand ou un alias, avec son test, et une ligne dans le [registre des précédents](docs/precedents.md). Un **Vrai positif** confirme l'alerte.
 
@@ -88,9 +95,9 @@ Format des fichiers : [docs/exploitation.md](docs/exploitation.md#reports-pour-l
 
 ## Couverture des marchands
 
-État au 02/10/2026 : **64 marchands rencontrés** par le moniteur (3 595 offres contrôlées).
+État au 02/10/2026 : **63 marchands rencontrés** par le moniteur (3 717 offres en mémoire).
 
-- **La plupart se contrôlent par l'URL seule** ; Instant Gaming, Fanatical et Ubisoft Store après leur propre 301 ; EA.com par nom partiel.
+- **La plupart se contrôlent par l'URL seule** ; Instant Gaming, Fanatical et Ubisoft Store après leur propre 301 ; le PS Store par le JSON de sa page.
 - **La page est nécessaire** pour le PS Store (URL = code produit ; page lue en HTTP, en anglais), les packs Steam (`/sub/`, `/bundle/`), les bundles G2A, PlanetPlay (URL = identifiant), LDShop (page multi-produits, option cochée).
 - **Pages illisibles** (Driffle, Loaded, Wyrel : blocage anti-robot) : l'URL fait foi, elle nomme presque toujours le produit.
 - **Ignoré** : Amazon (arbitrage du 01/10/2026, pages illisibles et URL sans nom).
