@@ -67,9 +67,6 @@ class TestProgressLine(unittest.TestCase):
         self.assertIsNone(db.progress_line({"type": "assistant", "message": {"content": [{"type": "text", "text": "x"}]}}))
 
 
-if __name__ == "__main__":
-    unittest.main()
-
 
 class TestClaudeEnvironment(unittest.TestCase):
     def test_secrets_never_reach_claude(self):
@@ -87,3 +84,34 @@ class TestClaudeEnvironment(unittest.TestCase):
         self.assertFalse(bot.allowed_mentions.everyone)
         self.assertFalse(bot.allowed_mentions.roles)
 
+
+class TestFilters(unittest.TestCase):
+    """Audit des tests du 02/10/2026 : rien ne vérifiait que les alertes du webhook et les non-propriétaires n'atteignent
+    pas `claude -p` (mode auto, service root)."""
+
+    @staticmethod
+    def message(**kw):
+        from types import SimpleNamespace
+        base = dict(channel=SimpleNamespace(id=10), author=SimpleNamespace(bot=False, id=1), webhook_id=None,
+                    type=db.discord.MessageType.default)
+        base.update(kw)
+        return SimpleNamespace(**base)
+
+    def test_only_humans_in_the_channel(self):
+        from types import SimpleNamespace
+        self.assertTrue(db.is_human_message(self.message(), 10))
+        self.assertTrue(db.is_human_message(self.message(type=db.discord.MessageType.reply), 10))
+        self.assertFalse(db.is_human_message(self.message(webhook_id=99), 10))  # une alerte du moniteur
+        self.assertFalse(db.is_human_message(self.message(author=SimpleNamespace(bot=True, id=2)), 10))
+        self.assertFalse(db.is_human_message(self.message(channel=SimpleNamespace(id=11)), 10))
+        self.assertFalse(db.is_human_message(self.message(type=db.discord.MessageType.pins_add), 10))
+
+    def test_owner_only_commands(self):
+        for word in ("!allow", "!deny", "!who", "!mention"):
+            self.assertTrue(db.is_owner_only(word), word)
+        for word in ("!help", "!new", "!stop", "!status"):
+            self.assertFalse(db.is_owner_only(word), word)
+
+
+if __name__ == "__main__":
+    unittest.main()

@@ -155,6 +155,23 @@ def claude_env(environ):
     return env
 
 
+def is_human_message(message, channel_id):
+    """Un message que le bot peut transmettre à Claude : dans son salon, d'un humain, pas un message système. Jamais un
+    robot ni un webhook : les alertes du moniteur arrivent par webhook, et leur texte (venu des pages marchands) ne doit
+    jamais devenir une consigne pour `claude -p` (audit du 02/10/2026)."""
+    if message.channel.id != channel_id or message.author.bot or message.webhook_id:
+        return False
+    return message.type in (discord.MessageType.default, discord.MessageType.reply)  # pas « a épinglé un message »…
+
+
+OWNER_ONLY_COMMANDS = ("!allow", "!deny", "!who", "!mention")
+
+
+def is_owner_only(word):
+    """Commandes du propriétaire seul : qui peut parler au bot, et à quelles conditions."""
+    return word in OWNER_ONLY_COMMANDS
+
+
 class ClaudeRunner:
     def __init__(self, cwd, permission_mode, timeout):
         self.cwd, self.permission_mode, self.timeout = cwd, permission_mode, timeout
@@ -255,10 +272,8 @@ class Bot(discord.Client):
         log.info("message reçu : salon %s, auteur %s (%s)%s, %d caractères", message.channel.id, message.author,
                  message.author.id, " [webhook]" if message.webhook_id else (" [bot]" if message.author.bot else ""),
                  len(message.content))
-        if message.channel.id != self.channel_id or message.author.bot or message.webhook_id:
+        if not is_human_message(message, self.channel_id):
             return
-        if message.type not in (discord.MessageType.default, discord.MessageType.reply):
-            return  # message système (« a épinglé un message », arrivée d'un membre...)
         if not self.owner_id:  # appairage : le premier humain du salon devient le propriétaire
             self.owner_id = message.author.id
             self.state["owner_id"] = self.owner_id
@@ -286,8 +301,7 @@ class Bot(discord.Client):
 
     async def command(self, message, text):
         word = text.split()[0].lower()
-        owner_only = word in ("!allow", "!deny", "!who", "!mention")
-        if owner_only and message.author.id != self.owner_id:
+        if is_owner_only(word) and message.author.id != self.owner_id:
             await message.reply("Commande réservée au propriétaire du bot.")
             return True
         if word == "!allow" or word == "!deny":

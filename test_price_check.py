@@ -984,6 +984,19 @@ class TestConfirmOnMerchantPage(unittest.TestCase):
             with self.assertRaises(pc.CheckError):
                 pc.check_offer("Rust", o)
 
+    def test_a_merchant_whose_page_decides_is_never_alerted_on_its_url_alone(self):
+        # LDShop, 01/10/2026 : l'URL « …/card/forza-horizon-6.html » nomme le jeu de base, l'option cochée de la page est
+        # le Premium Upgrade. Pour un marchand dont la page décide (lecteur « selected-option », PS Store), l'URL qui
+        # nomme un autre produit ne suffit pas : la page est lue (audit des tests du 02/10/2026 : rien ne le vérifiait)
+        url = "https://www.ldshop.gg/card/forza-horizon-6.html?compare=ak&skuId=16560&skuLabelId=1"
+        dom = sample("ldshop_forza-horizon-6_sku16560.html")
+        o = offer(merchantName="LDShop", edition="Upgrade", region="XBOX/PC", platform="xbox-play-anywhere")
+        with mock.patch.object(pc, "http_get", side_effect=[(200, None, self.page(url)), (200, None, "<title>Forza Horizon 6</title>"),
+                                                            (200, None, "<title>Forza Horizon 6</title>")] + [(200, None, "")] * 4), \
+             mock.patch.object(pc, "chromium_dom", return_value=dom):
+            res = pc.check_offer("Forza Horizon 6 Premium Upgrade Bundle Xbox Series", o)
+        self.assertEqual((res["verdict"], res["method"]), ("OK", "page (Chromium)"), res)
+
     def test_browser_headers_and_moved(self):
         # 02/10/2026 : Akamai (Kinguin) répond 403 à l'Accept minimal, 200 ou 301 au jeu complet d'en-têtes de Chrome
         h = pc.request_headers(pc.BROWSER_UA)
