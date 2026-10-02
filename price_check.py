@@ -1553,6 +1553,12 @@ def format_recheck(label, by, outcome, full=False):
     return "\n".join(lines)[:1900]
 
 
+def recap_due(requested, outcome):
+    """Le récapitulatif du recontrôle part toujours après un passage demandé ; après un passage automatique,
+    seulement s'il y a du nouveau : une offre réparée, retirée, levée par une règle, ou une nouvelle erreur."""
+    return bool(requested or outcome["fixed"] or outcome["removed"] or outcome["rules"] or outcome["new"])
+
+
 def run_cycle(targets, notify, state, checker=None, save=None, per_edition=1, between=None, progress=None, recheck=False):
     """Lit chaque page suivie et contrôle toute offre retenue (`per_edition` : voir page_offers) pas encore
     contrôlée. `recheck` : "all" recontrôle aussi toutes les offres retenues déjà vues (passage demandé depuis
@@ -1911,7 +1917,7 @@ def main():
                                       "still": len(outcome["still"]), "unknown": len(outcome["unknown"])}
                 recap = format_recheck(MODES[mode]["label"], requested, outcome, full=recheck == "all")
                 log.info("%s", recap.replace("\n", " | "))
-                if requested or outcome["fixed"] or outcome["removed"] or outcome["new"]:  # automatique : s'il y a du nouveau
+                if recap_due(requested, outcome):
                     try:
                         notifiers[mode](recap)
                     except Exception as e:

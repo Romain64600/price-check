@@ -53,9 +53,19 @@ Le moniteur garde dans `state.json` les id d'offre déjà contrôlés, avec leur
 | Quand | Quelles offres | Discord |
 |---|---|---|
 | Passage lancé depuis l'admin (bouton) | **toutes** les offres retenues des pages du mode, déjà vues ou non | récapitulatif « 🔁 Recontrôle de toutes les offres » |
-| Passages automatiques, une fois par heure | les offres **signalées** (SUSPECT, À VÉRIFIER, NON VÉRIFIABLE) des pages du mode, même sorties du top 3 de leur édition | récapitulatif seulement si une offre est réparée ou une nouvelle erreur apparaît |
+| Passages automatiques, une fois par heure | les offres **signalées** (SUSPECT, À VÉRIFIER, NON VÉRIFIABLE) des pages du mode, même sorties du top 3 de leur édition | récapitulatif seulement si une offre est réparée, retirée, levée par une règle, ou si une nouvelle erreur apparaît |
 
-Chaque offre recontrôlée est comparée à son verdict précédent : **réparée** (signalée, maintenant OK, ou retirée de sa page : `fixed_at`, `fixed_how`, `fixed_from`), **toujours en erreur** (`still_wrong_at`), ou **nouvelle erreur** (OK, maintenant fausse : alerte comme une première fois). Une offre notée NON VÉRIFIABLE trouvée SUSPECT est alertée. Un faux positif tranché dans l'admin n'est jamais recontrôlé.
+Chaque offre recontrôlée est comparée à son verdict précédent (`fixed_at`, `fixed_how`, `fixed_from`, `fixed_kind`) :
+
+| Résultat | Quand | `fixed_kind` |
+|---|---|---|
+| ✅ **réparée** | signalée, maintenant OK, et l'offre a changé (URL, région, plateforme ou édition), ou retirée de sa page | `repaired` |
+| 🧹 **ancien faux positif levé par une règle** | signalée, maintenant OK, mais rien n'a changé : une règle ajoutée depuis la blanchit (UFC 5 chez Eneba, Onimusha au PS Store US, recontrôle du 02/10/2026) | `rule` |
+| 🔴 **toujours en erreur** | signalée, encore fausse (`still_wrong_at`) ; une offre notée NON VÉRIFIABLE trouvée SUSPECT est alertée | |
+| 🆕 **nouvelle erreur** | OK, maintenant fausse : alerte comme une première fois | |
+| ⚪ **sans conclusion** | le recontrôle rend À VÉRIFIER ou NON VÉRIFIABLE (page marchand bloquée, « Access Denied ») : le verdict précédent reste | |
+
+Un faux positif tranché dans l'admin n'est jamais recontrôlé.
 
 ### 3. Contrôle, du moins cher au plus cher
 

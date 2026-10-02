@@ -1423,6 +1423,15 @@ class TestOfferModes20261001(unittest.TestCase):
         self.assertEqual(outcome, {"checked": 0, "fixed": [], "removed": [], "rules": [], "still": [], "new": [], "unknown": []})
         self.assertIn("Rien à signaler", pc.format_recheck("Price check top", "", outcome))
 
+    def test_recap_due(self):
+        """Après un passage automatique, le récapitulatif ne part que s'il y a du nouveau ; un ancien faux
+        positif levé par une règle en est (l'alerte envoyée sur Discord n'est plus valable)."""
+        empty = {"checked": 5, "fixed": [], "removed": [], "rules": [], "still": [{}], "new": [], "unknown": [{}]}
+        self.assertFalse(pc.recap_due(None, empty))
+        self.assertTrue(pc.recap_due("romain", empty))
+        for key in ("fixed", "removed", "rules", "new"):
+            self.assertTrue(pc.recap_due(None, dict(empty, **{key: [{}]})), key)
+
     def test_webhook_per_mode(self):
         with mock.patch.dict(os.environ, {"DISCORD_WEBHOOK_URL": "https://hook/top", "DISCORD_WEBHOOK_URL_HOMEPAGE": "https://hook/home"}):
             self.assertEqual((pc.webhook_for("top-games"), pc.webhook_for("homepage")), ("https://hook/top", "https://hook/home"))
