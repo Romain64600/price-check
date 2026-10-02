@@ -119,6 +119,11 @@ MERCHANT_ZONE_WORDS = {
     "EUUS": ("eu-na", "eu-us", "na-eu", "us-eu"),  # GAMESEAL « …-steam-key-eu-na » = région EU/US
     "ROW": ("row", "rest-of-world", "rest-of-the-world"),
     "EMEA": ("emea",),
+    # audit du 02/10/2026 : une clé US ou UK affichée EUROPE ou GLOBAL passait. Pas « us » ni « uk » seuls (« Among Us »,
+    # « uk » = ukrainien dans les listes de langues de GAMIVO) ; mesure : « united-states » n'apparaît en mémoire que
+    # sur des offres affichées USA (CJS CDKeys)
+    "US": ("united-states", "usa", "north-america"),
+    "UK": ("united-kingdom",),
 }
 REGION_FAMILIES = {z: MERCHANT_ZONE_WORDS[z] for z in ("GLOBAL", "EU", "ROW")}  # compatibilité
 FORBIDDEN_REGION_WORDS = ("ru", "russia", "russian", "cis", "asia", "sea", "latam", "latin-america",
@@ -879,7 +884,12 @@ def aks_zone(offer):
         if re.search(pattern, t):
             return zone
     # « IN ENGLISH ONLY », « EN/FR » : restriction de langue, clé mondiale (formation du 30/09/2026)
-    if re.search(r"GLOBAL|WORLDWIDE|REGION FREE|ENGLISH|ENG ONLY|EN ONLY|EN/FR|^XBOX/PC$|^XBOX X\|S$", t):
+    if re.search(r"GLOBAL|WORLDWIDE|REGION FREE|ENGLISH|ENG ONLY|EN ONLY|EN/FR", t):
+        return "GLOBAL"
+    # « XBOX/PC », « XBOX X|S » sans pays : mondiales. Chaque champ à part : le nom de filtre et le nom affiché sont
+    # concaténés plus haut (« XBOX/PC XBOX/PC »), et les ancres ne trouvaient jamais rien (audit du 02/10/2026 : 263
+    # offres sans zone comparée)
+    if any(re.fullmatch(r"XBOX/PC|XBOX X\|S", (x or "").strip().upper()) for x in (offer.get("region_filter"), offer.get("region"))):
         return "GLOBAL"
     return None
 

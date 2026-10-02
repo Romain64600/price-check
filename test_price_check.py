@@ -1949,6 +1949,19 @@ class TestDetectionAudit20261002(unittest.TestCase):
         self.assertEqual(self.match("SnowRunner PS5", "https://www.cjs-cdkeys.com/products/SnowRunner-1%252dYear-Anniversary-Edition-PSN-Download-Key-%28Playstation%29-UNITED-STATES.html",
                                     edition="1 Year Anniversary Edition"), "exact")
 
+    def test_xbox_pc_regions_have_a_zone_and_us_uk_keys_are_read(self):
+        # le nom de filtre et le nom affiché étaient concaténés (« XBOX/PC XBOX/PC ») : les ancres ne trouvaient rien
+        self.assertEqual(pc.aks_zone({"region": "XBOX/PC", "region_filter": "XBOX/PC"}), "GLOBAL")
+        self.assertEqual(pc.aks_zone({"region": "XBOX X|S", "region_filter": "XBOX X|S"}), "GLOBAL")
+        self.assertEqual(pc.aks_zone({"region": "XBOX/PC EU", "region_filter": "XBOX/PC EU"}), "EU")
+        r = lambda url, **kw: pc.analyze("EA SPORTS FC 27 PS5", offer(platform="playstation", **kw), pc.url_text(url), "URL")["reasons"]
+        cjs = "https://www.cjs-cdkeys.com/products/EA-SPORTS-FC-27-Standard-Edition-PSN-Download-Key-%28Playstation%29-UNITED-STATES.html"
+        self.assertEqual(r(cjs, region="USA", region_filter="USA"), [])  # clé US affichée USA : rien
+        self.assertEqual(r(cjs, region="EUROPE", region_filter="PSN EU"), ["région : AllKeyShop EUROPE, marchand US"])
+        self.assertEqual(r("https://shop.example/ea-sports-fc-27-ps5-united-kingdom", region="GLOBAL", region_filter="PSN GLOBAL"),
+                         ["région : AllKeyShop GLOBAL, marchand UK"])
+        self.assertEqual(pc.analyze("Among Us VR", offer(), pc.url_text("https://www.loaded.com/among-us-3d-vr-pc-steam"), "URL")["reasons"], [])
+
     def test_aliases_of_the_audit(self):
         pc._PRODUCT_ALIASES = None
         self.assertEqual(self.match("Diablo 4 Lord of Hatred Xbox Series",
