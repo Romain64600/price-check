@@ -1441,8 +1441,15 @@ def flagged_entries(state, page_url):
 def apply_recheck(entry, label, rank, product, page_url, offer, res, notify, stamp, now, outcome):
     """Une offre déjà vue, recontrôlée : son nouveau verdict comparé à l'ancien. Réparée (était signalée, maintenant
     OK), toujours en erreur, ou nouvelle erreur (était OK) : celle-ci part sur Discord comme une alerte, ainsi qu'une
-    offre notée NON VÉRIFIABLE devenue SUSPECT."""
+    offre notée NON VÉRIFIABLE devenue SUSPECT. Un recontrôle qui ne conclut pas (page illisible : À VÉRIFIER, NON
+    VÉRIFIABLE) ne change rien au verdict : un OK vérifié reste OK (G2A, The Witcher Trilogy Pack, 02/10/2026 :
+    « Access Denied » au recontrôle, alors que la page avait été lue le 30/09)."""
     was = entry.get("verdict")
+    if res["verdict"] in ("À VÉRIFIER", "NON VÉRIFIABLE"):
+        entry["last_recheck"] = stamp
+        entry["seen"] = now
+        outcome["unknown"].append((entry, (res.get("reasons") or ["recontrôle sans conclusion"])[0]))
+        return
     entry.update(reasons=res["reasons"], notes=res["notes"], method=res["method"], url=res["url"] or entry.get("url"),
                  edition_rank=offer.get("edition_rank"), page_first=offer.get("page_first", False), seen=now,
                  last_recheck=stamp, region=offer["region"], region_filter=offer.get("region_filter", ""),
@@ -1517,7 +1524,9 @@ def format_recheck(label, by, outcome, full=False):
     if still:
         lines.append("🔴 Toujours en erreur (%d) : %s%s" % (len(still), " ; ".join(still[:15]), " ; …" if len(still) > 15 else ""))
     if outcome["unknown"]:
-        lines.append("⚪ Recontrôle impossible (%d)" % len(outcome["unknown"]))
+        unknown = ["%s (%s)" % (item(e), why[:70]) for e, why in outcome["unknown"]]
+        lines.append("⚪ Recontrôle sans conclusion, verdict inchangé (%d) : %s%s" % (
+            len(unknown), " ; ".join(unknown[:5]), " ; …" if len(unknown) > 5 else ""))
     if not (fixed or new or still or outcome["unknown"]):
         lines.append("Rien à signaler : aucune offre réparée ni en erreur.")
     return "\n".join(lines)[:1900]

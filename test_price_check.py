@@ -1390,6 +1390,20 @@ class TestOfferModes20261001(unittest.TestCase):
         recap = pc.format_recheck("Price check top", "romain", outcome, full=True)
         self.assertIn("Recontrôle de toutes les offres** · Price check top (demandé depuis l'admin par romain) · 4 offre(s)", recap)
         self.assertIn("🆕 Nouvelles erreurs (1)", recap)
+        # un recontrôle qui ne conclut pas (page illisible) ne défait pas un OK vérifié (G2A Witcher, 02/10/2026)
+        state, sent = fresh_state(), []
+        unverifiable = {"verdict": "À VÉRIFIER", "reasons": ["édition Bundle : nom non contrôlé dans l'URL, page marchand illisible"],
+                        "notes": [], "url": None, "method": "aucune"}
+        with mock.patch.object(pc, "http_get", return_value=(200, None, self.PAGE)), mock.patch.object(pc, "NOTIFY_OK", False):
+            outcome = pc.run_cycle(self.TARGETS, sent.append, state, lambda p, o: dict(unverifiable), per_edition=3, recheck="all")
+        self.assertEqual(state["checked"][ok_id]["verdict"], "OK")
+        self.assertEqual(state["checked"][still_id]["verdict"], "SUSPECT")
+        self.assertEqual((outcome["new"], outcome["fixed"], outcome["still"]), ([], [], []))
+        self.assertEqual(len(outcome["unknown"]), 4)  # fixed, still, ok, et la NON VÉRIFIABLE, qui le reste
+        self.assertEqual(state["checked"][nv_id]["verdict"], "NON VÉRIFIABLE")
+        recap = pc.format_recheck("Price check top", "romain", outcome, full=True)
+        self.assertIn("⚪ Recontrôle sans conclusion, verdict inchangé (4)", recap)
+        self.assertNotIn("Nouvelles erreurs", recap)
         # 3. sans recontrôle : rien
         with mock.patch.object(pc, "http_get", return_value=(200, None, self.PAGE)), mock.patch.object(pc, "NOTIFY_OK", False):
             outcome = pc.run_cycle(self.TARGETS, lambda m: None, pc.load_state("/nonexistent"), self.ok)
