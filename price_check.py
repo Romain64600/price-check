@@ -62,9 +62,9 @@ HOMEPAGE_LISTS = tuple(
 # « urgent » : le mode passe aussi entre deux pages d'un passage plus long (les top games pendant la homepage).
 MODES = {
     "top-games": {"lists": TOP_GAMES_LISTS, "interval": 150, "urgent": True,  # 9 pages ; cache des pages : 120 s
-                  "webhook": "DISCORD_WEBHOOK_URL"},
+                  "webhook": "DISCORD_WEBHOOK_URL", "label": "Price check top"},
     "homepage": {"lists": HOMEPAGE_LISTS, "interval": 900,  # ~430 pages, un passage dure plusieurs minutes
-                 "webhook": "DISCORD_WEBHOOK_URL_HOMEPAGE"},  # son salon ; à défaut, celui des top games
+                 "webhook": "DISCORD_WEBHOOK_URL_HOMEPAGE", "label": "Price check homepage"},  # son salon ; à défaut, celui des top games
 }
 # Modes d'offres : prix contrôlés par édition (None = toutes les offres en vente de la page, comptes compris)
 OFFER_MODES = {"top-offers": 3, "full-page": None}
@@ -1413,12 +1413,13 @@ def promote_unverifiable(entry, label, rank, product, page_url, offer, notify):
     entry.update(verdict="À VÉRIFIER", notes=res["notes"], page_first=True, edition_rank=offer.get("edition_rank"))
 
 
-def run_cycle(targets, notify, state, checker=None, save=None, per_edition=1, between=None):
+def run_cycle(targets, notify, state, checker=None, save=None, per_edition=1, between=None, progress=None):
     """Lit chaque page suivie et contrôle toute offre retenue (`per_edition` : voir page_offers) pas encore
     contrôlée.
 
     `save()` est appelé toutes les SAVE_EVERY pages : un long passage interrompu ne repart pas de zéro.
     `between()` est appelé entre deux pages : un mode urgent (les top games) y passe pendant un long passage.
+    `progress(count, total)` est appelé à chaque page : l'avancement publié pour l'admin.
     """
     checker = checker or check_offer
     now = time.time()
@@ -1426,6 +1427,8 @@ def run_cycle(targets, notify, state, checker=None, save=None, per_edition=1, be
     for count, (label, rank, product, page_url) in enumerate(targets, 1):
         if between and count > 1:
             between()
+        if progress:
+            progress(count, len(targets))
         if save and count % SAVE_EVERY == 0:
             save()
         try:
@@ -1492,6 +1495,48 @@ def run_cycle(targets, notify, state, checker=None, save=None, per_edition=1, be
 # Dossier partagé avec l'admin : le moniteur y écrit reports.json, l'admin y écrit decisions.jsonl.
 REPORTS_DIR = os.environ.get("PRICE_CHECK_REPORTS_DIR", "")
 REPORTED = ("SUSPECT", "À VÉRIFIER", "NON VÉRIFIABLE")
+REQUEST_FILE = "run-%s.request"  # déposé par l'admin : un passage demandé pour un mode (run-top-games.request)
+STATUS_FILE = "status.json"  # écrit par le moniteur pour l'admin : l'état de chaque mode
+REQUEST_POLL = 5  # s entre deux lectures des demandes de l'admin pendant l'attente
+
+
+def take_requests(directory, modes):
+    """Les passages demandés depuis l'admin (Romain, 02/10/2026 : deux boutons, « Price check top » et « Price check
+    homepage ») : un fichier run-<mode>.request ({"by", "at"}) par mode, lu puis supprimé. Renvoie [(mode, by)]."""
+    found = []
+    if not directory:
+        return found
+    for mode in modes:
+        path = os.path.join(directory, REQUEST_FILE % mode)
+        if not os.path.exists(path):
+            continue
+        by = ""
+        try:
+            with open(path, encoding="utf-8") as f:
+                by = str(json.load(f).get("by") or "")
+        except (OSError, ValueError):
+            pass
+        try:
+            os.remove(path)
+        except OSError:
+            continue
+        found.append((mode, by or "admin"))
+    return found
+
+
+def write_status(directory, status):
+    """status.json pour l'admin : l'état de chaque mode (en cours, avancement, dernier et prochain passage)."""
+    if not directory:
+        return
+    path = os.path.join(directory, STATUS_FILE)
+    tmp = path + ".tmp"
+    try:
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(dict(status, updated_at=time.strftime("%Y-%m-%dT%H:%M:%S%z")), f, ensure_ascii=False, indent=1)
+        os.chmod(tmp, 0o644)
+        os.replace(tmp, path)
+    except OSError as e:
+        log.warning("status.json non écrit : %s", e)
 DECISIONS = {"vrai": "Vrai positif : alerter", "faux": "Faux positif : ne pas alerter", "a_discuter": "À discuter"}
 
 
@@ -1642,30 +1687,70 @@ def main():
     targets = {m: [] for m in modes}
     lists_at = {m: 0.0 for m in modes}
     due = {m: 0.0 for m in modes}  # prochain passage de chaque mode (time.monotonic)
+    stamp_iso = lambda: time.strftime("%Y-%m-%dT%H:%M:%S%z")
+    status = {"offers": args.offers, "modes": {m: {
+        "label": MODES[m]["label"], "interval": MODES[m]["interval"], "running": False, "pages": 0, "progress": None,
+        "last_start": None, "last_end": None, "last_checked": 0, "last_alerts": 0, "requested_by": None} for m in modes}}
+
+    def publish_status():
+        for m in modes:
+            status["modes"][m]["next_at"] = time.strftime(
+                "%Y-%m-%dT%H:%M:%S%z", time.localtime(time.time() + max(0.0, due[m] - time.monotonic())))
+        write_status(REPORTS_DIR, status)
+
+    def honor_requests():
+        """Les passages demandés depuis l'admin : le mode est dû tout de suite. Renvoie True si une demande a été lue."""
+        taken = take_requests(REPORTS_DIR, modes)
+        for mode, by in taken:
+            log.info("%s : passage demandé depuis l'admin par %s", mode, by)
+            due[mode] = 0.0
+            status["modes"][mode]["requested_by"] = by
+        return bool(taken)
 
     def run_mode(mode, between=None):
         now = time.monotonic()
         due[mode] = now + MODES[mode]["interval"]
+        st, alerts, before, last_pub = status["modes"][mode], [0], len(state["checked"]), [time.monotonic()]
+
+        def notify(msg, _send=notifiers[mode]):
+            _send(msg)
+            alerts[0] += 1
+
+        def progress(count, total):
+            st["progress"] = [count, total]
+            if time.monotonic() - last_pub[0] >= REQUEST_POLL or count == total:
+                last_pub[0] = time.monotonic()
+                publish_status()
+
+        st.update(running=True, last_start=stamp_iso(), progress=None, last_alerts=0)
         try:
             if not targets[mode] or now - lists_at[mode] >= LISTS_REFRESH:
                 targets[mode] = fetch_targets(MODES[mode]["lists"])
                 lists_at[mode] = now
                 names = ", ".join(t[2] for t in targets[mode]) if len(targets[mode]) <= 20 else ""
                 log.info("%s : %d pages suivies %s", mode, len(targets[mode]), names)
+            st["pages"] = len(targets[mode])
+            publish_status()
             if REPORTS_DIR:
                 for key in apply_decisions(state, REPORTS_DIR):
                     log.info("décision de l'admin pour l'offre %s : %s", key, state["checked"][key]["decision"])
-            run_cycle(targets[mode], notifiers[mode], state, save=lambda: save_state(args.state, state),
-                      per_edition=per_edition, between=between)
+            run_cycle(targets[mode], notify, state, save=lambda: save_state(args.state, state),
+                      per_edition=per_edition, between=between, progress=progress)
             save_state(args.state, state)
             if REPORTS_DIR:
                 pages = {t[2]: (t[0], t[1], t[3]) for m in modes for t in targets[m]}
                 export_reports(state, REPORTS_DIR, pages)
         except Exception:
             log.exception("%s : passage en échec, nouvel essai au prochain cycle", mode)
+        finally:
+            st.update(running=False, last_end=stamp_iso(), last_checked=len(state["checked"]) - before,
+                      last_alerts=alerts[0], progress=None, requested_by=None)
+            publish_status()
 
     def run_urgent():
-        """Entre deux pages d'un long passage : les modes urgents (top games) dont l'heure est venue."""
+        """Entre deux pages d'un long passage : les demandes de l'admin, puis les modes urgents (top games) dont
+        l'heure est venue."""
+        honor_requests()
         for m in modes:
             if MODES[m].get("urgent") and time.monotonic() >= due[m]:
                 run_mode(m)
@@ -1678,12 +1763,18 @@ def main():
             except Exception as e:
                 log.error("Envoi des alertes en attente impossible, nouvel essai plus tard : %s", e)
             save_state(args.state, state)
+        honor_requests()
         for mode in modes:
             if time.monotonic() >= due[mode]:
                 run_mode(mode, between=None if MODES[mode].get("urgent") else run_urgent)
         if args.once:
             return
-        time.sleep(max(1, min(due.values()) - time.monotonic()))
+        wait_until = min(due.values())  # attente par tranches : une demande de l'admin est vue en quelques secondes
+        while time.monotonic() < wait_until:
+            publish_status()
+            time.sleep(max(1, min(REQUEST_POLL, wait_until - time.monotonic())))
+            if honor_requests():
+                break
 
 
 if __name__ == "__main__":

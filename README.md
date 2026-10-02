@@ -79,6 +79,7 @@ Depuis le 02/10/2026, les reports se tranchent dans l'admin de l'executor, ongle
 
 - Le moniteur écrit `reports.json` dans `/var/lib/price-check` à chaque passage ; la page le lit.
 - Une décision ajoute une ligne à `decisions.jsonl` (signée de l'identifiant de connexion) ; le moniteur la relit avant son passage suivant et la reporte dans sa mémoire et dans l'export. La dernière décision par offre l'emporte.
+- Deux boutons, **Lancer le price check top** et **Lancer le price check homepage**, déclenchent un passage tout de suite au lieu d'attendre l'heure prévue ; la page montre l'état de chaque mode (en cours, avancement, dernier et prochain passage). L'admin dépose une demande dans le dossier partagé, le moniteur la lit en quelques secondes.
 - Un **Faux positif** ou un **À discuter** avec sa note devient ensuite une règle, une config marchand ou un alias, avec son test, et une ligne dans le [registre des précédents](docs/precedents.md). Un **Vrai positif** confirme l'alerte.
 
 Format des fichiers : [docs/exploitation.md](docs/exploitation.md#reports-pour-ladmin).

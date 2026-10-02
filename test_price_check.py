@@ -1253,6 +1253,56 @@ class TestOfferModes20261001(unittest.TestCase):
         self.assertEqual(fetched[0], "top")
         self.assertIn("top", fetched[first:last])  # un passage top games au milieu de la homepage
 
+    def test_admin_requests_and_status(self):
+        """Romain, 02/10/2026 : deux boutons dans l'admin, « Price check top » et « Price check homepage ». L'admin dépose
+        run-<mode>.request dans le dossier partagé ; le moniteur le lit, lance le passage et publie status.json."""
+        import tempfile
+        with tempfile.TemporaryDirectory() as d:
+            with open(os.path.join(d, "run-top-games.request"), "w") as f:
+                f.write('{"by": "romain", "at": "2026-10-02T15:00:00+02:00"}')
+            with open(os.path.join(d, "run-ailleurs.request"), "w") as f:
+                f.write("{}")  # un mode inconnu n'est pas lu
+            self.assertEqual(pc.take_requests(d, ["top-games", "homepage"]), [("top-games", "romain")])
+            self.assertFalse(os.path.exists(os.path.join(d, "run-top-games.request")))  # consommé
+            self.assertEqual(pc.take_requests(d, ["top-games", "homepage"]), [])
+            with open(os.path.join(d, "run-homepage.request"), "w") as f:
+                f.write("pas du json")
+            self.assertEqual(pc.take_requests(d, ["top-games", "homepage"]), [("homepage", "admin")])
+            pc.write_status(d, {"offers": "top-offers", "modes": {}})
+            with open(os.path.join(d, "status.json"), encoding="utf-8") as f:
+                status = json.load(f)
+            self.assertEqual(status["offers"], "top-offers")
+            self.assertRegex(status["updated_at"], r"^\d{4}-\d{2}-\d{2}T")
+        self.assertEqual(pc.take_requests("", ["top-games"]), [])  # pas de dossier partagé : rien
+
+    def test_status_published_during_a_pass(self):
+        import sys
+        import tempfile
+        top = [("Popular", 1, "EA SPORTS FC 27", "https://www.allkeyshop.com/blog/top/")]
+        seen = []
+
+        def progress_spy(count, total):
+            seen.append((count, total))
+
+        with tempfile.TemporaryDirectory() as d, \
+                mock.patch.object(pc, "fetch_targets", return_value=top), \
+                mock.patch.object(pc, "http_get", return_value=(200, None, self.PAGE)), mock.patch.object(pc, "check_offer", self.ok), \
+                mock.patch.object(pc.time, "sleep"), mock.patch.object(pc, "REPORTS_DIR", d), mock.patch.object(pc, "NOTIFY_OK", False), \
+                mock.patch.object(sys, "argv", ["price_check.py", "--mode", "top-games", "--once", "--dry-run",
+                                                "--state", os.path.join(d, "state.json")]):
+            pc.main()
+            with open(os.path.join(d, "status.json"), encoding="utf-8") as f:
+                status = json.load(f)
+        st = status["modes"]["top-games"]
+        self.assertEqual((st["label"], st["pages"], st["running"], st["progress"]), ("Price check top", 1, False, None))
+        self.assertEqual(st["last_checked"], 11)  # les 11 offres Top Offers de la page
+        self.assertTrue(st["last_start"] and st["last_end"] and st["next_at"])
+        self.assertEqual(status["offers"], "top-offers")
+        # run_cycle appelle progress(count, total) à chaque page
+        with mock.patch.object(pc, "http_get", return_value=(200, None, self.PAGE)), mock.patch.object(pc, "NOTIFY_OK", False):
+            pc.run_cycle(self.TARGETS * 3, lambda m: None, pc.load_state("/nonexistent"), self.ok, progress=progress_spy)
+        self.assertEqual(seen, [(1, 3), (2, 3), (3, 3)])
+
     def test_webhook_per_mode(self):
         with mock.patch.dict(os.environ, {"DISCORD_WEBHOOK_URL": "https://hook/top", "DISCORD_WEBHOOK_URL_HOMEPAGE": "https://hook/home"}):
             self.assertEqual((pc.webhook_for("top-games"), pc.webhook_for("homepage")), ("https://hook/top", "https://hook/home"))
