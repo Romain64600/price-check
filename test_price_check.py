@@ -1311,11 +1311,15 @@ class TestOfferModes20261001(unittest.TestCase):
                 mock.patch.object(pc.time, "sleep"), mock.patch.object(pc, "REPORTS_DIR", d), mock.patch.object(pc, "NOTIFY_OK", False), \
                 mock.patch.object(sys, "argv", ["price_check.py", "--mode", "top-games", "--once", "--dry-run",
                                                 "--state", os.path.join(d, "state.json")]):
+            with open(os.path.join(d, "run-top-games.request"), "w") as f:
+                f.write('{"mode": "top-games", "by": "romain"}')  # un clic dans l'admin
             pc.main()
+            self.assertFalse(os.path.exists(os.path.join(d, "run-top-games.request")))  # demande consommée
             with open(os.path.join(d, "status.json"), encoding="utf-8") as f:
                 status = json.load(f)
         st = status["modes"]["top-games"]
         self.assertEqual((st["label"], st["pages"], st["running"], st["progress"]), ("Price check top", 1, False, None))
+        self.assertEqual((st["requested_by"], st["last_requested_by"]), (None, "romain"))  # qui a lancé le dernier passage
         self.assertEqual(st["last_checked"], 11)  # les 11 offres Top Offers de la page
         self.assertTrue(st["last_start"] and st["last_end"] and st["next_at"])
         self.assertEqual(status["offers"], "top-offers")

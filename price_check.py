@@ -1704,7 +1704,8 @@ def main():
     stamp_iso = lambda: time.strftime("%Y-%m-%dT%H:%M:%S%z")
     status = {"offers": args.offers, "modes": {m: {
         "label": MODES[m]["label"], "interval": MODES[m]["interval"], "running": False, "pages": 0, "progress": None,
-        "last_start": None, "last_end": None, "last_checked": 0, "last_alerts": 0, "requested_by": None} for m in modes}}
+        "last_start": None, "last_end": None, "last_checked": 0, "last_alerts": 0, "requested_by": None,
+        "last_requested_by": None} for m in modes}}
 
     def publish_status():
         for m in modes:
@@ -1736,7 +1737,7 @@ def main():
                 last_pub[0] = time.monotonic()
                 publish_status()
 
-        st.update(running=True, last_start=stamp_iso(), progress=None, last_alerts=0)
+        st.update(running=True, last_start=stamp_iso(), progress=None, last_alerts=0, last_requested_by=st.get("requested_by"))
         try:
             if not targets[mode] or now - lists_at[mode] >= LISTS_REFRESH:
                 targets[mode] = fetch_targets(MODES[mode]["lists"])
