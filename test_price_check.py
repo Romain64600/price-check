@@ -1053,7 +1053,11 @@ class TestCheckOffer(unittest.TestCase):
             res = pc.check_offer("EA SPORTS FC 27", offer(region="GIFT"))
         self.assertEqual((res["verdict"], res["method"], res["reasons"]), ("OK", "URL", []))
         self.assertTrue(res["url"].startswith("https://www.kinguin.net/"))
-        get.assert_called_once_with(pc.REDIRECTION_URL % (1, 47), pc.AKS_UA)
+        # deux requêtes : la redirection AllKeyShop (UA AKS/Staff), puis la sonde de redirection de Kinguin (groupe
+        # out-of-stock, UA navigateur, sans suivre la redirection) ; jamais la page
+        self.assertEqual(get.call_count, 2)
+        self.assertEqual(get.call_args_list[0], mock.call(pc.REDIRECTION_URL % (1, 47), pc.AKS_UA))
+        self.assertEqual(get.call_args_list[1], mock.call(res["url"], pc.BROWSER_UA, follow=False))
 
     def test_merchant_redirect_fallback(self):
         page = self.interstitial("https://www.instant-gaming.com/en/21656-/?igr=289098")
@@ -1098,8 +1102,8 @@ class TestCheckOffer(unittest.TestCase):
         self.assertEqual(get.call_count, 2)  # un second essai sur un 5xx
 
     def test_transient_503_then_ok(self):
-        with mock.patch.object(pc, "http_get", side_effect=[(503, None, ""), (200, None, self.INTERSTITIAL)]):
-            res = pc.check_offer("EA SPORTS FC 27", offer(region="GIFT"))
+        with mock.patch.object(pc, "http_get", side_effect=[(503, None, ""), (200, None, self.INTERSTITIAL), (200, None, "")]):
+            res = pc.check_offer("EA SPORTS FC 27", offer(region="GIFT"))  # 3e réponse : la sonde Kinguin
         self.assertEqual(res["verdict"], "OK")
         with mock.patch.object(pc, "http_get", return_value=(200, None, "<html>rien</html>")):
             with self.assertRaises(pc.CheckError):
