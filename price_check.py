@@ -429,6 +429,11 @@ def merchant_config(url, merchant_name):
     return {}
 
 
+def out_of_stock_reason(served):
+    """Groupe Kinguin : la fiche du lien est en rupture, le marchand sert une autre offre, le prix reste dans le feed."""
+    return "offre en rupture chez le marchand : le lien redirige vers une autre fiche (%s), mais le prix reste dans le feed" % served
+
+
 def redirect_untrusted(cfg):
     """Groupe Kinguin (Romain, 02/10/2026) : chez ce marchand, une redirection mène à UNE AUTRE OFFRE, parce que la
     fiche du lien est en rupture. Elle ne dit rien de l'offre AllKeyShop : on ne s'y fie ni pour l'accuser, ni pour la
@@ -1188,8 +1193,9 @@ def check_offer(product, offer):
         if location:
             url2 = unwrap_affiliate(urllib.parse.urljoin(url, location))
             if redirect_untrusted(cfg):
-                if moved(url, url2):
-                    result["notes"].append("redirection du marchand ignorée (fiche du lien en rupture, autre offre servie) : %s" % url2)
+                if moved(url, url2):  # Romain, 02/10/2026 : « on aura quand même une alerte »
+                    result["reasons"].append(out_of_stock_reason(url2))
+                    result["kinds"].append("stock")
             else:
                 result2 = analyze(product, offer, url_text(url2), "URL après redirection du marchand", region=region_text(url2, cfg))
                 if result2["match"] or result2.get("label"):  # la fiche finale nomme le produit, ou un autre
@@ -1242,9 +1248,10 @@ def check_offer(product, offer):
             result["reasons"] = [r for r, _ in kept]
             result["kinds"] = [k for _, k in kept]
         if "zone" in result["kinds"] and redirect_untrusted(cfg):
-            # groupe Kinguin : la fiche du lien est en rupture, le marchand sert une autre fiche (URL canonique différente).
-            # Pour la région, c'est ce que l'acheteur obtient qui compte (arbitrage du 01/10/2026 : Stellaris
-            # « …-eu-… » sert la fiche globale affichée GLOBAL = faux positif)
+            # groupe Kinguin : la fiche du lien est en rupture, le marchand sert une autre fiche (URL canonique différente)
+            # alors que le prix reste dans le feed. Alerte « en rupture » (Romain, 02/10/2026 : « on aura quand même une
+            # alerte ») ; la région n'est plus reprochée si la fiche servie, ce que l'acheteur obtient, correspond à
+            # l'affichage (Stellaris « …-eu-… » sert la fiche globale affichée GLOBAL, 01/10/2026)
             canonical = page_canonical(url, cfg)
             if moved(url, canonical):
                 canonical = urllib.parse.urljoin(url, canonical)
@@ -1253,7 +1260,9 @@ def check_offer(product, offer):
                     kept = [(r, k) for r, k in zip(result["reasons"], result["kinds"]) if k != "zone"]
                     result["reasons"] = [r for r, _ in kept]
                     result["kinds"] = [k for _, k in kept]
-                    result["notes"].append("la fiche du lien a été remplacée, région lue sur la fiche servie : %s" % canonical)
+                    result["notes"].append("région lue sur la fiche servie, qui correspond à l'affichage")
+                result["reasons"].append(out_of_stock_reason(canonical))
+                result["kinds"].append("stock")
 
     return {"verdict": "SUSPECT" if result["reasons"] else "OK", "url": url, "method": method,
             "reasons": result["reasons"], "notes": result["notes"]}

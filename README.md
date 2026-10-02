@@ -51,7 +51,7 @@ Python 3 seulement, aucune dépendance. Chromium (déjà sur le serveur) sert de
 3. Toute offre retenue **jamais contrôlée** est contrôlée une fois : redirection AllKeyShop (`AKS/Staff`) → URL marchand → le nom du produit doit y être, et les mots de région, plateforme, édition et monnaie doivent être compatibles avec l'offre.
    - **L'URL nomme un autre produit** (Titanfall sur la page de Titanfall 2) : alerte tout de suite, sans lire la page (Romain, 02/10/2026 : « on a déjà un problème détecté à la base »).
    - **L'URL ne nomme rien** (un code, un numéro) : le 301 du marchand, puis sa page (HTTP, puis Chromium avec le user agent Chrome).
-   - **Deux groupes de marchands pour les redirections** (`merchants/*.toml`, clé `[redirect] means`) : chez la plupart (Instant Gaming, Fanatical), une redirection mène à la fiche actuelle de la même offre et c'est elle qu'on juge ; chez Kinguin, elle mène à **une autre offre** parce que la fiche du lien est en rupture : on ne s'y fie ni pour accuser ni pour blanchir, on juge le lien. D'autres marchands rejoindront ce groupe au fil de l'apprentissage.
+   - **Deux groupes de marchands pour les redirections** (`merchants/*.toml`, clé `[redirect] means`) : chez la plupart (Instant Gaming, Fanatical), une redirection mène à la fiche actuelle de la même offre et c'est elle qu'on juge ; chez Kinguin, elle mène à **une autre offre** parce que la fiche du lien est en rupture : on ne s'y fie ni pour accuser ni pour blanchir, on juge le lien, et la redirection est signalée (« offre en rupture chez le marchand, le prix reste dans le feed »). D'autres marchands rejoindront ce groupe au fil de l'apprentissage.
    - Si l'URL contredit AllKeyShop sur la plateforme ou la région, la page du marchand peut écarter une URL trompeuse connue (Gamingdragons : `steam-key` pour une clé EA App), jamais retenir une alerte pour autre chose.
 4. Verdict : 🟢 `OK`, 🔴 `SUSPECT` (avec la raison), 🟠 `À VÉRIFIER` (impossible de conclure, sur le premier prix d'une page d'un top ou d'un coming soon), ⚪ `NON VÉRIFIABLE` (impossible de conclure ailleurs : noté, sans alerte). SUSPECT et À VÉRIFIER partent sur Discord ; OK et NON VÉRIFIABLE restent dans le journal et l'état (`--unverified` pour la liste).
 
@@ -63,7 +63,7 @@ Chaque report jugé (par Romain ou par l'étude) est consigné dans le [registre
 
 - une mauvaise édition est une erreur même si l'acheteur reçoit plus (GTA 4, Zero Company) ;
 - Amazon est ignoré jusqu'à ce que ses pages soient lisibles ;
-- chez Kinguin, une redirection mène à une autre offre (fiche en rupture) : Stellaris n'était pas une erreur de saisie ;
+- chez Kinguin, une redirection mène à une autre offre (fiche en rupture) : Stellaris n'était pas une erreur de saisie, mais une rupture à signaler au marchand (alerte « le prix reste dans le feed » depuis le 02/10) ;
 - « Year 1 Season Pass » = « Year 1 Edition » (Farming Simulator 25).
 
 Premier jour de `top-offers` (01–02/10/2026) : 21 alertes sur les 2e et 3e prix, 11 vraies erreurs (dont Titanfall 1 vendu sur la page de Titanfall 2, un autre jeu de la série, et Horse Spirit Valley 2 sur la page de TCG Card Shop Simulator), 10 faux positifs tous devenus des règles. Arbitrages du 02/10/2026 :

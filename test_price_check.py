@@ -911,9 +911,9 @@ class TestConfirmOnMerchantPage(unittest.TestCase):
         with mock.patch.object(pc, "http_get", side_effect=[(200, None, self.page(bare)), (301, right, ""), (503, None, "")]), \
              mock.patch.object(pc, "page_title", return_value=None), mock.patch.object(pc, "chromium_dom", return_value=None):
             res = pc.check_offer("Titanfall 2", o)
-        self.assertEqual(res["verdict"], "À VÉRIFIER")
-        self.assertTrue(any(n.startswith("redirection du marchand ignorée") for n in res.get("notes", []) + res["reasons"]) or
-                        res["method"] == "aucune", res)
+        # la cible ne blanchit pas le nom, et la redirection elle-même est signalée : fiche en rupture, prix dans le feed
+        self.assertEqual(res["verdict"], "SUSPECT")
+        self.assertTrue(res["reasons"][0].startswith("offre en rupture chez le marchand : le lien redirige vers une autre fiche"), res)
 
     def test_kinguin_serves_another_page_than_the_link(self):
         # arbitrage du 01/10/2026, Stellaris (offre 135046199) : le lien « …-starter-pack-eu-steam-cd-key » sert la
@@ -924,7 +924,12 @@ class TestConfirmOnMerchantPage(unittest.TestCase):
         with mock.patch.object(pc, "http_get", side_effect=[(200, None, self.page(link)), (200, None, dom), (200, None, dom)]), \
              mock.patch.object(pc, "page_title", return_value=None):
             res = pc.check_offer("Stellaris", o)
-        self.assertEqual((res["verdict"], res["reasons"]), ("OK", []))
+        # Romain, 02/10/2026 : « on aura quand même une alerte » — en rupture, le prix reste dans le feed ; la région
+        # (lue sur la fiche servie, globale comme l'affichage) n'est plus reprochée
+        self.assertEqual(res["verdict"], "SUSPECT")
+        self.assertEqual(res["reasons"], ["offre en rupture chez le marchand : le lien redirige vers une autre fiche "
+                                          "(https://www.kinguin.net/category/172478/stellaris-starter-pack-bundle-2023-pc-steam-cd-key), "
+                                          "mais le prix reste dans le feed"])
         self.assertTrue(any("fiche servie" in n for n in res["notes"]))
         # une fiche canonique qui est bien celle du lien, toujours EU : l'alerte reste
         same = dom.replace("stellaris-starter-pack-bundle-2023-pc-steam-cd-key", "stellaris-starter-pack-eu-steam-cd-key")

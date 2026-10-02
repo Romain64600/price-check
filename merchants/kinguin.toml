@@ -6,7 +6,9 @@
 # Cas fondateur, Stellaris Bundle 1 (offre 135046199, 01/10/2026) : lien « …/172478/stellaris-starter-pack-eu-steam-cd-key »
 # affiché GLOBAL, Kinguin sert la fiche globale (« …-starter-pack-bundle-2023-pc-steam-cd-key »). Romain : « C'est bien EU
 # même si maintenant ça redirige sur l'offre globale », faux positif, le marchand doit passer l'offre EU en rupture dans
-# son feed. Pour la RÉGION, la fiche servie (ce que l'acheteur obtient) fait foi.
+# son feed. Depuis le 02/10 (Romain : « on aura quand même une alerte »), une redirection constatée donne l'alerte
+# « offre en rupture chez le marchand : le lien redirige vers une autre fiche, mais le prix reste dans le feed » ; la
+# RÉGION n'est plus reprochée quand la fiche servie (ce que l'acheteur obtient) correspond à l'affichage.
 # D'autres marchands rejoindront ce groupe au fil de l'apprentissage : copier ce fichier.
 name = "Kinguin"
 hosts = ["kinguin.net"]
