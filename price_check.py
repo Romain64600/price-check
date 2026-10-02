@@ -593,6 +593,18 @@ def unquote_all(segment):
     return segment
 
 
+def shop_url_text(url, cfg):
+    """url_text, moins le préfixe que le marchand met devant toutes ses URL quand l'URL nomme une autre plateforme
+    (`[url] noise_prefix` : Eneba « steam-…-xbox-live-key »)."""
+    text = url_text(url)
+    noise = (cfg.get("url") or {}).get("noise_prefix") or ()
+    for segment in text.split(" "):
+        words = norm(segment).split("-")
+        if words and words[0] in noise and text_platform_groups("-".join(words[1:])) - text_platform_groups(words[0]):
+            return text.replace(segment, "-".join(segment.split("-")[1:]), 1)
+    return text
+
+
 def repair_slug(segment):
     tokens = [t[:-2] if t.lower().endswith("tm") and len(t) >= 6 and t[:-2].isalpha() else t for t in segment.split("-")]
     out, run = [], []
@@ -1463,7 +1475,7 @@ def check_offer(product, offer):
     if not safe_target(url):
         raise CheckError("URL marchand refusée : %s" % url[:120])
     cfg = merchant_config(url, offer["merchantName"])
-    result, method = analyze(product, offer, url_text(url), "URL", region=region_text(url, cfg)), "URL"
+    result, method = analyze(product, offer, shop_url_text(url, cfg), "URL", region=region_text(url, cfg)), "URL"
     if (cfg.get("region") or {}).get("from") == "query":
         result["notes"].append("région lue dans le paramètre %s de l'URL" % (cfg["region"].get("param", "region")))
 
@@ -1503,7 +1515,7 @@ def check_offer(product, offer):
                 flag_out_of_stock(result, product, offer, url2)
                 served = url2
         elif result["match"] is None:
-            result2 = analyze(product, offer, url_text(url2), "URL après redirection du marchand", region=region_text(url2, cfg))
+            result2 = analyze(product, offer, shop_url_text(url2, cfg), "URL après redirection du marchand", region=region_text(url2, cfg))
             if result2["match"] or result2.get("label"):  # la fiche finale nomme le produit, ou un autre
                 result, method, url = result2, "URL après 301 marchand", url2
 

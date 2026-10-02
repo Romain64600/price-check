@@ -1905,6 +1905,8 @@ class TestTopOffersTrueErrors20261001(unittest.TestCase):
         self.assertEqual(r["reasons"], ["édition : rangée en Gold, le marchand vend anniversary (la page a une édition 1 Year Anniversary Edition)"])
 
 
+@mock.patch.object(pc, "REQUEST_DELAY", 0)
+@mock.patch.object(pc, "PAGE_DELAY", 0)
 class TestDetectionAudit20261002(unittest.TestCase):
     """Audit de la détection du 02/10/2026 : rejeu des 3 614 URL marchand en mémoire contre les 495 pages suivies ;
     824 paires (page A, vraie URL du produit B) passaient le contrôle du nom, 84 après ces règles. La crainte de
@@ -2020,6 +2022,22 @@ class TestDetectionAudit20261002(unittest.TestCase):
         self.assertEqual(r("Football Manager 2024", "https://shop.example/football-manager-2024-pc-steam"), [])  # l'année du nom
         awin = "https://www.awin1.com/cread.php?awinmid=1&awinaffid=2&ued=https%3A%2F%2Fwww.example-shop.com%2Fcrimson-desert-pc-steam"
         self.assertEqual(pc.unwrap_affiliate(awin), "https://www.example-shop.com/crimson-desert-pc-steam")
+
+    def test_eneba_steam_prefix_is_not_a_platform(self):
+        # merchants/eneba.toml : « steam- » devant une URL qui nomme une autre plateforme ne compte pas
+        def check(url, **kw):
+            o = offer(merchantName="Eneba", **kw)
+            with mock.patch.object(pc, "http_get", side_effect=[(200, None, TestConfirmOnMerchantPage.page(TestConfirmOnMerchantPage(), url))]
+                                   + [(200, None, "")] * 5), mock.patch.object(pc, "chromium_dom", return_value=None), \
+                    mock.patch.object(pc, "page_title", return_value=None):
+                return pc.check_offer("NBA 2K26", o)
+        xbox = "https://www.eneba.com/steam-nba-2k26-superstar-edition-xbox-series-x-s-xbox-live-key-europe"
+        res = check(xbox, edition="Superstar Edition", region="EUROPE", region_filter="STEAM EU", platform="steam")
+        self.assertEqual((res["verdict"], res["reasons"]), ("SUSPECT", ["plateforme : AllKeyShop steam, marchand xbox"]))
+        res = check(xbox, edition="Superstar Edition", region="EUROPE", region_filter="XBOX X|S EUROPE", platform="xbox")
+        self.assertEqual(res["verdict"], "OK")  # la clé Xbox affichée Xbox
+        res = check("https://www.eneba.com/steam-nba-2k26-pc-steam-key-europe", region="EUROPE", region_filter="STEAM EU", platform="steam")
+        self.assertEqual(res["verdict"], "OK")  # une vraie clé Steam : le préfixe reste un mot comme un autre
 
     def test_aliases_of_the_audit(self):
         pc._PRODUCT_ALIASES = None

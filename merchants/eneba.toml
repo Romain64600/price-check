@@ -1,0 +1,11 @@
+# Eneba (eneba.com) — audit de la détection du 02/10/2026.
+# Eneba préfixe beaucoup de ses URL par « steam- », même pour une clé Xbox ou Rockstar
+# (« steam-nba-2k26-superstar-edition-xbox-series-x-s-xbox-live-key-europe »,
+# « steam-grand-theft-auto-v-…-rockstar-social-club-key-europe ») : ce préfixe ne compte pas comme
+# plateforme quand l'URL en nomme une autre. Sans cela, une clé Xbox affichée Steam passait (la famille
+# Steam était « présente »).
+name = "Eneba"
+hosts = ["eneba.com"]
+
+[url]
+noise_prefix = ["steam"]

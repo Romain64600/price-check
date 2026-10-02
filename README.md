@@ -101,7 +101,7 @@ Format des fichiers : [docs/exploitation.md](docs/exploitation.md#reports-pour-l
 - **La page est nécessaire** pour le PS Store (URL = code produit ; page lue en HTTP, en anglais), les packs Steam (`/sub/`, `/bundle/`), les bundles G2A, PlanetPlay (URL = identifiant), LDShop (page multi-produits, option cochée).
 - **Pages illisibles** (Driffle, Loaded, Wyrel : blocage anti-robot) : l'URL fait foi, elle nomme presque toujours le produit.
 - **Ignoré** : Amazon (arbitrage du 01/10/2026, pages illisibles et URL sans nom).
-- **Spécificités** : Wyrel (région dans `region=`), Nintendo eShop (version anglaise de la fiche, anciens domaines `nintendo.es`…), Kinguin (redirections non suivies), LDShop (option cochée), PS Store (JSON de la page, lu en en-gb).
+- **Spécificités** : Wyrel (région dans `region=`), Eneba (préfixe `steam-` écarté), Nintendo eShop (version anglaise de la fiche, anciens domaines `nintendo.es`…), Kinguin (redirections non suivies), LDShop (option cochée), PS Store (JSON de la page, lu en en-gb).
 
 Table détaillée, méthode par méthode, et configs marchands : [docs/marchands.md](docs/marchands.md). Elle doit être mise à jour à chaque marchand qui oblige à ouvrir sa page, pour qu'on sache toujours qui est monitoré et qui ne l'est pas encore. `python3 price_check.py --coverage` affiche ce que le moniteur a constaté.
 
