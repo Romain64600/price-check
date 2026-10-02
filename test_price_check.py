@@ -1358,8 +1358,9 @@ class TestOfferModes20261001(unittest.TestCase):
         with mock.patch.object(pc, "http_get", return_value=(200, None, self.PAGE)), mock.patch.object(pc, "NOTIFY_OK", False):
             outcome = pc.run_cycle(self.TARGETS, sent.append, state, checker, per_edition=3, recheck="flagged")
         self.assertEqual([checked.count(k) for k in (fixed_id, still_id, nv_id, faux_id, ok_id)], [1, 1, 1, 0, 0])
-        self.assertEqual(([e["merchant"] for e in outcome["removed"]], [e["fixed_how"] for e in outcome["fixed"]], outcome["checked"]),
-                         (["Retiré"], ["recontrôle OK"], 3))
+        # rien n'a changé pour l'offre « réparée » de ce test (pas d'URL ni de région en mémoire) : faux positif levé
+        self.assertEqual(([e["merchant"] for e in outcome["removed"]], [e["fixed_kind"] for e in outcome["rules"]], outcome["checked"]),
+                         (["Retiré"], ["rule"], 3))
         self.assertEqual((state["checked"][fixed_id]["fixed_from"], state["checked"][fixed_id]["verdict"]), ("SUSPECT", "OK"))
         self.assertEqual(state["checked"]["999999"]["fixed_how"], "offre retirée de la page")
         self.assertEqual((len(outcome["still"]), state["checked"][nv_id]["verdict"], outcome["new"]), (2, "SUSPECT", []))
@@ -1368,15 +1369,16 @@ class TestOfferModes20261001(unittest.TestCase):
         self.assertEqual(len(sent), 1 + 6)
         recap = pc.format_recheck("Price check top", "", outcome)
         self.assertIn("Recontrôle des offres signalées** · Price check top · 3 offre(s)", recap)
-        self.assertIn("✅ Réparées (2)", recap)
+        self.assertIn("✅ Réparées (1)", recap)
+        self.assertIn("🧹 Anciens faux positifs levés par les règles, rien n'a changé (1)", recap)
         self.assertIn("🔴 Toujours en erreur (2)", recap)
         self.assertIn("Retiré — offre retirée de la page", recap)
         with tempfile.TemporaryDirectory() as d:
             pc.export_reports(state, d)
             with open(os.path.join(d, "reports.json"), encoding="utf-8") as f:
                 reports = {r["offer"]: r for r in json.load(f)["reports"]}
-        self.assertEqual((reports[fixed_id]["fixed_how"], reports["999999"]["fixed_from"], reports[still_id]["fixed_at"]),
-                         ("recontrôle OK", "SUSPECT", None))
+        self.assertEqual((reports[fixed_id]["fixed_kind"], reports["999999"]["fixed_from"], reports[still_id]["fixed_at"]),
+                         ("rule", "SUSPECT", None))
         # 2. passage demandé depuis l'admin : TOUTES les offres retenues, l'offre OK comprise (nouvelle erreur, alertée)
         state, sent, checked[:] = fresh_state(), [], []
         with mock.patch.object(pc, "http_get", return_value=(200, None, self.PAGE)), mock.patch.object(pc, "NOTIFY_OK", False):
@@ -1390,6 +1392,17 @@ class TestOfferModes20261001(unittest.TestCase):
         recap = pc.format_recheck("Price check top", "romain", outcome, full=True)
         self.assertIn("Recontrôle de toutes les offres** · Price check top (demandé depuis l'admin par romain) · 4 offre(s)", recap)
         self.assertIn("🆕 Nouvelles erreurs (1)", recap)
+        # 02/10/2026 : « réparée » seulement si l'offre a changé (URL, région, plateforme, édition) ; sinon c'est un
+        # ancien faux positif que les règles ont levé (UFC 5 chez Eneba, Onimusha au PS Store US, recontrôle de 18:37)
+        state = fresh_state()
+        state["checked"][fixed_id].update(url="https://shop.example/ea-sports-fc-27-eu-key", region="EUROPE")
+        with mock.patch.object(pc, "http_get", return_value=(200, None, self.PAGE)), mock.patch.object(pc, "NOTIFY_OK", False):
+            outcome = pc.run_cycle(self.TARGETS, lambda m: None, state,
+                                   lambda p, o: dict(self.ok(p, o), url="https://shop.example/ea-sports-fc-27-global-key")
+                                   if str(o["id"]) == fixed_id else dict(suspect), per_edition=3, recheck="flagged")
+        e = state["checked"][fixed_id]
+        self.assertEqual(e["fixed_kind"], "repaired")
+        self.assertTrue(e["fixed_how"].startswith("recontrôle OK, l'offre a changé (URL"), e["fixed_how"])
         # un recontrôle qui ne conclut pas (page illisible) ne défait pas un OK vérifié (G2A Witcher, 02/10/2026)
         state, sent = fresh_state(), []
         unverifiable = {"verdict": "À VÉRIFIER", "reasons": ["édition Bundle : nom non contrôlé dans l'URL, page marchand illisible"],
@@ -1407,7 +1420,7 @@ class TestOfferModes20261001(unittest.TestCase):
         # 3. sans recontrôle : rien
         with mock.patch.object(pc, "http_get", return_value=(200, None, self.PAGE)), mock.patch.object(pc, "NOTIFY_OK", False):
             outcome = pc.run_cycle(self.TARGETS, lambda m: None, pc.load_state("/nonexistent"), self.ok)
-        self.assertEqual(outcome, {"checked": 0, "fixed": [], "removed": [], "still": [], "new": [], "unknown": []})
+        self.assertEqual(outcome, {"checked": 0, "fixed": [], "removed": [], "rules": [], "still": [], "new": [], "unknown": []})
         self.assertIn("Rien à signaler", pc.format_recheck("Price check top", "", outcome))
 
     def test_webhook_per_mode(self):

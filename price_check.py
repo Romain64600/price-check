@@ -1445,6 +1445,9 @@ def apply_recheck(entry, label, rank, product, page_url, offer, res, notify, sta
     VÉRIFIABLE) ne change rien au verdict : un OK vérifié reste OK (G2A, The Witcher Trilogy Pack, 02/10/2026 :
     « Access Denied » au recontrôle, alors que la page avait été lue le 30/09)."""
     was = entry.get("verdict")
+    before = offer_facts(entry.get("url"), entry.get("region"), entry.get("region_filter"), entry.get("platform"), entry.get("edition"))
+    after = offer_facts(res.get("url") or entry.get("url"), offer.get("region"), offer.get("region_filter"), offer.get("platform"),
+                        offer.get("edition"))
     if res["verdict"] in ("À VÉRIFIER", "NON VÉRIFIABLE"):
         entry["last_recheck"] = stamp
         entry["seen"] = now
@@ -1457,8 +1460,15 @@ def apply_recheck(entry, label, rank, product, page_url, offer, res, notify, sta
     outcome["checked"] += 1
     if res["verdict"] == "OK":
         if was in REPORTED:
-            entry.update(fixed_at=stamp, fixed_how="recontrôle OK", fixed_from=was, verdict="OK")
-            outcome["fixed"].append(entry)
+            changed = [name for name, a, b in zip(("URL", "région", "plateforme", "édition"), before, after) if a and b and a != b]
+            if changed:  # l'offre a changé chez AllKeyShop ou chez le marchand : une vraie réparation
+                entry.update(fixed_at=stamp, fixed_kind="repaired", fixed_how="recontrôle OK, l'offre a changé (%s)" % ", ".join(changed),
+                             fixed_from=was, verdict="OK")
+                outcome["fixed"].append(entry)
+            else:  # rien n'a changé : c'était un faux positif, levé par une règle ajoutée depuis
+                entry.update(fixed_at=stamp, fixed_kind="rule", fixed_how="ancien faux positif : rien n'a changé, levé par une règle",
+                             fixed_from=was, verdict="OK")
+                outcome["rules"].append(entry)
         else:
             entry["verdict"] = "OK"
         return
@@ -1480,6 +1490,13 @@ def apply_recheck(entry, label, rank, product, page_url, offer, res, notify, sta
             log.error("Envoi Discord impossible : %s", e)
 
 
+def offer_facts(url, region, region_filter, platform, edition):
+    """Ce qui identifie une offre pour dire si elle a changé entre deux contrôles : chemin de l'URL marchand (sans les
+    paramètres de suivi), région, plateforme, édition."""
+    path = norm(url_text(unwrap_affiliate(url))) if url else ""
+    return (path, norm(region_filter or region or ""), norm(platform or ""), norm(edition or ""))
+
+
 def recheck_flagged(label, rank, product, page_url, trans, state, notify, checker, stamp, now, outcome, skip=()):
     """Romain, 02/10/2026 : « il faut qu'il contrôle les offres déjà vues, comme ça on saura si elles sont réparées ou
     pas ». Les offres signalées de la page qui ne sont plus parmi les offres retenues (`skip` : déjà recontrôlées) :
@@ -1492,8 +1509,8 @@ def recheck_flagged(label, rank, product, page_url, trans, state, notify, checke
     for key, entry in flagged.items():
         offer = on_page.get(key)
         if offer is None:
-            entry.update(fixed_at=stamp, fixed_how="offre retirée de la page", fixed_from=entry["verdict"], verdict="OK",
-                         seen=now, last_recheck=stamp)
+            entry.update(fixed_at=stamp, fixed_kind="repaired", fixed_how="offre retirée de la page", fixed_from=entry["verdict"],
+                         verdict="OK", seen=now, last_recheck=stamp)
             outcome["removed"].append(entry)
             continue
         offer["page_dlc"] = page_dlc
@@ -1517,6 +1534,10 @@ def format_recheck(label, by, outcome, full=False):
     fixed = ["%s — %s" % (item(e), e.get("fixed_how")) for e in outcome["removed"] + outcome["fixed"]]
     if fixed:
         lines.append("✅ Réparées (%d) : %s%s" % (len(fixed), " ; ".join(fixed[:15]), " ; …" if len(fixed) > 15 else ""))
+    rules = [item(e) for e in outcome.get("rules", [])]
+    if rules:
+        lines.append("🧹 Anciens faux positifs levés par les règles, rien n'a changé (%d) : %s%s" % (
+            len(rules), " ; ".join(rules[:10]), " ; …" if len(rules) > 10 else ""))
     new = ["%s (%s)" % (item(e), (e.get("reasons") or ["?"])[0][:90]) for e in outcome["new"]]
     if new:
         lines.append("🆕 Nouvelles erreurs (%d) : %s%s" % (len(new), " ; ".join(new[:15]), " ; …" if len(new) > 15 else ""))
@@ -1527,7 +1548,7 @@ def format_recheck(label, by, outcome, full=False):
         unknown = ["%s (%s)" % (item(e), why[:70]) for e, why in outcome["unknown"]]
         lines.append("⚪ Recontrôle sans conclusion, verdict inchangé (%d) : %s%s" % (
             len(unknown), " ; ".join(unknown[:5]), " ; …" if len(unknown) > 5 else ""))
-    if not (fixed or new or still or outcome["unknown"]):
+    if not (fixed or rules or new or still or outcome["unknown"]):
         lines.append("Rien à signaler : aucune offre réparée ni en erreur.")
     return "\n".join(lines)[:1900]
 
@@ -1545,7 +1566,7 @@ def run_cycle(targets, notify, state, checker=None, save=None, per_edition=1, be
     checker = checker or check_offer
     now = time.time()
     stamp = time.strftime("%Y-%m-%d %H:%M", time.localtime(now))
-    outcome = {"checked": 0, "fixed": [], "removed": [], "still": [], "new": [], "unknown": []}
+    outcome = {"checked": 0, "fixed": [], "removed": [], "rules": [], "still": [], "new": [], "unknown": []}
     for count, (label, rank, product, page_url) in enumerate(targets, 1):
         if between and count > 1:
             between()
@@ -1726,6 +1747,7 @@ def export_reports(state, directory, pages=None):
             "page_first": e.get("page_first"), "seen": e.get("seen"),
             # recontrôle des offres signalées (02/10/2026) : réparée (retirée de la page, ou recontrôle OK) ou toujours en erreur
             "fixed_at": e.get("fixed_at"), "fixed_how": e.get("fixed_how"), "fixed_from": e.get("fixed_from"),
+            "fixed_kind": e.get("fixed_kind"),
             "last_recheck": e.get("last_recheck"), "still_wrong_at": e.get("still_wrong_at"),
         })
     reports.sort(key=lambda r: r.get("at") or "", reverse=True)
@@ -1884,7 +1906,8 @@ def main():
             if recheck:
                 last_recheck[mode] = time.monotonic()
                 st["last_recheck"] = {"at": stamp_iso(), "kind": recheck, "checked": outcome["checked"],
-                                      "fixed": len(outcome["fixed"]) + len(outcome["removed"]), "new": len(outcome["new"]),
+                                      "fixed": len(outcome["fixed"]) + len(outcome["removed"]), "rules": len(outcome["rules"]),
+                                      "new": len(outcome["new"]),
                                       "still": len(outcome["still"]), "unknown": len(outcome["unknown"])}
                 recap = format_recheck(MODES[mode]["label"], requested, outcome, full=recheck == "all")
                 log.info("%s", recap.replace("\n", " | "))
