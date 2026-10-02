@@ -2000,6 +2000,14 @@ class TestDetectionAudit20261002(unittest.TestCase):
         r = pc.analyze("Farming Simulator 25", offer(), pc.url_text("https://shop.example/farming-simulator-25-season-pass-pc-steam"), "URL")
         self.assertEqual(r["reasons"], ["contenu additionnel : season-pass"])
 
+    def test_currency_quantity_that_looks_like_a_year_and_awin_links(self):
+        r = lambda product, url: pc.analyze(product, offer(), pc.url_text(url), "URL")["reasons"]
+        self.assertEqual(r("Apex Legends", "https://shop.example/apex-legends-2000-coins-pc"), ["monnaie de jeu chez le marchand : coins"])
+        self.assertEqual(r("War Thunder", "https://shop.example/war-thunder-2500-golden-eagles-pc"), ["monnaie de jeu chez le marchand : golden-eagles"])
+        self.assertEqual(r("Football Manager 2024", "https://shop.example/football-manager-2024-pc-steam"), [])  # l'année du nom
+        awin = "https://www.awin1.com/cread.php?awinmid=1&awinaffid=2&ued=https%3A%2F%2Fwww.example-shop.com%2Fcrimson-desert-pc-steam"
+        self.assertEqual(pc.unwrap_affiliate(awin), "https://www.example-shop.com/crimson-desert-pc-steam")
+
     def test_aliases_of_the_audit(self):
         pc._PRODUCT_ALIASES = None
         self.assertEqual(self.match("Diablo 4 Lord of Hatred Xbox Series",

@@ -198,7 +198,7 @@ NEVER_MISSING = {"upgrade", "dlc", "expansion", "season", "pass", "soundtrack", 
 # sont attendus.
 CURRENCY_PHRASES = ("cod-points", "v-bucks", "vbucks", "apex-coins", "fut-points", "fc-points", "fifa-points", "shark-card",
                     "cash-card", "riot-points", "robux", "minecoins", "gift-card", "prepaid-card", "psn-card", "eshop-card",
-                    "playstation-network-card", "wallet", "top-up", "topup")
+                    "playstation-network-card", "wallet", "top-up", "topup", "golden-eagles")  # golden eagles : War Thunder
 CURRENCY_WORDS = ("points", "coins", "credits", "gems", "tokens", "crystals", "shards")
 WALLET_PHRASES = ("wallet", "top-up", "topup", "gift-card", "prepaid-card", "psn-card", "playstation-network-card", "eshop-card")
 # Éditions AllKeyShop qui sont elles-mêmes de la monnaie : « Standard + Great White Shark Card », « GTA 5 + Criminal + Megalodon »
@@ -469,7 +469,7 @@ def merchant_url(interstitial):
 def unwrap_affiliate(url):
     """Lien affilié (go.loaded.com/...?u=https://www.loaded.com/...) : la cible est en paramètre."""
     query = urllib.parse.parse_qs(urllib.parse.urlparse(url).query)
-    for key in ("u", "url", "dest", "destination", "redirect", "target", "link", "r"):
+    for key in ("u", "url", "dest", "destination", "redirect", "target", "link", "r", "ued"):  # ued : Awin
         for value in query.get(key, ()):
             if value.startswith("http"):
                 return unwrap_affiliate(value)
@@ -1055,7 +1055,10 @@ def currency_reason(offer, words, normed):
     wallet = "WALLET" in ("%s %s" % (offer.get("region_filter") or "", offer.get("region") or "")).upper()
     found = [p for p in CURRENCY_PHRASES if re.search(r"(^|-)%s(-|$)" % re.escape(p), normed) and not (wallet and p in WALLET_PHRASES)]
     numbers = [int(w) for w in words.split("-") if w.isdigit() and len(w) >= 3]
-    if any(n >= 100 and not 1980 <= n <= 2035 for n in numbers):  # une quantité, pas une année
+    # une quantité, pas une année ; un nombre suivi d'un mot de monnaie est toujours une quantité (« apex-legends-2000-coins »,
+    # audit du 02/10/2026 : 2000 passait pour une année)
+    counted = any(re.search(r"(^|-)\d{3,}-%s(-|$)" % w, words) for w in CURRENCY_WORDS)
+    if counted or any(n >= 100 and not 1980 <= n <= 2035 for n in numbers):
         found += [w for w in CURRENCY_WORDS if re.search(r"(^|-)%s(-|$)" % w, words) and not any(w in p for p in found)]
     return "monnaie de jeu chez le marchand : " + ", ".join(found) if found else None
 
