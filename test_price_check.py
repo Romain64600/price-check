@@ -955,6 +955,22 @@ class TestConfirmOnMerchantPage(unittest.TestCase):
         self.assertEqual(res["verdict"], "SUSPECT")
         self.assertTrue(res["reasons"][0].startswith("offre en rupture chez le marchand : le lien redirige vers une autre fiche"), res)
 
+    def test_kinguin_probe_keeps_what_it_saw_and_never_passes_silently(self):
+        # 02/10/2026 : la fiche servie à la place du lien est gardée pour le recontrôle (evidence) ; une sonde en erreur
+        # n'est pas une fiche en stock : contrôle raté, retenté au passage suivant (À VÉRIFIER au 3e échec)
+        rust = "https://www.kinguin.net/category/55259/rust-eu-steam-altergift/"
+        o = offer(merchantName="Kinguin", region="GIFT EU", region_filter="STEAM GIFT EU")
+        with mock.patch.object(pc, "http_get", side_effect=[(200, None, self.page(rust)), (301, "/category/55259/rust-de-pc-steam-altergift", "")]):
+            res = pc.check_offer("Rust", o)
+        self.assertEqual(res["evidence"], {"served": pc.norm(pc.url_text("https://www.kinguin.net/category/55259/rust-de-pc-steam-altergift")),
+                                           "page": ""})
+        with mock.patch.object(pc, "http_get", side_effect=[(200, None, self.page(rust)), (200, None, "")]):
+            res = pc.check_offer("Rust", o)
+        self.assertEqual((res["verdict"], res["evidence"]), ("OK", {"served": "", "page": ""}))
+        with mock.patch.object(pc, "http_get", side_effect=[(200, None, self.page(rust)), OSError("timed out")]):
+            with self.assertRaises(pc.CheckError):
+                pc.check_offer("Rust", o)
+
     def test_browser_headers_and_moved(self):
         # 02/10/2026 : Akamai (Kinguin) répond 403 à l'Accept minimal, 200 ou 301 au jeu complet d'en-têtes de Chrome
         h = pc.request_headers(pc.BROWSER_UA)
@@ -1422,6 +1438,42 @@ class TestOfferModes20261001(unittest.TestCase):
             outcome = pc.run_cycle(self.TARGETS, lambda m: None, pc.load_state("/nonexistent"), self.ok)
         self.assertEqual(outcome, {"checked": 0, "fixed": [], "removed": [], "rules": [], "still": [], "new": [], "unknown": []})
         self.assertIn("Rien à signaler", pc.format_recheck("Price check top", "", outcome))
+
+    def test_recheck_tells_a_repair_behind_the_same_link(self):
+        """02/10/2026 : une fiche Kinguin signalée en rupture puis de nouveau en stock garde le même lien, la même région,
+        la même plateforme : c'est le marchand qui a réparé, pas une règle qui blanchit un faux positif. Le contrôle garde
+        ce qu'il a vu au-delà du lien (fiche servie, titre de la page) et le recontrôle le compare."""
+        link = "https://www.kinguin.net/category/55259/rust-eu-steam-altergift/"
+        stock = pc.out_of_stock_reason("https://www.kinguin.net/category/55259/rust-de-pc-steam-altergift")
+        o = offer(merchantName="Kinguin", region="GIFT EU", region_filter="STEAM GIFT EU", edition_rank=1, page_first=True)
+
+        def recheck(entry, res):
+            outcome = {"checked": 0, "fixed": [], "removed": [], "rules": [], "still": [], "new": [], "unknown": []}
+            pc.apply_recheck(entry, "Popular", 1, "Rust", "https://aks/rust", o, res, lambda m: None, "2026-10-02 21:00",
+                             pc.time.time(), outcome)
+            return entry
+        base = lambda **kw: dict({"verdict": "SUSPECT", "url": link, "region": "GIFT EU", "region_filter": "STEAM GIFT EU",
+                                  "platform": "steam", "edition": "Standard", "reasons": [stock]}, **kw)
+        ok = lambda ev: {"verdict": "OK", "reasons": [], "notes": [], "url": link, "method": "URL", "evidence": ev}
+        nothing = pc.evidence_of(None, None)
+        # 1. alerte d'avant le 02/10 (rien gardé de ce qui avait été vu) : seule la raison « en rupture » le dit
+        e = recheck(base(), ok(nothing))
+        self.assertEqual((e["fixed_kind"], e["fixed_how"]), ("repaired", "recontrôle OK, l'offre a changé (fiche servie)"))
+        self.assertEqual(e["evidence"], nothing)  # désormais gardé
+        # 2. la fiche servie est gardée : elle était une autre, le lien sert de nouveau sa fiche
+        served = pc.evidence_of("https://www.kinguin.net/category/55259/rust-de-pc-steam-altergift", None)
+        self.assertEqual(recheck(base(evidence=served), ok(nothing))["fixed_kind"], "repaired")
+        # 3. même lien, autre titre de page (le marchand a corrigé sa fiche) : réparée
+        title = lambda t: pc.evidence_of(None, t)
+        e = recheck(base(reasons=["autre produit chez le marchand : « Nocturne » au lieu de « Rust » (titre de la page)"],
+                         evidence=title("Nocturne PC Steam CD Key | Kinguin")), ok(title("Rust EU Steam Altergift | Kinguin")))
+        self.assertEqual((e["fixed_kind"], e["fixed_how"]), ("repaired", "recontrôle OK, l'offre a changé (page marchand)"))
+        # 4. rien n'a changé, ni le lien ni ce qui a été vu : une règle a levé un faux positif
+        e = recheck(base(reasons=["région : AllKeyShop GIFT EU, marchand GLOBAL"], evidence=title("Rust | Kinguin")),
+                    ok(title("Rust | Kinguin")))
+        self.assertEqual(e["fixed_kind"], "rule")
+        e = recheck(base(reasons=["région : AllKeyShop GIFT EU, marchand GLOBAL"]), ok(nothing))  # d'avant le 02/10, sans rupture
+        self.assertEqual(e["fixed_kind"], "rule")
 
     def test_recap_due(self):
         """Après un passage automatique, le récapitulatif ne part que s'il y a du nouveau ; un ancien faux

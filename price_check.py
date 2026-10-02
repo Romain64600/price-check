@@ -443,9 +443,12 @@ def merchant_config(url, merchant_name):
     return {}
 
 
+STOCK_REASON_START = "offre en rupture chez le marchand"
+
+
 def out_of_stock_reason(served):
     """Groupe Kinguin : la fiche du lien est en rupture, le marchand sert une autre offre, le prix reste dans le feed."""
-    return "offre en rupture chez le marchand : le lien redirige vers une autre fiche (%s), mais le prix reste dans le feed" % served
+    return STOCK_REASON_START + " : le lien redirige vers une autre fiche (%s), mais le prix reste dans le feed" % served
 
 
 def redirect_untrusted(cfg):
@@ -1186,11 +1189,24 @@ class CheckError(Exception):
     """Contrôle impossible pour l'instant (réseau, redirection AllKeyShop en erreur) : à réessayer."""
 
 
+def evidence_of(served, page_text):
+    """Ce que le contrôle a vu au-delà du lien : la fiche servie à sa place (groupe Kinguin : rupture ; Nintendo : la
+    version anglaise) et le titre de la page lue. Le recontrôle s'en sert pour dire si l'offre a changé chez le
+    marchand alors que le lien est le même (fiche Kinguin de nouveau en stock : réparée, pas un faux positif)."""
+    return {"served": norm(url_text(served)) if served else "", "page": norm(page_text)[:300] if page_text else ""}
+
+
 def check_offer(product, offer):
     """Suit la redirection AllKeyShop de l'offre et confronte l'URL marchand au produit.
 
-    Renvoie {"verdict", "reasons", "notes", "url", "method"}.
+    Renvoie {"verdict", "reasons", "notes", "url", "method", "evidence"}.
     """
+    served = page_text = None  # fiche servie à la place du lien, texte de la page lue : voir evidence_of
+
+    def done(verdict, method, reasons, notes, **extra):
+        return dict({"verdict": verdict, "url": url, "method": method, "reasons": reasons, "notes": notes,
+                     "evidence": evidence_of(served, page_text)}, **extra)
+
     for attempt in (1, 2):
         try:
             status, _, body = http_get(REDIRECTION_URL % (offer["id"], offer["merchant"]), AKS_UA)
@@ -1223,9 +1239,8 @@ def check_offer(product, offer):
         if alt:
             result = analyze(product, offer, url_text(alt), "URL de la version %s" % hreflang, region=region_text(alt, cfg))
             result["notes"].append("nom contrôlé sur %s" % alt)
-            method = "URL de la version %s" % hreflang
-            return {"verdict": "SUSPECT" if result["reasons"] else "OK", "url": url, "method": method,
-                    "reasons": result["reasons"], "notes": result["notes"]}
+            served = alt
+            return done("SUSPECT" if result["reasons"] else "OK", "URL de la version %s" % hreflang, result["reasons"], result["notes"])
 
     location = None
     if redirect_untrusted(cfg) or result["match"] is None:
@@ -1236,7 +1251,9 @@ def check_offer(product, offer):
         # nomme un autre (slug périmé) : c'est l'URL finale qui compte.
         try:
             _, location, _ = http_get(url, BROWSER_UA, follow=False)
-        except OSError:
+        except OSError as e:
+            if redirect_untrusted(cfg):  # sans la sonde, une rupture passerait pour une offre OK : contrôle raté, retenté
+                raise CheckError("sonde de la fiche marchand : %s" % e)
             location = None
         time.sleep(REQUEST_DELAY)
     if location:
@@ -1244,6 +1261,7 @@ def check_offer(product, offer):
         if redirect_untrusted(cfg):
             if moved(url, url2):
                 flag_out_of_stock(result, product, offer, url2)
+                served = url2
         elif result["match"] is None:
             result2 = analyze(product, offer, url_text(url2), "URL après redirection du marchand", region=region_text(url2, cfg))
             if result2["match"] or result2.get("label"):  # la fiche finale nomme le produit, ou un autre
@@ -1256,27 +1274,23 @@ def check_offer(product, offer):
         # problème détecté à la base »). Sauf marchand dont la page décide (LDShop : option cochée ; PS Store), aux
         # titres traduits (« localized ») ou contrôlé sur sa version anglaise (Nintendo : un slug traduit n'est pas
         # un autre produit quand la version en-GB n'a pas pu être lue)
-        return {"verdict": "SUSPECT", "url": url, "method": method, "reasons": result["reasons"], "notes": result["notes"]}
+        return done("SUSPECT", method, result["reasons"], result["notes"])
 
-    page_text = None
     if result["match"] is None:
         # 2e repli : lire la page marchand (HTTP simple, puis Chromium si la config le permet)
         page_text, page_method = merchant_page_text(url, cfg)
         if page_text is None:
             others = [r for r, k in zip(result["reasons"], result["kinds"]) if k != "name"]
             if others:  # le nom ne se vérifie pas, mais l'URL montre déjà un autre problème (Elden Ring : « PlayStation »)
-                return {"verdict": "SUSPECT", "url": url, "method": method, "reasons": others,
-                        "notes": result["notes"] + ["nom du produit non vérifiable (page marchand illisible)"]}
-            return {"verdict": "À VÉRIFIER", "url": url, "method": "aucune", "notes": [],
-                    "reasons": [unverified_reason(offer, url)],
-                    "unverifiable": cfg.get("unverifiable", "first-price")}
+                return done("SUSPECT", method, others, result["notes"] + ["nom du produit non vérifiable (page marchand illisible)"])
+            return done("À VÉRIFIER", "aucune", [unverified_reason(offer, url)], [],
+                        unverifiable=cfg.get("unverifiable", "first-price"))
         result, method = analyze(product, offer, page_text, "titre de la page"), page_method
         if cfg.get("localized") and result["kinds"] == ["name"]:
             # boutique au titre traduit (Amazon.fr : « Kirby et le monde oublié ») : un nom introuvable
             # n'est pas une preuve, un humain vérifie ; la réponse enrichit aliases.toml
-            return {"verdict": "À VÉRIFIER", "url": url, "method": method, "notes": result["notes"],
-                    "reasons": ["titre du marchand dans une autre langue, nom non reconnu : %s" % page_text[:120]],
-                    "unverifiable": cfg.get("unverifiable", "first-price")}
+            return done("À VÉRIFIER", method, ["titre du marchand dans une autre langue, nom non reconnu : %s" % page_text[:120]],
+                        result["notes"], unverifiable=cfg.get("unverifiable", "first-price"))
 
     # le DLC aussi, sur une édition « X + Y » : le « + » du titre (le jeu plus le contenu) disparaît dans l'URL
     confirmable = [k for k in result["kinds"] if k in ("platform", "console", "zone")
@@ -1300,10 +1314,10 @@ def check_offer(product, offer):
             # canonique que le lien ?
             canonical = page_canonical(url, cfg)
             if moved(url, canonical):
-                flag_out_of_stock(result, product, offer, urllib.parse.urljoin(url, canonical))
+                served = urllib.parse.urljoin(url, canonical)
+                flag_out_of_stock(result, product, offer, served)
 
-    return {"verdict": "SUSPECT" if result["reasons"] else "OK", "url": url, "method": method,
-            "reasons": result["reasons"], "notes": result["notes"]}
+    return done("SUSPECT" if result["reasons"] else "OK", method, result["reasons"], result["notes"])
 
 
 # ---- Alertes, état, boucle ---------------------------------------------------
@@ -1453,14 +1467,15 @@ def apply_recheck(entry, label, rank, product, page_url, offer, res, notify, sta
         entry["seen"] = now
         outcome["unknown"].append((entry, (res.get("reasons") or ["recontrôle sans conclusion"])[0]))
         return
+    changed = [name for name, a, b in zip(("URL", "région", "plateforme", "édition"), before, after) if a and b and a != b]
+    changed += seen_changes(entry, res)
     entry.update(reasons=res["reasons"], notes=res["notes"], method=res["method"], url=res["url"] or entry.get("url"),
                  edition_rank=offer.get("edition_rank"), page_first=offer.get("page_first", False), seen=now,
                  last_recheck=stamp, region=offer["region"], region_filter=offer.get("region_filter", ""),
-                 platform=offer["platform"], price=offer["price"])
+                 platform=offer["platform"], price=offer["price"], evidence=res.get("evidence"))
     outcome["checked"] += 1
     if res["verdict"] == "OK":
         if was in REPORTED:
-            changed = [name for name, a, b in zip(("URL", "région", "plateforme", "édition"), before, after) if a and b and a != b]
             if changed:  # l'offre a changé chez AllKeyShop ou chez le marchand : une vraie réparation
                 entry.update(fixed_at=stamp, fixed_kind="repaired", fixed_how="recontrôle OK, l'offre a changé (%s)" % ", ".join(changed),
                              fixed_from=was, verdict="OK")
@@ -1488,6 +1503,23 @@ def apply_recheck(entry, label, rank, product, page_url, offer, res, notify, sta
             notify(msg)
         except Exception as e:
             log.error("Envoi Discord impossible : %s", e)
+
+
+def seen_changes(entry, res):
+    """Ce qui a changé chez le marchand derrière le même lien : la fiche servie (Kinguin de nouveau en stock), le titre
+    de la page lue. Une offre contrôlée avant le 02/10/2026 n'a pas gardé ce qu'elle avait vu : seule sa raison
+    « en rupture » le dit (la fiche servie était une autre)."""
+    old, new = entry.get("evidence"), res.get("evidence") or {}
+    if old is None:
+        was_stock = any(r.startswith(STOCK_REASON_START) for r in entry.get("reasons") or [])
+        now_stock = any(r.startswith(STOCK_REASON_START) for r in res.get("reasons") or [])
+        return ["fiche servie"] if was_stock and not now_stock else []
+    changes = []
+    if "served" in new and (old.get("served") or "") != (new.get("served") or ""):
+        changes.append("fiche servie")
+    if old.get("page") and new.get("page") and old["page"] != new["page"]:
+        changes.append("page marchand")
+    return changes
 
 
 def offer_facts(url, region, region_filter, platform, edition):
@@ -1640,6 +1672,7 @@ def run_cycle(targets, notify, state, checker=None, save=None, per_edition=1, be
                 "page": page_url, "list": label, "rank": rank,
                 "edition_rank": offer.get("edition_rank"), "account": offer.get("account", False),
                 "page_first": offer.get("page_first", False), "unverifiable": res.get("unverifiable"),
+                "evidence": res.get("evidence"),
             }
             if res["method"] != "aucune":
                 m = state["merchants"].setdefault(offer["merchantName"], {"methods": {}})
