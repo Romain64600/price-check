@@ -832,6 +832,67 @@ class TestConfirmOnMerchantPage(unittest.TestCase):
         res = pc.analyze("World of Warcraft: Forever", o, pc.url_text(url), "URL")
         self.assertEqual((res["match"], res["reasons"]), ("exact", []))
 
+    def test_url_naming_another_product_alerts_without_the_page(self):
+        # Romain, 02/10/2026 : « je vois pas pourquoi tu veux vérifier la page quand on a déjà un problème détecté à
+        # la base ». Titanfall 2 : l'URL nomme le premier Titanfall ; une seule requête, la redirection AllKeyShop
+        url = "https://www.driffle.com/titanfall-deluxe-edition-en-language-only-ea-app-cd-key-p123456"
+        # deux requêtes seulement : la redirection AllKeyShop et le 301 éventuel du marchand (ici un 403) ; jamais la page
+        with mock.patch.object(pc, "http_get", side_effect=[(200, None, self.page(url)), (403, None, "")]) as get:
+            res = pc.check_offer("Titanfall 2", offer(merchantName="Driffle", edition="Deluxe", region="IN ENGLISH ONLY",
+                                                     region_filter="EA ENG/POL/RUS ONLY", platform="ea-app"))
+        self.assertEqual((res["verdict"], res["method"], get.call_count), ("SUSPECT", "URL", 2))
+        self.assertTrue(res["reasons"][0].startswith("autre produit chez le marchand : « Titanfall Deluxe Edition"), res["reasons"])
+        # audit du 02/10/2026 : un slug périmé que le marchand redirige (301) vers la fiche du bon produit n'alerte pas
+        # (Instant Gaming garde l'id et change le slug : « /en/4860-buy-key-…-breath-of-the-wild-2/ »)
+        zelda = "The Legend of Zelda Tears of the Kingdom Nintendo Switch"
+        stale = "https://www.instant-gaming.com/en/4860-buy-key-some-old-name/"
+        good = "https://www.instant-gaming.com/en/4860-buy-the-legend-of-zelda-tears-of-the-kingdom-switch-game-nintendo-eshop-europe/"
+        with mock.patch.object(pc, "http_get", side_effect=[(200, None, self.page(stale)), (301, good, "")]):
+            res = pc.check_offer(zelda, offer(merchantName="Instant Gaming", region="EUROPE", platform="nintendo-eshop"))
+        self.assertEqual((res["verdict"], res["method"]), ("OK", "URL après 301 marchand"))
+        # et un lien sans nom dont le 301 mène à une fiche d'un autre produit alerte, sans lire la page
+        other = "https://www.instant-gaming.com/en/4860-buy-the-legend-of-zelda-breath-of-the-wild-switch/"
+        with mock.patch.object(pc, "http_get", side_effect=[(200, None, self.page("https://www.instant-gaming.com/en/4860-/")), (301, other, "")]):
+            res = pc.check_offer(zelda, offer(merchantName="Instant Gaming", region="EUROPE", platform="nintendo-eshop"))
+        self.assertEqual((res["verdict"], res["method"]), ("SUSPECT", "URL après 301 marchand"))
+        self.assertIn("Breath Of The Wild", res["reasons"][0])
+        # une boutique contrôlée sur sa version anglaise (Nintendo) n'alerte jamais sur son slug traduit
+        fr = "https://www.nintendo.com/fr-fr/Jeux/Jeux-a-telecharger/Le-Chat-Chapeaute-Pagaille-sous-la-pluie-3177999.html"
+        with mock.patch.object(pc, "http_get", side_effect=[(200, None, self.page(fr)), (503, None, ""), (503, None, ""), (503, None, "")]), \
+             mock.patch.object(pc, "page_title", return_value=None), mock.patch.object(pc, "chromium_dom", return_value=None):
+            res = pc.check_offer("The Cat in the Hat Rainy Day Mayhem Nintendo Switch", offer(merchantName="Nintendo eShop FR", platform="nintendo-eshop"))
+        self.assertNotEqual(res["verdict"], "SUSPECT")
+        # une URL qui ne nomme rien (un code) va toujours lire la page
+        self.assertIsNone(pc.merchant_label("bundle 27059", "URL"))  # Steam « /bundle/27059/ »
+        self.assertIsNone(pc.merchant_label("preorder-page", "URL"))  # Escape from Tarkov, page de l'éditeur
+
+    def test_slug_repairs_and_shortened_names_20261002(self):
+        # rejeu du 02/10/2026 : six offres OK grâce à la page seraient devenues de fausses alertes immédiates
+        self.assertEqual(pc.repair_slug("nintendo-pokemontm-pokopia-nintendo-switch-2"), "nintendo-pokemon-pokopia-nintendo-switch-2")
+        self.assertEqual(pc.repair_slug("s-t-a-l-k-e-r-2-heart-of-chernobyl"), "stalker-2-heart-of-chernobyl")
+        self.assertEqual(pc.repair_slug("xbox-series-x-s-key"), "xbox-series-x-s-key")  # deux lettres : pas un sigle
+        self.assertEqual(pc.norm("Kingdom Hearts HD 1.5+2.5 ReMIX"), "kingdom-hearts-hd-1-5-2-5-remix")
+        self.assertIn("kingdom hearts hd 15 25 remix", [pc.norm(n).replace("-", " ") for n in pc.name_variants("Kingdom Hearts HD 1.5+2.5 ReMIX")])
+        cases = (("Pokemon Pokopia Nintendo Switch 2", "https://www.eneba.com/nintendo-pokemontm-pokopia-nintendo-switch-2-nintendo-eshop-key-europe"),
+                 ("S.T.A.L.K.E.R. 2 Heart of Chornobyl", "https://www.gamivo.com/product/s-t-a-l-k-e-r-2-heart-of-chernobyl-steam-gift"),
+                 ("Kingdom Hearts HD 1.5+2.5 ReMIX Xbox Series", "https://www.kinguin.net/category/204807/kingdom-hearts-1-5-2-5-hd-remix-eu-xbox-one-xbox-series-x-s-cd-key"),
+                 ("The Legend of Zelda Tears of the Kingdom Nintendo Switch", "https://www.instant-gaming.com/en/4860-buy-key-nintendo-the-legend-of-zelda-breath-of-the-wild-2/"),
+                 ("Call of Duty Black Ops 6", "https://www.g2a.com/black-ops-6-vault-edition-pc-steam-key-global-i100"),
+                 ("Marvel’s Spider-Man 2", "https://www.gamivo.com/product/spider-man-2-pc-steam-global"),
+                 ("World of Warcraft: Forever", "https://www.driffle.com/warcraft-forever-skyborne-heroic-pack-dlc-global-pc-mac-battlenet-gift-p10001673"))
+        pc._PRODUCT_ALIASES = None
+        for product, url in cases:
+            with self.subTest(product=product):
+                self.assertIsNotNone(pc.analyze(product, offer(edition="Standard"), pc.url_text(url), "URL")["match"])
+        # le préfixe omis garde le numéro et deux mots au moins
+        self.assertIsNone(pc.name_match(pc.name_variants("Call of Duty Black Ops 6"), pc.norm("black-ops-7-vault-edition-pc")))
+        self.assertNotIn("warcraft", [pc.norm(n) for n in pc.name_variants("World of Warcraft")])
+        # audit du 02/10/2026 : le suffixe de plateforme ne compte pas pour les « deux mots au moins »
+        self.assertNotIn("avengers ps5", [pc.norm(n).replace("-", " ") for n in pc.name_variants("Marvel’s Avengers PS5")])
+        self.assertIn("spider man 2 ps5", [pc.norm(n).replace("-", " ") for n in pc.name_variants("Marvel’s Spider-Man 2 PS5")])
+        self.assertIsNone(pc.name_match(pc.name_variants("The Legend of Zelda Tears of the Kingdom Nintendo Switch"),
+                                        pc.norm("the-legend-of-zelda-breath-of-the-wild-nintendo-switch")))
+
     def test_kinguin_serves_another_page_than_the_link(self):
         # arbitrage du 01/10/2026, Stellaris (offre 135046199) : le lien « …-starter-pack-eu-steam-cd-key » sert la
         # fiche globale « …-starter-pack-bundle-2023-pc-steam-cd-key » (URL canonique) : la fiche servie fait foi

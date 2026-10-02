@@ -11,6 +11,7 @@
 # K4G écrit « Booster Courses Pack » pour le Booster Course Pass (page : « This is a DLC… Mario Kart 8 Deluxe –
 # Booster Course Pass », 01/10/2026, Top Offers)
 "Mario Kart 8 Deluxe Booster Course Pass" = ["Mario Kart 8 Deluxe Booster Courses Pack"]
-# Driffle écrit « Warcraft Forever » (URL « warcraft-forever-skyborne-heroic-pack-… »), les autres marchands
-# « world-of-warcraft-forever-… » ; Romain, 02/10/2026 : « Heroic pack est une édition pour ce DLC, battlenet Gift est correct »
-"World of Warcraft: Forever" = ["Warcraft Forever"]
+# « Warcraft Forever » (Driffle) pour World of Warcraft: Forever n'est plus un alias depuis le 02/10/2026 : le préfixe
+# « World of » est facultatif pour tous les produits (OPTIONAL_PREFIXES dans price_check.py).
+# Titre de travail de Tears of the Kingdom, gardé dans l'URL Instant Gaming (« …-breath-of-the-wild-2 », 02/10/2026)
+"The Legend of Zelda Tears of the Kingdom" = ["The Legend of Zelda Breath of the Wild 2"]

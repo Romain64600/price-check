@@ -171,7 +171,11 @@ NAME_ALIASES = (
     ("cod", "call of duty"),
 )
 # préfixes d'éditeur que les marchands omettent (« UFC 5 » chez Eneba et GAMIVO pour « EA Sports UFC 5 », 01/10/2026)
-OPTIONAL_PREFIXES = ("ea sports",)
+# Liste élargie le 02/10/2026 (Romain : un alias par produit ne tient pas avec beaucoup de marchands) : préfixes
+# de franchise ou d'éditeur, pas de nom distinctif. Le nom complet reste testé ; la variante sans le préfixe garde
+# au moins deux mots et le numéro de l'épisode.
+OPTIONAL_PREFIXES = ("ea sports", "call of duty", "the legend of", "warhammer 40k", "warhammer 40 000", "warhammer 40000",
+                     "world of", "marvels", "tom clancys", "sid meiers")
 # Mots qui distinguent un produit d'un autre : jamais tolérés comme « le mot manquant » d'un nom long
 # (le titre du jeu de base ne passe pas pour « Forza Horizon 6 Premium Upgrade Bundle », étude du 30/09/2026)
 NEVER_MISSING = {"upgrade", "dlc", "expansion", "season", "pass", "soundtrack", "ost", "demo", "vr", "remake", "remastered"}
@@ -429,6 +433,7 @@ def norm(text):
     """« EA SPORTS FC 27 » -> « ea-sports-fc-27 » ; « S.T.A.L.K.E.R. 2 » -> « stalker-2 »."""
     text = re.sub(r"[\u2122\u00ae\u00a9\u2120]", " ", text)  # ™ ® © ℠ (NFKD ferait de ™ les lettres « TM »)
     text = unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode()
+    text = re.sub(r"(?<=\d)\.(?=\d)", " ", text)  # « HD 1.5+2.5 » -> « 1-5-2-5 », comme les URL (02/10/2026)
     text = re.sub(r"\b(\w)\.", r"\1", text)  # sigle pointé : S.T.A.L.K.E.R. -> STALKER, A.O.T. -> AOT
     return re.sub(r"[^a-z0-9]+", "-", text.lower().replace("&", " and ")).strip("-")
 
@@ -441,15 +446,33 @@ LOCALE_SEGMENT_RE = re.compile(r"^[a-z]{2}([-_][a-zA-Z]{2})?$")
 
 
 def url_text(url):
-    """Le chemin de l'URL, sans les segments de langue (/en/, /en-us/)."""
+    """Le chemin de l'URL, sans les segments de langue (/en/, /en-us/), avec deux réparations des slugs
+    (rejeu du 02/10/2026) : le ™ collé au mot (Eneba « pokemontm ») est retiré, un sigle écrit lettre par
+    lettre (GAMIVO « s-t-a-l-k-e-r-2 ») est recollé."""
     segments = [s for s in urllib.parse.urlparse(url).path.split("/") if s and not LOCALE_SEGMENT_RE.match(s)]
-    return " ".join(urllib.parse.unquote(s) for s in segments)
+    return " ".join(repair_slug(urllib.parse.unquote(s)) for s in segments)
+
+
+def repair_slug(segment):
+    tokens = [t[:-2] if t.lower().endswith("tm") and len(t) >= 6 and t[:-2].isalpha() else t for t in segment.split("-")]
+    out, run = [], []
+    for t in tokens + [""]:
+        if len(t) == 1 and t.isalpha():
+            run.append(t)
+            continue
+        out.extend(["".join(run)] if len(run) >= 3 else run)
+        run = []
+        if t:
+            out.append(t)
+    return "-".join(out)
 
 
 def name_variants(product):
     """Le nom AllKeyShop et ses variantes : abréviations (« GTA 6 PS5 » / « Grand Theft Auto 6 PS5 »)
     et chiffres <-> chiffres romains (« Dungeons 2 » / « Dungeons II »), combinées."""
     names = [product]
+    if re.search(r"\d\.\d", product):  # « HD 1.5+2.5 ReMIX » écrit « 15-25 » par certains marchands
+        names.append(re.sub(r"(?<=\d)\.(?=\d)", "", product))
     base = norm(product)
     for suffix in PLATFORM_SUFFIXES:  # « GTA 6 PS5 » -> « GTA 6 », « Ragnarock VR » -> « Ragnarock »
         if base.endswith("-" + norm(suffix)) and base != norm(suffix):
@@ -463,7 +486,12 @@ def name_variants(product):
         n = norm(name)
         for prefix in map(norm, OPTIONAL_PREFIXES):
             rest = n[len(prefix) + 1:] if n.startswith(prefix + "-") else ""
-            if len([w for w in rest.split("-") if w]) >= 2:
+            core = rest  # deux mots au moins HORS suffixe de plateforme : pas « Avengers PS5 » pour « Marvel's Avengers PS5 »
+            for suffix in PLATFORM_SUFFIXES:
+                if core.endswith("-" + norm(suffix)):
+                    core = core[:-len(norm(suffix)) - 1]
+                    break
+            if len([w for w in core.split("-") if w]) >= 2:
                 names.append(rest.replace("-", " "))
     for short, long in NAME_ALIASES:
         for name in list(names):
@@ -546,7 +574,8 @@ LABEL_NOISE = {"buy", "cheap", "acheter", "kaufen", "comprar", "key", "keys", "c
                "games", "game", "jeux", "jeu", "spiele", "giochi", "juegos", "download", "software", "telecharger", "a",
                "sur", "product", "products", "category", "p", "html", "htm", "store", "instant", "en", "fr", "de", "it",
                "es", "gb", "us", "uk", "card", "dp", "gp", "ref", "the-game", "windows", "microsoft", "account", "s",
-               "rockstar", "ubisoft", "uplay", "connect", "battle", "net", "battlenet", "social", "club"}
+               "rockstar", "ubisoft", "uplay", "connect", "battle", "net", "battlenet", "social", "club",
+               "bundle", "bundles", "sub", "preorder", "page", "pages"}  # « bundle/27059 », « preorder-page »
 
 
 def merchant_label(text, source):
@@ -793,6 +822,7 @@ def analyze(product, offer, text, source, region=None):
         return re.search(r"(^|-)%s(-|$)" % re.escape(word), words if where is None else where) is not None
 
     reasons, kinds, notes = [], [], []
+    result_label = None
 
     def reason(kind, message):
         reasons.append(message)
@@ -806,6 +836,7 @@ def analyze(product, offer, text, source, region=None):
         notes.append("édition %s : nom non contrôlé" % offer["edition"])  # un bundle porte un autre nom
     elif match is None:
         label = merchant_label(text, source)
+        result_label = label
         if label:  # le marchand nomme un produit, mais pas celui-là (TORO 2 -> « Metal Garden »)
             reason("name", "autre produit chez le marchand : « %s » au lieu de « %s » (%s)" % (label, product, source))
         else:
@@ -845,7 +876,7 @@ def analyze(product, offer, text, source, region=None):
     if (dlc and not has("bonus") and not announces_extra_content(offer["edition"]) and not offer.get("page_dlc")
             and not year_pass_edition(offer["edition"], words)):
         reason("dlc", "contenu additionnel : " + ", ".join(dlc))
-    return {"match": match, "reasons": reasons, "kinds": kinds, "notes": notes}
+    return {"match": match, "reasons": reasons, "kinds": kinds, "notes": notes, "label": result_label}
 
 
 def confirmed(kind, product, offer, page_text):
@@ -1108,7 +1139,8 @@ def check_offer(product, offer):
                     "reasons": result["reasons"], "notes": result["notes"]}
 
     if result["match"] is None:
-        # 1er repli : le marchand redirige peut-être vers l'URL complète (Instant Gaming, Fanatical)
+        # 1er repli : le marchand redirige peut-être vers l'URL complète (Instant Gaming « /en/4860-/ », Fanatical),
+        # ou d'un slug périmé vers la fiche actuelle : c'est l'URL finale qui compte, pas l'ancien nom du lien
         try:
             _, location, _ = http_get(url, BROWSER_UA, follow=False)
         except OSError:
@@ -1117,8 +1149,17 @@ def check_offer(product, offer):
         if location:
             url2 = unwrap_affiliate(urllib.parse.urljoin(url, location))
             result2 = analyze(product, offer, url_text(url2), "URL après redirection du marchand", region=region_text(url2, cfg))
-            if result2["match"]:
+            if result2["match"] or result2.get("label"):  # la fiche finale nomme le produit, ou un autre
                 result, method, url = result2, "URL après 301 marchand", url2
+
+    if (result["match"] is None and result.get("label") and not (cfg.get("page") or {}).get("parser")
+            and not cfg.get("localized") and not (cfg.get("product_name") or {}).get("hreflang")):
+        # l'URL (finale) nomme un autre produit (Titanfall chez Kinguin, TORO 2 -> « Metal Garden ») : l'alerte part
+        # sans lire la page (Romain, 02/10/2026 : « je vois pas pourquoi tu veux vérifier la page quand on a déjà un
+        # problème détecté à la base »). Sauf marchand dont la page décide (LDShop : option cochée ; PS Store), aux
+        # titres traduits (« localized ») ou contrôlé sur sa version anglaise (Nintendo : un slug traduit n'est pas
+        # un autre produit quand la version en-GB n'a pas pu être lue)
+        return {"verdict": "SUSPECT", "url": url, "method": method, "reasons": result["reasons"], "notes": result["notes"]}
 
     page_text = None
     if result["match"] is None:
