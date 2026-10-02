@@ -1750,6 +1750,102 @@ class TestLoopAudit20261002(unittest.TestCase):
         self.assertIn(2002, calls)
 
 
+@mock.patch.object(pc, "REQUEST_DELAY", 0)
+@mock.patch.object(pc, "PAGE_DELAY", 0)
+class TestMainLoopAudit20261002(unittest.TestCase):
+    """La boucle principale (audit du 02/10/2026) : arrêt propre, reprise d'un passage demandé, demande pendant un passage."""
+    TOP = [("Popular", 1, "Jeu", "https://www.allkeyshop.com/blog/buy-jeu-cd-key-compare-prices/")]
+
+    def setUp(self):
+        pc.STOP["asked"] = False
+        self.addCleanup(pc.STOP.__setitem__, "asked", False)
+
+    def run_main(self, d, mode, run_cycle):
+        import sys
+        with mock.patch.object(pc, "fetch_targets", return_value=self.TOP), mock.patch.object(pc, "run_cycle", side_effect=run_cycle), \
+                mock.patch.object(pc.time, "sleep"), mock.patch.object(pc, "REPORTS_DIR", d), mock.patch.object(pc.signal, "signal"), \
+                mock.patch.object(sys, "argv", ["price_check.py", "--mode", mode, "--dry-run", "--state", os.path.join(d, "state.json")]):
+            pc.main()
+        return pc.load_state(os.path.join(d, "state.json"))
+
+    @staticmethod
+    def outcome():
+        return {"checked": 0, "fixed": [], "removed": [], "rules": [], "verified": [], "still": [], "new": [], "unknown": [], "first_checked": 0}
+
+    def test_stop_mid_pass_then_resume_the_requested_pass(self):
+        import tempfile
+        calls = []
+        with tempfile.TemporaryDirectory() as d:
+            with open(os.path.join(d, "run-homepage.request"), "w") as f:
+                f.write('{"by": "romain"}')
+
+            def interrupted(targets, notify, state, checker=None, **kw):
+                calls.append((kw["recheck"], kw.get("resume_after")))
+                state["checked"]["1"] = {"verdict": "SUSPECT", "product": "Jeu", "last_recheck": "2026-10-02 19:05"}
+                pc.STOP["asked"] = True  # SIGTERM pendant le passage
+                raise pc.Stop()
+            state = self.run_main(d, "homepage", interrupted)
+            self.assertEqual(calls, [("all", None)])
+            self.assertEqual(state["checked"]["1"]["verdict"], "SUSPECT")  # l'état est écrit à l'arrêt
+            self.assertEqual(state["running"]["homepage"]["by"], "romain")  # le passage demandé est à reprendre
+            started = state["running"]["homepage"]["started"]
+            pc.STOP["asked"] = False
+
+            def resumed(targets, notify, state, checker=None, **kw):
+                calls.append((kw["recheck"], kw.get("resume_after")))
+                pc.STOP["asked"] = True  # le passage suivant (automatique) arrête le test
+                if len(calls) > 2:
+                    raise pc.Stop()
+                return self.outcome()
+            state = self.run_main(d, "homepage", resumed)
+            self.assertEqual(calls[1], ("all", started))  # reprise : recontrôle complet, sans refaire le déjà fait
+            self.assertNotIn("homepage", state.get("running") or {})
+
+    def test_a_request_during_a_pass_of_the_same_mode_runs_a_full_recheck_after_it(self):
+        import tempfile
+        calls = []
+        with tempfile.TemporaryDirectory() as d:
+            def run_cycle(targets, notify, state, checker=None, **kw):
+                calls.append(kw["recheck"])
+                if len(calls) == 1:  # passage automatique ; un clic dans l'admin arrive entre deux pages
+                    with open(os.path.join(d, "run-homepage.request"), "w") as f:
+                        f.write('{"by": "remi"}')
+                    kw["between"]()
+                    return self.outcome()
+                pc.STOP["asked"] = True
+                raise pc.Stop()
+            self.run_main(d, "homepage", run_cycle)
+        self.assertEqual(calls, ["flagged", "all"])
+
+    def test_a_failed_requested_pass_is_retried(self):
+        import tempfile
+        calls = []
+        with tempfile.TemporaryDirectory() as d:
+            with open(os.path.join(d, "run-top-games.request"), "w") as f:
+                f.write('{"by": "romain"}')
+
+            def run_cycle(targets, notify, state, checker=None, **kw):
+                calls.append(kw["recheck"])
+                if len(calls) == 1:
+                    raise RuntimeError("API des listes en panne")
+                pc.STOP["asked"] = True
+                raise pc.Stop()
+            with mock.patch.object(pc.time, "monotonic", side_effect=itertools_count()):
+                self.run_main(d, "top-games", run_cycle)
+        self.assertEqual(calls, ["all", "all"])
+
+
+def itertools_count(start=10_000.0, step=200.0):
+    """Une horloge monotone qui avance de 200 s à chaque lecture : les intervalles des modes passent sans attendre."""
+    value = [start]
+
+    def tick():
+        value[0] += step
+        return value[0]
+    while True:
+        yield tick()
+
+
 class TestSecurityAudit20261002(unittest.TestCase):
     """Audit sécurité du 02/10/2026 : le moniteur tourne en root."""
 

@@ -9,6 +9,8 @@ EnvironmentFile=/root/price-checker/price-check/.env
 ExecStart=/usr/bin/python3 price_check.py
 Restart=always
 RestartSec=30
+# arrêt propre (SIGTERM) : fin de l'offre en cours (un rendu Chromium peut durer 90 s), état écrit, puis arrêt
+TimeoutStopSec=180
 
 [Install]
 WantedBy=multi-user.target

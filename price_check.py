@@ -31,6 +31,7 @@ import os
 import pwd
 import re
 import shutil
+import signal
 import stat
 import subprocess
 import sys
@@ -2097,8 +2098,7 @@ def main():
             for label, rank, product, url in fetch_targets(MODES[mode]["lists"]):
                 pages.setdefault(product, (label, rank, url))
         print(export_reports(state, args.export_reports, pages), "reports écrits dans", args.export_reports)
-        save_state(args.state, state)
-        return
+        return  # state.json n'est pas réécrit : le service, s'il tourne, en est le seul auteur
     if args.check:
         product, url = args.check
         offer = {"account": False, "edition": args.edition, "region": args.region, "platform": args.platform}
@@ -2138,25 +2138,65 @@ def main():
                 "%Y-%m-%dT%H:%M:%S%z", time.localtime(time.time() + max(0.0, due[m] - time.monotonic())))
         write_status(REPORTS_DIR, status)
 
+    # Demandes de l'admin en attente, par mode : gardées à part, une demande lue pendant un passage du même mode
+    # relance un recontrôle complet à la fin de celui-ci (audit du 02/10/2026 : elle était effacée).
+    pending = {m: None for m in modes}
+    # Un passage demandé en cours est noté dans state.json (« running ») : interrompu par un redémarrage, il reprend
+    # au démarrage, sans recontrôler les offres déjà recontrôlées depuis son début (audit : la demande était perdue).
+    resume = {}
+    for mode, info in list((state.get("running") or {}).items()):
+        if mode in modes and isinstance(info, dict):
+            pending[mode] = "%s (reprise après redémarrage)" % (info.get("by") or "admin")
+            resume[mode] = info.get("started")
+            due[mode] = 0.0
+            log.info("%s : reprise du passage demandé par %s, interrompu (commencé le %s)", mode, info.get("by"), info.get("started"))
+
     def honor_requests():
         """Les passages demandés depuis l'admin : le mode est dû tout de suite. Renvoie True si une demande a été lue."""
-        taken = take_requests(REPORTS_DIR, modes)
+        try:
+            taken = take_requests(REPORTS_DIR, modes)
+        except Exception:  # un fichier inattendu dans le dossier partagé ne doit jamais arrêter la surveillance
+            log.exception("lecture des demandes de l'admin impossible")
+            return False
         for mode, by in taken:
             log.info("%s : passage demandé depuis l'admin par %s", mode, by)
             due[mode] = 0.0
+            pending[mode] = by
             status["modes"][mode]["requested_by"] = by
         return bool(taken)
 
     last_recheck = {m: 0.0 for m in modes}
+    last_flush = [0.0]
+
+    def flush_alerts(every=0):
+        """Les alertes en file (pause terminée, Discord de nouveau joignable), au plus une tentative par `every` s."""
+        if not state["queued"] or muted() or args.dry_run or time.monotonic() - last_flush[0] < every:
+            return
+        last_flush[0] = time.monotonic()
+        try:
+            flush_queue(state, lambda msg, channel: send_discord(webhook_for(channel), msg))
+            log.info("alertes en file envoyées")
+        except Exception as e:
+            log.error("Envoi des alertes en file impossible, nouvel essai plus tard (%d en file) : %s", len(state["queued"]), e)
+        save_state(args.state, state)
 
     def run_mode(mode, between=None):
         now = time.monotonic()
         due[mode] = now + MODES[mode]["interval"]
-        st, alerts, before, last_pub = status["modes"][mode], [0], len(state["checked"]), [time.monotonic()]
-        requested = st.get("requested_by")
+        st, alerts, last_pub = status["modes"][mode], [0], [time.monotonic()]
+        requested, pending[mode] = pending[mode], None
+        resume_after = resume.pop(mode, None)
+        st["requested_by"] = requested
         # passage demandé depuis l'admin : toutes les offres retenues sont recontrôlées ; sinon, les offres signalées
         # une fois par heure
         recheck = "all" if requested else ("flagged" if now - last_recheck[mode] >= RECHECK_EVERY else False)
+        if requested:
+            info = (state.get("running") or {}).get(mode) or {}
+            by = info.get("by") or requested
+            started = resume_after or time.strftime("%Y-%m-%d %H:%M")
+            state.setdefault("running", {})[mode] = {"by": by, "started": started}
+            save_state(args.state, state)
+        outcome = None
 
         def notify(msg, _send=notifiers[mode]):
             _send(msg)
@@ -2178,10 +2218,15 @@ def main():
             st["pages"] = len(targets[mode])
             publish_status()
             if REPORTS_DIR:
-                for key in apply_decisions(state, REPORTS_DIR):
-                    log.info("décision de l'admin pour l'offre %s : %s", key, state["checked"][key]["decision"])
+                try:
+                    for key in apply_decisions(state, REPORTS_DIR):
+                        log.info("décision de l'admin pour l'offre %s : %s", key, state["checked"][key]["decision"])
+                except Exception:  # decisions.jsonl illisible : la surveillance continue, les décisions attendront
+                    log.exception("lecture des décisions de l'admin impossible")
             outcome = run_cycle(targets[mode], notify, state, save=lambda: save_state(args.state, state),
-                                per_edition=per_edition, between=between, progress=progress, recheck=recheck)
+                                per_edition=per_edition, between=between, progress=progress, recheck=recheck,
+                                resume_after=resume_after)
+            (state.get("running") or {}).pop(mode, None)  # passage demandé terminé
             save_state(args.state, state)
             if recheck:
                 last_recheck[mode] = time.monotonic()
@@ -2199,41 +2244,59 @@ def main():
             if REPORTS_DIR:
                 pages = {t[2]: (t[0], t[1], t[3]) for m in modes for t in targets[m]}
                 export_reports(state, REPORTS_DIR, pages)
+        except Stop:
+            # arrêt du service (SIGTERM) : l'état est écrit, le passage demandé reprendra au démarrage
+            save_state(args.state, state)
+            if REPORTS_DIR:
+                pages = {t[2]: (t[0], t[1], t[3]) for m in modes for t in targets[m]}
+                export_reports(state, REPORTS_DIR, pages)
+            raise
         except Exception:
             log.exception("%s : passage en échec, nouvel essai au prochain cycle", mode)
+            if requested:  # la demande de l'admin n'est pas perdue : le prochain passage du mode la reprend
+                pending[mode] = requested
+                resume[mode] = ((state.get("running") or {}).get(mode) or {}).get("started")
         finally:
-            st.update(running=False, last_end=stamp_iso(), last_checked=len(state["checked"]) - before,
+            st.update(running=False, last_end=stamp_iso(), last_checked=outcome["first_checked"] if outcome else 0,
                       last_alerts=alerts[0], progress=None, requested_by=None)
             publish_status()
 
     def run_urgent():
-        """Entre deux pages d'un long passage : les demandes de l'admin, puis les modes urgents (top games) dont
-        l'heure est venue."""
+        """Entre deux pages d'un long passage : les demandes de l'admin, les alertes en file, puis les modes urgents
+        (top games) dont l'heure est venue."""
+        check_stop()
         honor_requests()
+        flush_alerts(every=60)
         for m in modes:
             if MODES[m].get("urgent") and time.monotonic() >= due[m]:
                 run_mode(m)
 
-    while True:
-        if state["queued"] and not muted() and not args.dry_run:
-            try:
-                flush_queue(state, lambda msg, channel: send_discord(webhook_for(channel), msg))
-                log.info("fin de la pause Discord : alertes en attente envoyées")
-            except Exception as e:
-                log.error("Envoi des alertes en attente impossible, nouvel essai plus tard : %s", e)
-            save_state(args.state, state)
-        honor_requests()
-        for mode in modes:
-            if time.monotonic() >= due[mode]:
-                run_mode(mode, between=None if MODES[mode].get("urgent") else run_urgent)
-        if args.once:
-            return
-        wait_until = min(due.values())  # attente par tranches : une demande de l'admin est vue en quelques secondes
-        while time.monotonic() < wait_until:
-            publish_status()
-            time.sleep(max(1, min(REQUEST_POLL, wait_until - time.monotonic())))
-            if honor_requests():
-                break
+    def ask_stop(signum, frame):
+        if not STOP["asked"]:
+            log.info("arrêt demandé (signal %d) : fin de l'offre en cours, état écrit, puis arrêt", signum)
+        STOP["asked"] = True
+
+    signal.signal(signal.SIGTERM, ask_stop)
+    try:
+        while True:
+            check_stop()
+            flush_alerts()
+            honor_requests()
+            for mode in modes:
+                if time.monotonic() >= due[mode]:
+                    run_mode(mode, between=None if MODES[mode].get("urgent") else run_urgent)
+            if args.once:
+                return
+            wait_until = min(due.values())  # attente par tranches : une demande de l'admin est vue en quelques secondes
+            while time.monotonic() < wait_until:
+                check_stop()
+                publish_status()
+                time.sleep(max(1, min(REQUEST_POLL, wait_until - time.monotonic())))
+                if honor_requests():
+                    break
+    except Stop:
+        save_state(args.state, state)
+        log.info("arrêt : état écrit%s", " ; passage demandé à reprendre : %s" % ", ".join(state["running"]) if state.get("running") else "")
 
 
 if __name__ == "__main__":
