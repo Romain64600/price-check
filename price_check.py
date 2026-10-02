@@ -2391,7 +2391,7 @@ def main():
                 last_recheck[mode] = time.monotonic()
                 st["last_recheck"] = {"at": stamp_iso(), "kind": recheck, "checked": outcome["checked"],
                                       "fixed": len(outcome["fixed"]) + len(outcome["removed"]), "rules": len(outcome["rules"]),
-                                      "new": len(outcome["new"]),
+                                      "verified": len(outcome["verified"]), "new": len(outcome["new"]),
                                       "still": len(outcome["still"]), "unknown": len(outcome["unknown"])}
                 recap = format_recheck(MODES[mode]["label"], requested, outcome, full=recheck == "all")
                 log.info("%s", recap.replace("\n", " | "))
