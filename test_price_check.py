@@ -2185,7 +2185,7 @@ class TestReportModes20261003(unittest.TestCase):
         cycle("top-games", sent)
         urgent = [m for m in sent if m.startswith(pc.URGENT_PREFIX)]
         self.assertEqual(len(urgent), 2, sent)
-        self.assertTrue(all("📌 Report existant (signalé le " in m and "renvoyé dans le salon des urgences premiers prix" in m.splitlines()[1]
+        self.assertTrue(all("📌 **Rappel** · report existant (signalé le " in m and "renvoyé dans le salon des urgences premiers prix" in m.splitlines()[1]
                             for m in urgent), urgent)
         self.assertEqual(len(sent), 2)  # l'offre 1005 attend un passage homepage
         self.assertEqual([state["checked"][k].get("sent_to") for k in ("1001", "1002", "1003")], ["urgent", "urgent", "urgent"])
@@ -2193,7 +2193,7 @@ class TestReportModes20261003(unittest.TestCase):
         sent = []
         cycle("homepage", sent)
         self.assertEqual(len(sent), 1, sent)
-        self.assertTrue(sent[0].startswith("📌 Report existant (signalé le 2026-09-30 15:54), renvoyé dans le salon de son mode"), sent[0])
+        self.assertTrue(sent[0].startswith("📌 **Rappel** · report existant (signalé le 2026-09-30 15:54), renvoyé dans le salon de son mode"), sent[0])
         self.assertEqual(state["checked"]["1005"]["sent_to"], "homepage")
         # une seule fois
         sent = []
@@ -2268,6 +2268,134 @@ class TestReportModes20261003(unittest.TestCase):
                 mock.patch.object(pc, "NOTIFY_OK", False):
             pc.run_cycle([("Home · RPG", 1, "Jeu", "https://www.allkeyshop.com/blog/jeu/")], lambda m: None, state, ok, mode="homepage")
         self.assertEqual(state["checked"]["1"]["mode"], "homepage")
+
+
+class TestLoopBanner20261003(unittest.TestCase):
+    """Romain, 03/10/2026 : « il faut qu'on sache qu'une nouvelle boucle a commencé, et tu mets un petit message pour
+    expliquer et un lien vers la doc … dans ce channel et les autres channels de check, à chaque boucle … très visible,
+    qui fasse bien la séparation entre les boucles »."""
+
+    def loop(self, mode="top-games", **kw):
+        return dict(pc.new_loop(mode), start="03/10/2026 13:20", **kw)
+
+    def test_the_banner_separates_explains_and_links_the_guide(self):
+        banner = pc.loop_banner(self.loop(recheck="flagged"), "top-games")
+        lines = banner.splitlines()
+        self.assertEqual(lines[0], pc.BANNER_RULE)
+        self.assertEqual(lines[1], "# 🔄 Nouvelle boucle · Price check top")  # un titre Discord : le plus visible
+        self.assertEqual(lines[2], "-# 03/10/2026 13:20 · les tops : 5 premiers Popular, 4 premiers Coming soon PC · "
+                                   "avec le recontrôle horaire des offres signalées")
+        for legend in ("🔴 🟠 nouveau report", "📌 rappel d'un report existant", "🔁 bilan du recontrôle", "**vrai**"):
+            self.assertIn(legend, banner)
+        self.assertEqual(lines[-1], "📘 Guide de l'équipe : <https://169.58.5.63.sslip.io/executor/price-check-guide>")
+        self.assertLess(len(banner), pc.DISCORD_LIMIT)
+
+    def test_each_channel_its_banner(self):
+        urgent = pc.loop_banner(self.loop("homepage"), "urgent")
+        self.assertEqual(urgent.splitlines()[1], "# 🚨 Nouvelle boucle · Price check homepage")
+        self.assertIn("3 offres les moins chères d'une édition. À traiter en premier.", urgent)
+        self.assertNotIn("🔁", urgent)  # les bilans du recontrôle partent sur le salon du mode
+        requested = pc.loop_banner(self.loop("homepage", recheck="all", requested="romain"), "homepage")
+        self.assertIn("toute la homepage : widgets de la home, TOP 50 de chaque plateforme · passage demandé depuis "
+                      "l'admin par romain : toutes les offres recontrôlées", requested)
+        self.assertEqual(pc.loop_banner(self.loop("homepage"), "urgent", resumed=True),
+                         pc.BANNER_RULE + "\n### ↪️ Suite de la boucle · Price check homepage, commencée le 03/10/2026 13:20")
+
+    def test_the_bot_opens_no_feedback_thread_on_a_banner(self):
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("feedback", os.path.join(os.path.dirname(__file__), "bot", "feedback.py"))
+        fb = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(fb)
+        for channel in ("top-games", "homepage", "urgent"):
+            for resumed in (False, True):
+                self.assertIsNone(fb.alert_offer(pc.loop_banner(self.loop(channel if channel != "urgent" else "homepage"),
+                                                                channel, resumed)))
+
+    def test_one_banner_per_loop_in_each_channel(self):
+        sent = []
+        announce = pc.make_announcer(key_of=lambda channel: channel)
+        to = lambda channel: (lambda m: sent.append((channel, m.splitlines()[1] if m.startswith(pc.BANNER_RULE) else m)))
+        home, top = self.loop("homepage"), self.loop("top-games")
+        announce(home, "urgent", to("urgent"), "🚨 alerte 1")
+        announce(home, "urgent", to("urgent"), "🚨 alerte 2")  # la même boucle : pas de nouveau bandeau
+        announce(top, "urgent", to("urgent"), "🚨 alerte 3")  # une boucle des tops entre deux pages de la homepage
+        announce(home, "urgent", to("urgent"), "🚨 alerte 4")  # la homepage reprend : « suite »
+        announce(home, "homepage", to("homepage"), "🔁 bilan")  # un autre salon : son propre bandeau
+        pc.new_loop("top-games")  # une boucle qui ne poste rien : pas de bandeau
+        self.assertEqual(sent, [
+            ("urgent", "# 🚨 Nouvelle boucle · Price check homepage"), ("urgent", "🚨 alerte 1"), ("urgent", "🚨 alerte 2"),
+            ("urgent", "# 🚨 Nouvelle boucle · Price check top"), ("urgent", "🚨 alerte 3"),
+            ("urgent", "### ↪️ Suite de la boucle · Price check homepage, commencée le 03/10/2026 13:20"), ("urgent", "🚨 alerte 4"),
+            ("homepage", "# 🔄 Nouvelle boucle · Price check homepage"), ("homepage", "🔁 bilan")])
+
+    def test_a_shared_webhook_is_one_channel(self):
+        """Sans webhook homepage, ses alertes partent sur celui des top games : un seul salon, une boucle chasse l'autre."""
+        sent = []
+        announce = pc.make_announcer(key_of=lambda channel: "top games")
+        top, home = self.loop("top-games"), self.loop("homepage")
+        announce(top, "top-games", sent.append, "a")
+        announce(home, "homepage", sent.append, "b")
+        announce(top, "top-games", sent.append, "c")
+        titles = [m.splitlines()[1] for m in sent if m.startswith(pc.BANNER_RULE)]
+        self.assertEqual(titles, ["# 🔄 Nouvelle boucle · Price check top", "# 🔄 Nouvelle boucle · Price check homepage",
+                                  "### ↪️ Suite de la boucle · Price check top, commencée le 03/10/2026 13:20"])
+
+    def test_a_banner_not_sent_goes_with_the_next_message(self):
+        sent, fail = [], [True]
+
+        def send(m):
+            if fail[0]:
+                fail[0] = False
+                raise urllib.error.URLError("Discord injoignable")
+            sent.append(m)
+        announce = pc.make_announcer(key_of=lambda channel: channel)
+        loop = self.loop()
+        with self.assertRaises(urllib.error.URLError):
+            announce(loop, "top-games", send, "🔴 alerte 1")  # l'appelant journalise, l'alerte repart au passage suivant
+        announce(loop, "top-games", send, "🔴 alerte 1")
+        self.assertEqual([m.splitlines()[1] if m.startswith(pc.BANNER_RULE) else m for m in sent],
+                         ["# 🔄 Nouvelle boucle · Price check top", "🔴 alerte 1"])
+
+    def test_the_main_loop_heads_each_loop_in_each_channel(self):
+        """La boucle principale, de bout en bout (Discord simulé) : une boucle des tops, puis une de la homepage."""
+        import sys
+        import tempfile
+        hooks = {"DISCORD_WEBHOOK_URL": "https://discord.invalid/api/webhooks/1/top",
+                 "DISCORD_WEBHOOK_URL_HOMEPAGE": "https://discord.invalid/api/webhooks/2/home",
+                 "DISCORD_WEBHOOK_URL_URGENT": "https://discord.invalid/api/webhooks/3/urgent"}
+        channel = {url: name for name, url in (("top", hooks["DISCORD_WEBHOOK_URL"]), ("home", hooks["DISCORD_WEBHOOK_URL_HOMEPAGE"]),
+                                                ("urgent", hooks["DISCORD_WEBHOOK_URL_URGENT"]))}
+        sent = []
+
+        def run_cycle(targets, notify, state, checker=None, **kw):
+            if kw["mode"] == "top-games":
+                notify("🟠 **À VÉRIFIER** · **Jeu** (Popular #1) · Standard")
+                notify(pc.URGENT_PREFIX + "\n🔴 **SUSPECT** · **Jeu** (Popular #1) · Standard")
+            else:
+                notify("🔴 **SUSPECT** · **Autre jeu** (Home · RPG #2) · Standard · 5e prix de l'édition")
+            return TestMainLoopAudit20261002.outcome()
+        with tempfile.TemporaryDirectory() as d, mock.patch.dict(os.environ, hooks), \
+                mock.patch.object(pc, "fetch_targets", return_value=TestMainLoopAudit20261002.TOP), \
+                mock.patch.object(pc, "run_cycle", side_effect=run_cycle), mock.patch.object(pc.time, "sleep"), \
+                mock.patch.object(pc, "REPORTS_DIR", d), mock.patch.object(pc.signal, "signal"), \
+                mock.patch.object(pc, "send_discord", side_effect=lambda url, msg: sent.append((channel[url], msg))), \
+                mock.patch.object(sys, "argv", ["price_check.py", "--once", "--state", os.path.join(d, "state.json")]):
+            pc.main()
+        self.assertEqual([(c, m.splitlines()[1] if m.startswith(pc.BANNER_RULE) else m.splitlines()[0]) for c, m in sent], [
+            ("top", "# 🔄 Nouvelle boucle · Price check top"), ("top", "🟠 **À VÉRIFIER** · **Jeu** (Popular #1) · Standard"),
+            ("urgent", "# 🚨 Nouvelle boucle · Price check top"), ("urgent", pc.URGENT_PREFIX + " · Price check top"),
+            ("home", "# 🔄 Nouvelle boucle · Price check homepage"),
+            ("home", "🔴 **SUSPECT** · **Autre jeu** (Home · RPG #2) · Standard · 5e prix de l'édition")])
+        self.assertIn("avec le recontrôle horaire des offres signalées", sent[0][1])  # la première boucle d'un mode recontrôle
+
+    def test_during_a_discord_pause_banner_and_alert_wait_together(self):
+        state = {"queued": []}
+        with mock.patch.object(pc, "MUTE_UNTIL", "2999-01-01 00:00"):
+            notify = pc.make_notifier("https://discord.invalid/api/webhooks/1/x", state, "top-games")
+            pc.make_announcer(key_of=lambda channel: channel)(self.loop(), "top-games", notify, "🔴 alerte")
+        self.assertEqual([c for c, m in state["queued"]], ["top-games", "top-games"])
+        self.assertEqual(state["queued"][0][1].splitlines()[1], "# 🔄 Nouvelle boucle · Price check top")
+        self.assertEqual(state["queued"][1][1], "🔴 alerte")
 
 
 class TestSecurityAudit20261002(unittest.TestCase):

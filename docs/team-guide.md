@@ -33,7 +33,15 @@ Each alert goes to one channel only: emergencies first, then the tops, then the 
 | #aks_price_checker | The other top alerts (À VÉRIFIER, offers lower in the edition) and the tops' re-check recaps. It is also the bot's channel. | Next |
 | #aks_top_price_checker | The other homepage alerts and their recaps. | Next |
 
-An older report sent again to its right channel carries "Report existant (signalé le …)" (existing report, first reported on …): it is not a new detection.
+Each loop starts, in every channel it posts to, with a very visible banner: "🔄 Nouvelle boucle · Price check top" (new loop; 🚨 in the emergencies channel), with the time, what the loop checks, the legend of the messages and the link to this guide. A loop with no alert posts nothing.
+
+| Message starts with | What it is |
+| --- | --- |
+| 🔄 Nouvelle boucle (🚨 in emergencies) | The banner: a loop starts |
+| ↪️ Suite de la boucle | The same loop resumes after another loop's messages |
+| 🚨 URGENCE PREMIER PRIX, 🔴 SUSPECT, 🟠 À VÉRIFIER | A new report |
+| 📌 Rappel · report existant | An older report sent again to its right channel (reminder): not a new detection |
+| 🔁 Recontrôle | The re-check recap: repaired, still wrong, new errors |
 
 ## Reading an alert
 
@@ -41,7 +49,7 @@ An alert says which offer is at stake, where it shows, and why the monitor think
 
 ```
 🚨 URGENCE PREMIER PRIX · Price check homepage
-📌 Report existant (signalé le 2026-10-01 14:58), renvoyé dans le salon des urgences premiers prix
+📌 Rappel · report existant (signalé le 2026-10-01 14:58), renvoyé dans le salon des urgences premiers prix
 🔴 SUSPECT · Monster Hunter Wilds (Home · RPG #8) · Deluxe · 2e prix de l'édition
 G2A · EUROPE (STEAM EU) · steam · 44.10 € · offre 136209040 · contrôle : URL
 Raison : région : AllKeyShop EUROPE, marchand ROW
@@ -52,7 +60,7 @@ Page : <link to the AllKeyShop page>
 | Line | What it says |
 | --- | --- |
 | URGENCE PREMIER PRIX | First-price emergency: a confirmed problem on one of the edition's 3 first prices, and the mode that found it (top or homepage) |
-| Report existant | An older alert, sent once again to its right channel (absent from a new alert) |
+| Rappel · report existant | An older alert (reminder), sent once again to its right channel (absent from a new alert) |
 | Verdict · game (list #rank) · edition · rank | The verdict, the page, the list it appears in, the edition the offer is filed under, and its rank in that edition ("2e prix de l'édition" = 2nd price of the edition) |
 | Merchant · region · platform · price | What AllKeyShop shows: the region with its filter name in brackets (the region's real meaning), the price with card fees, the offer id, and how the monitor checked (contrôle : URL, page) |
 | Raison | What is wrong (reason): here, AllKeyShop shows a EUROPE key, the merchant sells a ROW key (rest of world, without Europe) |

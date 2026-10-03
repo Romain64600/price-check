@@ -13,6 +13,8 @@ Deux modes de **pages**, qui tournent dans le même processus avec la même mém
 
 **Urgences premiers prix** (depuis le 03/10/2026, Romain : « quand c'est vraiment premier prix qui a un problème, c'est une grosse alerte ») : un SUSPECT sur l'un des **3 prix de clé les moins chers de son édition** part sur un troisième salon, celui des urgences (`DISCORD_WEBHOOK_URL_URGENT`), avec l'en-tête « 🚨 URGENCE PREMIER PRIX » et le mode qui l'a trouvé ; les autres alertes (À VÉRIFIER, offres plus bas dans l'édition, comptes) et les récapitulatifs restent sur le salon de leur mode. Les reports déjà ouverts rejoignent leur bon salon au passage qui les revoit, une fois, marqués « 📌 Report existant ».
 
+**Bandeau de boucle** (depuis le 03/10/2026, Romain : « qu'on sache qu'une nouvelle boucle a commencé … très visible, qui fasse bien la séparation entre les boucles ») : dans chaque salon, le premier message d'une boucle suit un bandeau « 🔄 Nouvelle boucle · Price check top » (🚨 aux urgences) qui explique la boucle, donne la légende des messages (🔴 🟠 nouveau report, 📌 rappel d'un report existant, 🔁 bilan du recontrôle) et le lien du guide de l'équipe ; une boucle sans message ne poste rien. Détail : [docs/detection.md](docs/detection.md).
+
 Deux modes d'**offres** : quelles offres de chaque page sont contrôlées (`--offers`, ou `PRICE_CHECK_OFFERS`). Décision de Romain du 01/10/2026, en réponse à la question « vraiment un premier prix » :
 
 | Mode | Offres contrôlées sur chaque page |

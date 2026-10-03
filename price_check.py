@@ -25,6 +25,7 @@ import glob
 import html
 import http.client
 import ipaddress
+import itertools
 import json
 import logging
 import os
@@ -82,6 +83,10 @@ OFFER_MODES = {"top-offers": 3, "full-page": None}
 FIRST_PRICES = 3
 URGENT_WEBHOOK = "DISCORD_WEBHOOK_URL_URGENT"
 URGENT_PREFIX = "🚨 **URGENCE PREMIER PRIX**"
+# Le bandeau de boucle (Romain, 03/10/2026 : « il faut qu'on sache qu'une nouvelle boucle a commencé, et tu mets un
+# petit message pour expliquer et un lien vers la doc … très visible, qui fasse bien la séparation entre les
+# boucles », dans chaque salon de check) : avant le premier message d'une boucle dans un salon (loop_banner).
+GUIDE_URL = os.environ.get("PRICE_CHECK_GUIDE_URL", "https://169.58.5.63.sslip.io/executor/price-check-guide")
 REDIRECTION_URL = "https://www.allkeyshop.com/redirection/offer/eur/%s?locale=en&merchant=%s"
 
 AKS_UA = "AKS/Staff"  # pages AllKeyShop seulement, jamais chez le marchand
@@ -1717,6 +1722,67 @@ def route_alert(msg, mode, send_mode, send_urgent=None):
         send_mode(msg)
 
 
+BANNER_RULE = "━" * 28
+LOOP_WHAT = {"top-games": "les tops : 5 premiers Popular, 4 premiers Coming soon PC",
+             "homepage": "toute la homepage : widgets de la home, TOP 50 de chaque plateforme"}
+LOOP_IDS = itertools.count(1)
+
+
+def new_loop(mode, recheck=False, requested=None):
+    """Une boucle : un passage d'un mode (run_mode), et ce que son bandeau en dit."""
+    return {"id": next(LOOP_IDS), "mode": mode, "start": time.strftime("%d/%m/%Y %H:%M"), "recheck": recheck,
+            "requested": requested, "channels": set()}
+
+
+def loop_banner(loop, channel, resumed=False):
+    """Le bandeau d'une boucle dans un salon : une règle et un titre (la séparation), ce que la boucle contrôle, la
+    légende des messages qui suivent, comment trancher, le lien vers le guide de l'équipe. Jamais pris pour une alerte
+    par le bot (il ne commence pas par un verdict). `resumed` : la boucle avait déjà posté dans ce salon et une autre y
+    a posté entre-temps (une boucle des tops tourne entre deux pages de la homepage) : un bandeau « suite », court."""
+    label = MODES.get(loop["mode"], {}).get("label", loop["mode"])
+    if resumed:
+        return "%s\n### ↪️ Suite de la boucle · %s, commencée le %s" % (BANNER_RULE, label, loop["start"])
+    if loop.get("requested"):
+        kind = " · passage demandé depuis l'admin par %s : toutes les offres recontrôlées" % loop["requested"]
+    elif loop.get("recheck") == "flagged":
+        kind = " · avec le recontrôle horaire des offres signalées"
+    else:
+        kind = ""
+    lines = [BANNER_RULE, "# %s Nouvelle boucle · %s" % ("🚨" if channel == "urgent" else "🔄", label),
+             "-# %s · %s%s" % (loop["start"], LOOP_WHAT.get(loop["mode"], label), kind)]
+    if channel == "urgent":
+        lines += ["Urgences premiers prix : un problème avéré (SUSPECT) sur l'une des 3 offres les moins chères d'une "
+                  "édition. À traiter en premier.",
+                  "Ce qui suit vient de cette boucle : 🚨 nouveau report · 📌 rappel d'un report existant."]
+    else:
+        lines.append("Ce qui suit vient de cette boucle : 🔴 🟠 nouveau report · 📌 rappel d'un report existant · "
+                     "🔁 bilan du recontrôle.")
+    lines += ["Chaque alerte a son fil « Feedback » : réponds **vrai**, **faux** ou **à discuter**, suivi d'une note.",
+              "📘 Guide de l'équipe : <%s>" % GUIDE_URL]
+    return "\n".join(lines)
+
+
+def make_announcer(key_of=webhook_for):
+    """`announce(loop, channel, send, msg)` : le bandeau de la boucle avant son premier message dans un salon, et de
+    nouveau (« suite ») quand une autre boucle y a posté entre-temps. Une boucle qui ne poste rien n'y met pas de
+    bandeau (une boucle des tops toutes les 2 min 30). Un salon est reconnu à son webhook (un mode sans webhook propre
+    partage celui des top games). Bandeau et message passent par le même `send` : pendant une pause Discord, ils
+    attendent ensemble, dans l'ordre ; un bandeau qui n'a pas pu partir repart avec le message suivant."""
+    last = {}  # salon (son webhook) -> la dernière boucle qui y a posté
+
+    def announce(loop, channel, send, msg):
+        key = key_of(channel)
+        if last.get(key) != loop["id"]:
+            resumed = key in loop["channels"]
+            send(loop_banner(loop, channel, resumed))
+            loop["channels"].add(key)
+            last[key] = loop["id"]
+            log.info("%s : bandeau « %s » dans le salon %s", loop["mode"], "suite de la boucle" if resumed else "nouvelle boucle",
+                     channel)
+        send(msg)
+    return announce
+
+
 def make_notifier(webhook, state, channel=""):
     """Envoie sur Discord, ou met en attente pendant une pause (`DISCORD_MUTE_UNTIL`), ou quand Discord ne répond pas
     (audit du 02/10/2026 : une nouvelle erreur trouvée au recontrôle dont l'envoi échouait n'était jamais renvoyée) :
@@ -1889,8 +1955,8 @@ def reroute_existing(entry, label, rank, product, page_url, offer, notify, mode)
     res = {"verdict": entry["verdict"], "reasons": entry.get("reasons") or [], "notes": entry.get("notes") or [],
            "url": entry.get("url"), "method": entry.get("method") or "?"}
     msg = format_alert(label, rank, product, page_url, offer, res)
-    note = "📌 Report existant (signalé le %s), %s" % (entry.get("at") or "?", "renvoyé dans le salon des urgences premiers prix"
-                                                       if target == "urgent" else "renvoyé dans le salon de son mode")
+    note = "📌 **Rappel** · report existant (signalé le %s), %s" % (
+        entry.get("at") or "?", "renvoyé dans le salon des urgences premiers prix" if target == "urgent" else "renvoyé dans le salon de son mode")
     head, _, rest = msg.partition("\n")
     msg = "%s\n%s\n%s" % (head, note, rest) if msg.startswith(URGENT_PREFIX) else "%s\n%s" % (note, msg)
     log.info("%s", msg.replace("\n", " | "))
@@ -2633,6 +2699,7 @@ def main():
 
     last_recheck = {m: 0.0 for m in modes}
     last_flush = [0.0]
+    announce = make_announcer()  # le bandeau de chaque boucle, dans chaque salon où elle poste
 
     def flush_alerts(every=0):
         """Les alertes en file (pause terminée, Discord de nouveau joignable), au plus une tentative par `every` s."""
@@ -2663,9 +2730,11 @@ def main():
             state.setdefault("running", {})[mode] = {"by": by, "started": started}
             save_state(args.state, state)
         outcome = None
+        loop = new_loop(mode, recheck, requested)
+        to_urgent = None if urgent_notifier is None else (lambda m: announce(loop, "urgent", urgent_notifier, m))
 
         def notify(msg, _send=notifiers[mode]):
-            route_alert(msg, mode, _send, urgent_notifier)
+            route_alert(msg, mode, lambda m: announce(loop, mode, _send, m), to_urgent)
             alerts[0] += 1
 
         def progress(count, total):
@@ -2711,7 +2780,7 @@ def main():
                 log.info("%s", recap.replace("\n", " | "))
                 if recap_due(requested, outcome):
                     try:
-                        notifiers[mode](recap)
+                        announce(loop, mode, notifiers[mode], recap)
                     except Exception as e:
                         log.error("Envoi Discord du récapitulatif impossible : %s", e)
             if REPORTS_DIR:

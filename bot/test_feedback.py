@@ -20,7 +20,10 @@ class TestAlerts(unittest.TestCase):
     def test_alert_messages_and_their_offer(self):
         self.assertEqual(fb.alert_offer(ALERT), "140513764")
         self.assertEqual(fb.alert_offer("🚨 **URGENCE PREMIER PRIX** · Price check homepage\n" + ALERT), "140513764")
-        self.assertEqual(fb.alert_offer("📌 Report existant (signalé le 2026-09-30 15:54), renvoyé…\n" + ALERT), "140513764")
+        self.assertEqual(fb.alert_offer("📌 **Rappel** · report existant (signalé le 2026-09-30 15:54), renvoyé…\n" + ALERT), "140513764")
+        # le bandeau d'une boucle (price_check.loop_banner) : pas une alerte, pas de fil
+        self.assertIsNone(fb.alert_offer("━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n# 🔄 Nouvelle boucle · Price check top\n"
+                                         "-# 03/10/2026 13:20 · les tops : 5 premiers Popular, 4 premiers Coming soon PC"))
         self.assertIsNone(fb.alert_offer("🔁 **Recontrôle des offres signalées** · Price check homepage · offre 140513764 ·"))
         self.assertIsNone(fb.alert_offer("Bonjour, l'offre 140513764 est-elle réparée ?"))
         self.assertEqual(fb.alert_product(ALERT), "Minecraft Dungeons")

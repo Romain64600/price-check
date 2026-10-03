@@ -33,7 +33,15 @@ Chaque alerte part dans un seul salon : les urgences d'abord, puis les tops, pui
 | #aks_price_checker | Les autres alertes des tops (À VÉRIFIER, offres plus bas dans l'édition) et les récapitulatifs de recontrôle des tops. C'est aussi le salon du bot. | Ensuite |
 | #aks_top_price_checker | Les autres alertes de la homepage et leurs récapitulatifs. | Ensuite |
 
-Un ancien report renvoyé dans son bon salon porte la mention « Report existant (signalé le …) » : ce n'est pas une nouvelle détection.
+Chaque boucle commence, dans chaque salon où elle poste, par un bandeau très visible : « 🔄 Nouvelle boucle · Price check top » (🚨 dans le salon des urgences), avec l'heure, ce que la boucle contrôle, la légende des messages et le lien vers ce guide. Une boucle sans alerte ne poste rien.
+
+| Début du message | Ce que c'est |
+| --- | --- |
+| 🔄 Nouvelle boucle (🚨 aux urgences) | Le bandeau : une boucle commence |
+| ↪️ Suite de la boucle | La même boucle reprend après les messages d'une autre |
+| 🚨 URGENCE PREMIER PRIX, 🔴 SUSPECT, 🟠 À VÉRIFIER | Un nouveau report |
+| 📌 Rappel · report existant | Un ancien report renvoyé dans son bon salon : pas une nouvelle détection |
+| 🔁 Recontrôle | Le bilan du recontrôle : réparées, toujours en erreur, nouvelles erreurs |
 
 ## Lire une alerte
 
@@ -41,7 +49,7 @@ Une alerte dit quelle offre est en cause, où elle s'affiche, et pourquoi le mon
 
 ```
 🚨 URGENCE PREMIER PRIX · Price check homepage
-📌 Report existant (signalé le 2026-10-01 14:58), renvoyé dans le salon des urgences premiers prix
+📌 Rappel · report existant (signalé le 2026-10-01 14:58), renvoyé dans le salon des urgences premiers prix
 🔴 SUSPECT · Monster Hunter Wilds (Home · RPG #8) · Deluxe · 2e prix de l'édition
 G2A · EUROPE (STEAM EU) · steam · 44.10 € · offre 136209040 · contrôle : URL
 Raison : région : AllKeyShop EUROPE, marchand ROW
@@ -52,7 +60,7 @@ Page : <lien de la page AllKeyShop>
 | Ligne | Ce qu'elle dit |
 | --- | --- |
 | URGENCE PREMIER PRIX | Un problème avéré sur l'un des 3 premiers prix de l'édition, et le mode qui l'a trouvé (top ou homepage) |
-| Report existant | Une ancienne alerte, renvoyée une seule fois dans son bon salon (absente d'une alerte neuve) |
+| Rappel · report existant | Une ancienne alerte, renvoyée une seule fois dans son bon salon (absente d'une alerte neuve) |
 | Verdict · jeu (liste #rang) · édition · rang | Le verdict, la page, la liste où elle figure, l'édition où l'offre est rangée et son rang dans cette édition |
 | Marchand · région · plateforme · prix | Ce qu'affiche AllKeyShop : la région avec son nom de filtre entre parenthèses (le vrai sens de la région), le prix frais carte compris, l'id de l'offre, et comment le moniteur a contrôlé (URL, page) |
 | Raison | Ce qui ne va pas : ici, AllKeyShop affiche une clé EUROPE, le marchand vend une clé ROW (reste du monde, sans l'Europe) |
