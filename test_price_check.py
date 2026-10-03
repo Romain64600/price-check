@@ -1975,12 +1975,25 @@ class TestDetectionAudit20261002(unittest.TestCase):
         self.assertIsNone(self.match("Oblivion Remastered", "https://shop.example/oblivion-goty-pc-steam"))
         self.assertIsNone(self.match("Final Fantasy VII Remake", "https://shop.example/final-fantasy-vii-pc-steam"))
         self.assertIsNone(self.match("EA Sports UFC 5 PS5", "https://vidaplayer.com/product/playstation-4-5/ea-sports-fc-26-ps5"))
-        # vraie erreur en production (GameBoost, offre 138007132, 1er prix de l'édition Standard le 02/10/2026)
-        r = pc.analyze("Pokemon Scarlet The Hidden Treasure of Area Zero Nintendo Switch", offer(platform="nintendo-eshop", region="EUROPE"),
-                       pc.url_text("https://gameboost.com/pokemon-violet-the-hidden-treasure-of-area-zero-switch-eu-00-12005"), "URL")
-        self.assertTrue(r["reasons"][0].startswith("autre produit chez le marchand : « Pokemon Violet"), r["reasons"])
+        # un autre mot à la place d'un mot du nom (« Liberty » pour « Vice ») : un autre jeu de la série
+        self.assertIsNone(self.match("Grand Theft Auto Vice City", "https://shop.example/grand-theft-auto-liberty-city-stories-pc"))
         # la tolérance d'un mot absent reste quand rien ne prend sa place (« pokmon » : à une lettre près, déjà testé)
         self.assertEqual(self.match("Heroes of Might and Magic Olden Era", "https://shop.example/heroes-of-might-and-magic-era-pc"), "partial")
+
+    def test_pokemon_scarlet_violet_dlc_page_covers_both(self):
+        # Romain, 03/10/2026 : faux positif. Le DLC « The Hidden Treasure of Area Zero » existe pour Scarlet et pour Violet,
+        # la page AllKeyShop « Pokemon Scarlet The Hidden Treasure of Area Zero » prend en compte les deux (GameBoost,
+        # offre 138007132). « Spécifique à Pokémon, vraiment pas généraliser » : un alias pour ce produit seul
+        pc._PRODUCT_ALIASES = None
+        o = offer(platform="nintendo-eshop", region="EUROPE")
+        url = "https://gameboost.com/pokemon-violet-the-hidden-treasure-of-area-zero-switch-eu-00-12005"
+        r = pc.analyze("Pokemon Scarlet The Hidden Treasure of Area Zero Nintendo Switch", o, pc.url_text(url), "URL")
+        self.assertEqual((r["match"], r["reasons"]), ("exact", []))
+        # pas généralisé : le jeu Pokémon Violet n'est pas le jeu Pokémon Scarlet, ni Bouclier l'Épée
+        r = pc.analyze("Pokemon Scarlet Nintendo Switch", o, pc.url_text("https://shop.example/pokemon-violet-nintendo-switch-eu"), "URL")
+        self.assertTrue(r["reasons"] and r["reasons"][0].startswith("autre produit chez le marchand : « Pokemon Violet"), r["reasons"])
+        r = pc.analyze("Pokemon Sword Nintendo Switch", o, pc.url_text("https://shop.example/pokemon-shield-nintendo-switch-eu"), "URL")
+        self.assertTrue(r["reasons"] and r["reasons"][0].startswith("autre produit"), r["reasons"])
 
     def test_short_page_title_only_the_end_of_the_name(self):
         o = offer(platform="playstation-store", region="PS5")

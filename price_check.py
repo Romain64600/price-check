@@ -776,7 +776,7 @@ def name_match(names, normed, extra_ok=()):
 
     Sur un nom long (4 mots significatifs ou plus), un seul mot peut manquer, sauf un nombre, sauf le dernier (c'est
     lui qui distingue le nouveau jeu : « Super Mario Party Jamboree », « Jedi Survivor »), et sauf si un autre mot
-    occupe sa place (« Pokemon Violet » pour « Pokemon Scarlet ») : un vieux Mario sur la page du dernier Mario, c'est
+    occupe sa place (« Liberty » pour « Vice » dans « Grand Theft Auto Vice City ») : un vieux Mario sur la page du dernier Mario, c'est
     l'erreur à ne jamais laisser passer. `extra_ok` : les mots de l'édition de l'offre, qui peuvent occuper la place.
     """
     tokens_list = [t for t in normed.split("-") if t]

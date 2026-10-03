@@ -27,3 +27,9 @@
 # Resident Evil Requiem est le 9e épisode : Gamingdragons écrit « resident-evil-requiem-9 » (un numéro après le nom ne
 # passe plus depuis le 02/10/2026 : c'est d'ordinaire une suite)
 "Resident Evil Requiem" = ["Resident Evil Requiem 9", "Resident Evil 9 Requiem"]
+# Le DLC « The Hidden Treasure of Area Zero » existe pour Pokémon Scarlet et pour Pokémon Violet ; la page AllKeyShop
+# « Pokemon Scarlet The Hidden Treasure of Area Zero » prend en compte les deux (il n'y a pas de page Violet : 404).
+# Romain, 03/10/2026 : faux positif (GameBoost, offre 138007132, alertée « en doute » le 02/10) — « c'est des cas
+# rares, spécifique à Pokémon, donc vraiment, vraiment pas généraliser » : un alias pour ce seul produit ; la règle
+# « un autre mot à la place d'un mot du nom = un autre produit » reste (le jeu Pokémon Violet n'est pas Scarlet).
+"Pokemon Scarlet The Hidden Treasure of Area Zero" = ["Pokemon Violet The Hidden Treasure of Area Zero"]
