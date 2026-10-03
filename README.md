@@ -112,7 +112,7 @@ Table détaillée, méthode par méthode, et configs marchands : [docs/marchands
 
 | Document | Contenu |
 |---|---|
-| [docs/guide-equipe.md](docs/guide-equipe.md) · [docs/team-guide.md](docs/team-guide.md) | **Guide de l'équipe** (FR · EN) : les salons Discord, lire une alerte, trancher dans le fil ou l'admin, que faire, cas déjà jugés. Copie de la [version partagée](https://claude.ai/code/artifact/2c890bc0-9b6c-42e9-b0dc-298c0e11ac84), lien aussi dans l'admin |
+| [docs/guide-equipe.md](docs/guide-equipe.md) · [docs/team-guide.md](docs/team-guide.md) | **Guide de l'équipe** (FR · EN) : les salons Discord, lire une alerte, trancher dans le fil ou l'admin, que faire, cas déjà jugés. Page de l'admin pour l'équipe (« 📘 Guide équipe », `/executor/price-check-guide`), générée par `tools/guide_html.py` |
 | [docs/detection.md](docs/detection.md) | Objectif, user agents, lien de redirection, règle en place, verdicts, limites, questions ouvertes |
 | [docs/precedents.md](docs/precedents.md) | Registre des précédents : chaque cas réel jugé (formation ou étude), sa décision, sa preuve, les principes et les cas à trancher |
 | [docs/marchands.md](docs/marchands.md) | Couverture par marchand : méthode de contrôle, marchands non couverts |
