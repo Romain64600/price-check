@@ -112,6 +112,8 @@ Toutes ces règles et leurs cas réels sont dans le [registre des précédents](
 
 **Urgences premiers prix** (Romain, 03/10/2026 : « quand c'est vraiment premier prix qui a un problème, c'est une grosse alerte », « premier prix = les 3 prix les moins chers par édition ») : un `SUSPECT` sur l'une des 3 offres de clé les moins chères de son édition (pas un compte) part sur le webhook des urgences (`DISCORD_WEBHOOK_URL_URGENT`), et seulement là, avec l'en-tête `🚨 URGENCE PREMIER PRIX · Price check top` (ou `homepage`, le mode qui l'a trouvée). Le reste (À VÉRIFIER, offres plus bas dans l'édition au recontrôle ou en Full Page, comptes, récapitulatifs) part sur le salon du mode. Dans l'export de l'admin : `first_price`.
 
+**Les reports existants rejoignent leur bon salon** (Romain, 03/10/2026 : « si tu passes sur les offres qui ont déjà été reportées, il faudra les reporter ce coup-ci dans le bon chan discord au prochain passage ») : chaque offre garde le salon où son alerte est partie (`sent_to` ; avant le 03/10, il se déduit : le salon des top games jusqu'au 01/10/2026 14:55, un seul webhook, puis celui du mode). Quand un passage revoit une offre signalée encore en erreur dont l'alerte n'est pas dans le bon salon (un SUSPECT sur l'un des 3 premiers prix : les urgences ; sinon le salon de son mode), elle y est signalée **une fois**, marquée « 📌 Report existant (signalé le …) » ; une alerte de mode attend un passage de son mode (une page des tops est aussi dans la homepage). Au déploiement : 18 urgences et 3 alertes homepage du 30/09.
+
 Format d'une alerte :
 
 ```

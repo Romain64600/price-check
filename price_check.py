@@ -1646,6 +1646,8 @@ def is_urgent(offer, res):
     return res.get("verdict") == "SUSPECT" and is_first_price(offer)
 
 
+
+
 def format_alert(label, rank, product, page_url, offer, res):
     where = rank_label(offer)
     lines = [
@@ -1836,6 +1838,70 @@ def promote_unverifiable(entry, label, rank, product, page_url, offer, notify):
     entry.update(verdict="À VÉRIFIER", notes=res["notes"], page_first=True, edition_rank=offer.get("edition_rank"))
 
 
+# Le bon salon d'une offre signalée (Romain, 03/10/2026 : « si tu passes sur les offres qui ont déjà été reportées, il
+# faudra les reporter ce coup-ci dans le bon chan discord au prochain passage »). Le salon où part chaque alerte est
+# noté depuis le 03/10 (`sent_to`) ; avant, il se déduit : un seul webhook, celui des top games, jusqu'au déploiement
+# des salons par mode (01/10/2026 14:55, commit d34ebe9), puis le salon du mode.
+MODE_CHANNELS_SINCE = "2026-10-01 14:55"
+
+
+def mode_of_list(label):
+    """Le mode d'une liste : les tops (« Popular », « Coming soon PC ») ou la homepage (tout le reste)."""
+    return "top-games" if (label or "") in TOP_GAMES_LABELS else "homepage"
+
+
+def mode_channel(entry, mode=None):
+    """Le salon du mode d'une offre : le mode qui l'a contrôlée, à défaut celui du passage, à défaut celui de sa liste."""
+    return entry.get("mode") or mode or mode_of_list(entry.get("list"))
+
+
+def channel_of(entry, offer, mode=None):
+    """Le bon salon d'une offre signalée : celui des urgences pour un SUSPECT sur un premier prix (au rang qu'elle a
+    maintenant), sinon celui de son mode."""
+    if entry.get("verdict") == "SUSPECT" and is_first_price(offer):
+        return "urgent"
+    return mode_channel(entry, mode)
+
+
+def sent_channel(entry):
+    """Le salon où l'alerte de l'offre est partie (voir MODE_CHANNELS_SINCE)."""
+    if entry.get("sent_to"):
+        return entry["sent_to"]
+    if (entry.get("at") or "") < MODE_CHANNELS_SINCE:
+        return "top-games"
+    return mode_channel(entry)
+
+
+def reroute_existing(entry, label, rank, product, page_url, offer, notify, mode):
+    """Une offre déjà signalée (SUSPECT, À VÉRIFIER), encore en erreur, dont l'alerte n'est pas dans le bon salon : elle
+    y est signalée une fois, au passage qui la voit, marquée « report existant » (ce n'est pas une nouvelle détection).
+    Une urgence premier prix part du premier passage qui la voit ; une autre alerte attend un passage de son mode (une
+    page des tops est aussi dans la homepage : elle ne part pas deux fois)."""
+    if (entry.get("verdict") not in ("SUSPECT", "À VÉRIFIER") or entry.get("fixed_at")
+            or (entry.get("decision") or {}).get("decision") == "faux"):
+        return
+    target = channel_of(entry, offer, mode)
+    if sent_channel(entry) == target:
+        entry.setdefault("sent_to", target)
+        return
+    if target != "urgent" and mode and target != mode:
+        return
+    res = {"verdict": entry["verdict"], "reasons": entry.get("reasons") or [], "notes": entry.get("notes") or [],
+           "url": entry.get("url"), "method": entry.get("method") or "?"}
+    msg = format_alert(label, rank, product, page_url, offer, res)
+    note = "📌 Report existant (signalé le %s), %s" % (entry.get("at") or "?", "renvoyé dans le salon des urgences premiers prix"
+                                                       if target == "urgent" else "renvoyé dans le salon de son mode")
+    head, _, rest = msg.partition("\n")
+    msg = "%s\n%s\n%s" % (head, note, rest) if msg.startswith(URGENT_PREFIX) else "%s\n%s" % (note, msg)
+    log.info("%s", msg.replace("\n", " | "))
+    try:
+        notify(msg)
+    except Exception as e:
+        log.error("Envoi Discord impossible, nouvel essai au prochain passage : %s", e)
+        return
+    entry["sent_to"] = target
+
+
 RECHECK_EVERY = 3600  # s : recontrôle des offres signalées encore sur leurs pages (et à chaque passage demandé depuis l'admin)
 
 
@@ -1931,7 +1997,8 @@ def offer_facts(url, region, region_filter, platform, edition):
     return (path, norm(region or ""), norm(region_filter or ""), norm(platform or ""), norm(edition or ""))
 
 
-def recheck_flagged(label, rank, product, page_url, trans, state, notify, checker, stamp, now, outcome, skip=()):
+def recheck_flagged(label, rank, product, page_url, trans, state, notify, checker, stamp, now, outcome, skip=(), mode=None,
+                    sends=None):
     """Romain, 02/10/2026 : « il faut qu'il contrôle les offres déjà vues, comme ça on saura si elles sont réparées ou
     pas ». Les offres signalées de la page qui ne sont plus parmi les offres retenues (`skip` : déjà recontrôlées) :
     disparues de la page = retirées ; encore là (plus bas dans l'édition) = recontrôlées."""
@@ -1968,7 +2035,11 @@ def recheck_flagged(label, rank, product, page_url, trans, state, notify, checke
             continue
         if res["verdict"] == "À VÉRIFIER":
             res = dict(res, verdict=unverifiable_verdict(offer, label, page_url, res.get("unverifiable", "first-price")))
+        before = sends[0] if sends else 0
         apply_recheck(entry, label, rank, product, page_url, offer, res, notify, stamp, now, outcome)
+        if sends and sends[0] > before:
+            entry["sent_to"] = channel_of(entry, offer, mode)
+        reroute_existing(entry, label, rank, product, page_url, offer, notify, mode)
 
 
 def format_recheck(label, by, outcome, full=False):
@@ -2076,10 +2147,17 @@ def run_cycle(targets, notify, state, checker=None, save=None, per_edition=1, be
             time.sleep(PAGE_DELAY)
         handled = set()
         alerted = [False]
+        sends = [0]
 
         def page_notify(msg):
             notify(msg)
             alerted[0] = True
+            sends[0] += 1
+
+        def mark_sent(entry, offer, before):
+            # une alerte vient de partir pour cette offre (recontrôle, promotion) : le salon où elle est partie
+            if sends[0] > before:
+                entry["sent_to"] = channel_of(entry, offer, mode)
         for offer in offers:
             check_stop()
             offer["page_dlc"] = offer_on_dlc_page(page_dlc, offer)
@@ -2105,7 +2183,10 @@ def run_cycle(targets, notify, state, checker=None, save=None, per_edition=1, be
                 if (entry.get("verdict") == "NON VÉRIFIABLE" and policy == "first-price"
                         and (entry.get("decision") or {}).get("decision") != "faux"  # jugée faux positif : jamais alertée
                         and unverifiable_verdict(offer, label, page_url) == "À VÉRIFIER"):
+                    before = sends[0]
                     promote_unverifiable(entry, label, rank, product, page_url, offer, page_notify)
+                    mark_sent(entry, offer, before)
+                reroute_existing(entry, label, rank, product, page_url, offer, page_notify, mode)
                 continue
             try:
                 res = checker(product, offer)
@@ -2124,7 +2205,10 @@ def run_cycle(targets, notify, state, checker=None, save=None, per_edition=1, be
             if res["verdict"] == "À VÉRIFIER":
                 res = dict(res, verdict=unverifiable_verdict(offer, label, page_url, res.get("unverifiable", "first-price")))
             if entry is not None:  # recontrôle d'une offre déjà vue
+                before = sends[0]
                 apply_recheck(entry, label, rank, product, page_url, offer, res, page_notify, stamp, now, outcome)
+                mark_sent(entry, offer, before)
+                reroute_existing(entry, label, rank, product, page_url, offer, page_notify, mode)
                 continue
             msg = format_alert(label, rank, product, page_url, offer, res)
             log.info("%s", msg.replace("\n", " | "))
@@ -2144,13 +2228,15 @@ def run_cycle(targets, notify, state, checker=None, save=None, per_edition=1, be
                 "edition_rank": offer.get("edition_rank"), "account": offer.get("account", False),
                 "page_first": offer.get("page_first", False), "unverifiable": res.get("unverifiable"),
                 "evidence": res.get("evidence"), "mode": mode,
+                "sent_to": ("urgent" if is_urgent(offer, res) else mode_channel({}, mode)) if res["verdict"] not in NOT_SENT else None,
             }
             if res["method"] != "aucune":
                 m = state["merchants"].setdefault(offer["merchantName"], {"methods": {}})
                 m["methods"][res["method"]] = m["methods"].get(res["method"], 0) + 1
                 m.update(url=res["url"], at=stamp)
         if recheck:
-            recheck_flagged(label, rank, product, page_url, trans, state, page_notify, checker, stamp, now, outcome, skip=handled)
+            recheck_flagged(label, rank, product, page_url, trans, state, page_notify, checker, stamp, now, outcome, skip=handled,
+                            mode=mode, sends=sends)
         if alerted[0] and save:  # une alerte partie : l'état est écrit tout de suite (un redémarrage ne la renverra pas)
             save()
     prune_state(state, now)

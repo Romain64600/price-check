@@ -1413,7 +1413,7 @@ class TestOfferModes20261001(unittest.TestCase):
         fixed_id, still_id, faux_id, nv_id, ok_id = (str(o["id"]) for o in offers[:5])
         flagged = lambda **kw: dict({"verdict": "SUSPECT", "product": "EA SPORTS FC 27", "edition": "Standard", "merchant": "X",
                                      "reasons": ["région : AllKeyShop GLOBAL, marchand EU"], "page": page, "at": "2026-10-01 10:00",
-                                     "seen": pc.time.time()}, **kw)
+                                     "seen": pc.time.time(), "sent_to": "urgent"}, **kw)  # déjà dans le bon salon
         def fresh_state():
             st = pc.load_state("/nonexistent")
             st["checked"] = {fixed_id: flagged(), still_id: flagged(), "999999": flagged(merchant="Retiré"),
@@ -2157,6 +2157,66 @@ class TestReportModes20261003(unittest.TestCase):
         self.assertTrue(pc.is_first_price({"edition_rank": 2}))
         self.assertFalse(pc.is_first_price({"edition_rank": 2, "account": True}))
         self.assertFalse(pc.is_first_price({"edition_rank": 5}))
+
+    def test_existing_reports_are_sent_once_to_their_right_channel(self):
+        """Romain, 03/10/2026 : « si tu passes sur les offres qui ont déjà été reportées, il faudra les reporter ce coup-ci
+        dans le bon chan discord au prochain passage »."""
+        page = "https://www.allkeyshop.com/blog/jeu/"
+        html = aks_page([{"id": n, "price": 5.0 + n} for n in (1001, 1002, 1003, 1004, 1005)])
+        still = lambda product, o: {"verdict": "SUSPECT", "reasons": ["région : AllKeyShop GLOBAL, marchand EU"], "notes": [],
+                                    "url": "https://shop.example/jeu-eu", "method": "URL"}
+        old = lambda **kw: dict({"verdict": "SUSPECT", "product": "Jeu", "edition": "Standard", "merchant": "Kinguin", "page": page,
+                                 "reasons": ["région : AllKeyShop GLOBAL, marchand EU"], "url": "https://shop.example/jeu-eu",
+                                 "method": "URL", "at": "2026-09-30 15:54", "seen": pc.time.time()}, **kw)
+        state = pc.load_state("/nonexistent")
+        state["checked"] = {
+            "1001": old(),  # 30/09 : partie sur le salon des top games ; un SUSPECT sur le 1er prix : les urgences
+            "1002": old(at="2026-10-02 05:19", mode="homepage"),  # partie sur le salon homepage ; 2e prix : les urgences
+            "1003": old(at="2026-10-02 05:19", mode="homepage", sent_to="urgent"),  # déjà au bon endroit
+            "1005": old(mode="homepage"),  # 5e prix (recontrôlée, hors des 3 premiers) : le salon homepage, pas les urgences
+        }
+        targets = [("Home · RPG", 3, "Jeu", page)]
+
+        def cycle(mode, sent, recheck="flagged"):
+            with mock.patch.object(pc, "http_get", return_value=(200, None, html)), mock.patch.object(pc, "NOTIFY_OK", False):
+                pc.run_cycle(targets, sent.append, state, still, per_edition=3, recheck=recheck, mode=mode)
+        # un passage des tops voit la page (elle est aussi dans les tops) : les urgences partent, pas l'alerte homepage
+        sent = []
+        cycle("top-games", sent)
+        urgent = [m for m in sent if m.startswith(pc.URGENT_PREFIX)]
+        self.assertEqual(len(urgent), 2, sent)
+        self.assertTrue(all("📌 Report existant (signalé le " in m and "renvoyé dans le salon des urgences premiers prix" in m.splitlines()[1]
+                            for m in urgent), urgent)
+        self.assertEqual(len(sent), 2)  # l'offre 1005 attend un passage homepage
+        self.assertEqual([state["checked"][k].get("sent_to") for k in ("1001", "1002", "1003")], ["urgent", "urgent", "urgent"])
+        # le passage homepage : l'alerte homepage du 30/09 (partie sur le salon des top games) rejoint son salon
+        sent = []
+        cycle("homepage", sent)
+        self.assertEqual(len(sent), 1, sent)
+        self.assertTrue(sent[0].startswith("📌 Report existant (signalé le 2026-09-30 15:54), renvoyé dans le salon de son mode"), sent[0])
+        self.assertEqual(state["checked"]["1005"]["sent_to"], "homepage")
+        # une seule fois
+        sent = []
+        cycle("homepage", sent)
+        cycle("top-games", sent)
+        self.assertEqual(sent, [])
+        # un envoi raté est retenté au passage suivant
+        state["checked"]["1004"] = old(sent_to=None)
+        failing = lambda msg: (_ for _ in ()).throw(OSError("Discord 503"))
+        with mock.patch.object(pc, "http_get", return_value=(200, None, html)), mock.patch.object(pc, "NOTIFY_OK", False):
+            pc.run_cycle(targets, failing, state, still, per_edition=3, recheck="flagged", mode="homepage")
+        self.assertIsNone(state["checked"]["1004"].get("sent_to"))
+        sent = []
+        cycle("homepage", sent)
+        self.assertEqual(len(sent), 1)
+        self.assertEqual(state["checked"]["1004"]["sent_to"], "homepage")  # 4e prix : pas une urgence, le salon de son mode
+
+    def test_a_new_alert_notes_its_channel(self):
+        state = pc.load_state("/nonexistent")
+        suspect = lambda product, o: {"verdict": "SUSPECT", "reasons": ["x"], "notes": [], "url": "https://shop.example/jeu", "method": "URL"}
+        with mock.patch.object(pc, "http_get", return_value=(200, None, aks_page([{"id": 1, "price": 5.0}]))):
+            pc.run_cycle([("Home · RPG", 1, "Jeu", "https://www.allkeyshop.com/blog/jeu/")], lambda m: None, state, suspect, mode="homepage")
+        self.assertEqual(state["checked"]["1"]["sent_to"], "urgent")
 
     def test_run_cycle_keeps_the_mode_that_checked_the_offer(self):
         state = pc.load_state("/nonexistent")
