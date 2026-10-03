@@ -10,6 +10,10 @@ le bot ne traite que les messages qui le mentionnent, répondent à lui ou comme
 
 Commandes : !new (nouvelle session), !stop (interrompre), !status, !help ;
 propriétaire : !allow @membre, !deny @membre, !who, !mention on|off.
+
+Feedback des reports (Romain, 03/10/2026, voir feedback.py) : chaque alerte des webhooks du moniteur, dans les salons
+d'alertes, reçoit un fil « Feedback · <jeu> · offre <id> » ; une personne autorisée y répond « vrai », « faux » ou
+« à discuter » + une note, et la décision s'ajoute à decisions.jsonl (celui de l'admin). Jamais transmis à Claude.
 Réglages dans ../.env : DISCORD_BOT_TOKEN, DISCORD_CHANNEL_ID, DISCORD_OWNER_ID, DISCORD_ALLOWED_IDS
 (ids séparés par des virgules), DISCORD_REQUIRE_MENTION (1 = mention obligatoire au départ),
 CLAUDE_CWD (défaut /root/price-checker), CLAUDE_PERMISSION_MODE (défaut auto), CLAUDE_TIMEOUT (s).
@@ -28,6 +32,8 @@ import shutil
 
 import discord
 
+import feedback as fb
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 ENV_PATH = os.environ.get("PRICE_CHECK_ENV", os.path.join(os.path.dirname(HERE), ".env"))
 STATE_PATH = os.path.join(HERE, "state.json")
@@ -42,6 +48,10 @@ SYSTEM_PROMPT = (
 )
 
 log = logging.getLogger("price-check-bot")
+# les webhooks du moniteur : leurs messages sont les alertes, qui reçoivent un fil de feedback
+ALERT_WEBHOOKS = {"DISCORD_WEBHOOK_URL": "top-games", "DISCORD_WEBHOOK_URL_HOMEPAGE": "homepage", "DISCORD_WEBHOOK_URL_URGENT": "urgent"}
+BACKFILL_LIMIT = 150  # messages relus par salon au démarrage, pour ouvrir un fil sur les alertes encore ouvertes
+REPORTED = ("SUSPECT", "À VÉRIFIER", "NON VÉRIFIABLE")
 
 
 def load_env(path):
@@ -250,6 +260,15 @@ class Bot(discord.Client):
         self.queue = asyncio.Queue()
         self.busy = None  # message en cours de traitement
         self.started = time.time()
+        self.reports_dir = os.environ.get("PRICE_CHECK_REPORTS_DIR", "")
+        self.alert_hooks = {}  # id de webhook -> mode (top-games, homepage, urgent)
+        for key, mode in ALERT_WEBHOOKS.items():
+            hook = fb.webhook_id(os.environ.get(key, ""))
+            if hook:
+                self.alert_hooks.setdefault(hook, mode)
+        self.alert_channels = {}  # id de salon -> mode, résolu au démarrage
+        self.threads_lock = asyncio.Lock()
+        self.backfilled = False
 
     async def setup_hook(self):
         self.loop.create_task(self.worker())
@@ -267,11 +286,130 @@ class Bot(discord.Client):
                                              ("add_reactions", perms.add_reactions), ("attach_files", perms.attach_files)) if not ok]
             log.info("salon trouvé : #%s (%s)%s", channel.name, channel.guild.name,
                      " ; PERMISSIONS MANQUANTES : " + ", ".join(missing) if missing else " ; permissions OK")
+        if self.reports_dir and not self.backfilled:
+            self.backfilled = True
+            self.loop.create_task(self.start_feedback())
+
+    # ---- Feedback des reports ----------------------------------------------------
+
+    async def start_feedback(self):
+        """Résout les salons des webhooks du moniteur, vérifie les droits du bot sur les fils, puis ouvre un fil sur les
+        alertes récentes encore ouvertes qui n'en ont pas."""
+        for key, mode in ALERT_WEBHOOKS.items():
+            url = os.environ.get(key, "")
+            if not url:
+                continue
+            try:
+                hook = await discord.Webhook.from_url(url, client=self).fetch(prefer_auth=False)
+            except discord.HTTPException as e:
+                log.warning("feedback : webhook %s illisible (%s)", key, e)
+                continue
+            self.alert_channels.setdefault(hook.channel_id, mode)
+        for channel_id, mode in self.alert_channels.items():
+            channel = self.get_channel(channel_id)
+            if channel is None:
+                log.warning("feedback : salon %s (%s) introuvable pour le bot", channel_id, mode)
+                continue
+            perms = channel.permissions_for(channel.guild.me)
+            missing = [n for n, ok in (("create_public_threads", perms.create_public_threads),
+                                       ("send_messages_in_threads", perms.send_messages_in_threads),
+                                       ("read_message_history", perms.read_message_history)) if not ok]
+            log.info("feedback : #%s (%s)%s", channel.name, mode, " ; PERMISSIONS MANQUANTES : " + ", ".join(missing)
+                     if missing else " ; fils OK")
+        try:
+            await self.backfill_threads()
+        except Exception:
+            log.exception("feedback : rattrapage des fils raté")
+
+    def open_reports(self):
+        """Les offres encore signalées, d'après l'export du moniteur (reports.json)."""
+        try:
+            with open(os.path.join(self.reports_dir, "reports.json"), encoding="utf-8") as f:
+                reports = json.load(f).get("reports") or []
+        except (OSError, ValueError):
+            return set()
+        return {str(r.get("offer")) for r in reports if isinstance(r, dict) and r.get("verdict") in REPORTED
+                and not r.get("fixed_at") and not r.get("decision")}
+
+    async def backfill_threads(self):
+        open_offers = self.open_reports()
+        threads = fb.load_threads(self.reports_dir)
+        latest = {}  # offre -> dernier message d'alerte sans fil
+        for channel_id in self.alert_channels:
+            channel = self.get_channel(channel_id)
+            if channel is None:
+                continue
+            async for msg in channel.history(limit=BACKFILL_LIMIT):
+                offer = fb.alert_offer(msg.content) if msg.webhook_id in self.alert_hooks else None
+                if not offer or offer not in open_offers or offer in threads:
+                    continue
+                if msg.thread is not None:  # cette alerte a déjà son fil : l'offre est servie
+                    threads[offer] = {"thread": msg.thread.id}
+                    latest.pop(offer, None)
+                    continue
+                if offer not in latest or msg.created_at > latest[offer].created_at:
+                    latest[offer] = msg  # la plus récente, tous salons confondus (une urgence renvoyée ce matin)
+        for msg in latest.values():
+            await self.open_feedback_thread(msg)
+        log.info("feedback : %d fil(s) ouvert(s) au démarrage sur des alertes encore ouvertes", len(latest))
+
+    async def open_feedback_thread(self, message):
+        offer = fb.alert_offer(message.content)
+        if not offer or message.thread is not None:
+            return
+        try:
+            thread = await message.create_thread(name=fb.thread_name(offer, fb.alert_product(message.content)),
+                                                 auto_archive_duration=10080)
+            await thread.send(fb.INSTRUCTIONS)
+        except discord.Forbidden:
+            log.warning("feedback : pas le droit d'ouvrir un fil dans #%s (« Créer des fils publics », « Envoyer des "
+                        "messages dans les fils »)", getattr(message.channel, "name", message.channel.id))
+            return
+        except discord.HTTPException as e:
+            log.warning("feedback : fil non ouvert pour l'offre %s : %s", offer, e)
+            return
+        async with self.threads_lock:
+            threads = fb.load_threads(self.reports_dir)
+            threads[offer] = {"thread": thread.id, "channel": message.channel.id, "guild": message.guild.id,
+                              "message": message.id, "mode": self.alert_hooks.get(message.webhook_id),
+                              "at": time.strftime("%Y-%m-%dT%H:%M:%S%z")}
+            fb.save_threads(self.reports_dir, threads)
+        log.info("feedback : fil ouvert pour l'offre %s dans #%s", offer, message.channel.name)
+
+    async def thread_feedback(self, message):
+        """Une réponse dans un fil de feedback : « vrai », « faux », « à discuter » + note, d'une personne autorisée."""
+        if message.author.bot or message.webhook_id:
+            return
+        parsed = fb.parse_decision(message.content)
+        offer = fb.thread_offer(message.channel.name)
+        if not parsed or not offer:
+            return
+        if not is_authorized(message.author.id, self.owner_id, self.state["allowed"]):
+            await message.reply("Seules les personnes autorisées sur le bot peuvent trancher (le propriétaire les ajoute "
+                                "avec `!allow @membre`). Ta remarque reste dans le fil.", mention_author=False)
+            return
+        key, note = parsed
+        by = "%s (Discord)" % message.author.display_name
+        try:
+            fb.append_decision(self.reports_dir, offer, key, note, by)
+        except (OSError, ValueError) as e:
+            log.error("feedback : décision non enregistrée pour l'offre %s : %s", offer, e)
+            await message.reply("❌ Décision non enregistrée : %s" % e, mention_author=False)
+            return
+        log.warning("feedback : décision %s pour l'offre %s par %s%s", key, offer, by, (" : " + note[:120]) if note else "")
+        await message.reply(fb.confirmation(key, note, by), mention_author=False)
 
     async def on_message(self, message):
         log.info("message reçu : salon %s, auteur %s (%s)%s, %d caractères", message.channel.id, message.author,
                  message.author.id, " [webhook]" if message.webhook_id else (" [bot]" if message.author.bot else ""),
                  len(message.content))
+        if self.reports_dir and message.webhook_id in self.alert_hooks:
+            await self.open_feedback_thread(message)  # une alerte du moniteur : son fil de feedback
+            return
+        if (self.reports_dir and isinstance(message.channel, discord.Thread)
+                and message.channel.parent_id in self.alert_channels and fb.thread_offer(message.channel.name)):
+            await self.thread_feedback(message)  # jamais transmis à Claude
+            return
         if not is_human_message(message, self.channel_id):
             return
         if not self.owner_id:  # appairage : le premier humain du salon devient le propriétaire

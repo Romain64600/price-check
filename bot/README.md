@@ -72,8 +72,27 @@ fichier joint au-delà de 6 000 caractères) et réagit ✅, ou ❌ avec l'erreu
 
 Les messages envoyés pendant un traitement sont mis en file (réaction 🕒) et traités dans l'ordre.
 
+## Feedback des reports dans les fils Discord
+
+Depuis le 03/10/2026 (Romain : « envoyer le feedback sur un thread du report sur Discord … ou les 2 ? » — les deux, avec
+l'admin) :
+
+- Chaque alerte des webhooks du moniteur (salons des top games, de la homepage, des urgences premiers prix) reçoit un fil
+  **« Feedback · <jeu> · offre <id> »**, avec la consigne. Au démarrage, le bot ouvre aussi un fil sur les alertes récentes
+  (150 derniers messages par salon) dont l'offre est encore signalée, sans décision, sur l'alerte la plus récente.
+- Dans le fil, une personne **autorisée** (le propriétaire, ou ajoutée par `!allow`) répond **vrai** (`vp`, ✅),
+  **faux** (`fp`, ❌) ou **à discuter** (💬), suivi d'une note : « faux : la page AllKeyShop est bien un DLC ». Le bot
+  ajoute la décision à `/var/lib/price-check/decisions.jsonl` (le fichier de l'admin, signée « <nom> (Discord) ») et
+  confirme dans le fil. Un autre membre reçoit un rappel ; une discussion sans mot-clé en tête ne tranche rien.
+- Le moniteur poste dans le même fil les suites de l'offre (réparée, faux positif levé par une règle, vérifiée, de
+  nouveau en erreur) et y recopie une décision prise dans l'admin. `threads.json`, dans le dossier partagé, garde le
+  dernier fil de chaque offre ; l'admin affiche le lien.
+- Rien de ces fils ne passe par Claude : le bot ne reconnaît que les mots-clés (une alerte cite des pages marchands).
+- Droits nécessaires dans les trois salons : « Créer des fils publics », « Envoyer des messages dans les fils », « Voir
+  l'historique ». Le journal du bot le vérifie au démarrage (`feedback : #salon (mode) ; fils OK`).
+
 ## Tests
 
 ```
-cd bot && .venv/bin/python -m unittest -v
+cd bot && .venv/bin/python -m unittest -v   # test_discord_bot, test_feedback
 ```

@@ -2334,6 +2334,92 @@ def read_decisions(directory):
     return decisions
 
 
+# Fils de feedback Discord (Romain, 03/10/2026 : « envoyer le feedback sur un thread du report sur Discord », et l'admin
+# aussi) : le bot ouvre un fil sur chaque alerte et note dans threads.json, par offre, le dernier fil ouvert (salon,
+# mode du webhook, serveur). Le moniteur y poste les suites de l'offre et en donne le lien à l'admin.
+THREADS_FILE = "threads.json"
+DECISION_LABELS = {"vrai": "Vrai positif", "faux": "Faux positif", "a_discuter": "À discuter"}
+
+
+def read_threads(directory):
+    if not directory:
+        return {}
+    try:
+        with open_shared(os.path.join(directory, THREADS_FILE)) as f:
+            data = json.load(f)
+    except (OSError, ValueError):
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def thread_url(info):
+    if isinstance(info, dict) and str(info.get("guild", "")).isdigit() and str(info.get("thread", "")).isdigit():
+        return "https://discord.com/channels/%s/%s" % (info["guild"], info["thread"])
+    return None
+
+
+def follow_up_message(kind, entry, stamp):
+    """Le message posté dans le fil de feedback d'une offre quand son recontrôle conclut."""
+    at = stamp or entry.get("fixed_at") or entry.get("last_recheck") or ""
+    if kind == "fixed":
+        return "✅ **Réparée** au recontrôle du %s : %s" % (at, entry.get("fixed_how") or "recontrôle OK")
+    if kind == "removed":
+        return "✅ **Réparée** au recontrôle du %s : offre retirée de la page" % at
+    if kind == "rules":
+        return "🧹 **Faux positif levé par une règle** au recontrôle du %s : rien n'a changé dans l'offre" % at
+    if kind == "verified":
+        return "🔎 **Vérifiée OK** au recontrôle du %s (elle n'avait pas pu être vérifiée)" % at
+    if kind == "new":
+        return "🆕 **De nouveau en erreur** au recontrôle du %s : %s" % (at, (entry.get("reasons") or ["?"])[0])
+    raise ValueError(kind)
+
+
+def post_follow_ups(state, outcome, threads, send):
+    """Poste dans le fil de feedback de chaque offre ce que son recontrôle a conclu (réparée, retirée, faux positif levé,
+    vérifiée, de nouveau en erreur ; jamais « toujours en erreur », qui reviendrait toutes les heures). `send(info, msg)`.
+    Renvoie le nombre de messages postés."""
+    if not threads:
+        return 0
+    keys = {id(e): k for k, e in state["checked"].items()}
+    posted = 0
+    for kind in ("fixed", "removed", "rules", "verified", "new"):
+        for entry in outcome.get(kind) or []:
+            info = threads.get(keys.get(id(entry)))
+            if not thread_url(info):
+                continue
+            try:
+                send(info, follow_up_message(kind, entry, entry.get("fixed_at") if kind != "new" else entry.get("at")))
+                posted += 1
+            except Exception as e:  # une suite manquée n'est pas une alerte : journalisée, pas mise en file
+                log.warning("fil de l'offre %s : suite non postée (%s)", keys.get(id(entry)), e)
+    return posted
+
+
+def post_admin_decisions(state, keys, threads, send):
+    """Une décision prise dans l'admin est recopiée dans le fil de feedback de l'offre (celles prises sur Discord y sont
+    déjà : le bot les a confirmées)."""
+    for key in keys:
+        decision = (state["checked"].get(key) or {}).get("decision") or {}
+        info = threads.get(key)
+        if not thread_url(info) or str(decision.get("by") or "").endswith("(Discord)"):
+            continue
+        note = decision.get("note")
+        try:
+            send(info, "📝 Décision prise dans l'admin : **%s**%s — par %s" % (
+                DECISION_LABELS.get(decision.get("decision"), decision.get("decision")), (" — « %s »" % note) if note else "",
+                decision.get("by") or "?"))
+        except Exception as e:
+            log.warning("fil de l'offre %s : décision non recopiée (%s)", key, e)
+
+
+def send_to_thread(info, msg):
+    """Poste dans un fil, par le webhook de son salon (un webhook ne poste que dans les fils de son salon)."""
+    hook = webhook_for(info.get("mode") or "top-games")
+    if not hook:
+        raise OSError("pas de webhook pour le mode %s" % info.get("mode"))
+    send_discord("%s?thread_id=%s" % (hook, info["thread"]), msg)
+
+
 def apply_decisions(state, directory):
     """Reporte les décisions de l'admin dans l'état ; renvoie les offres dont la décision est nouvelle."""
     changed = []
@@ -2382,6 +2468,7 @@ def export_reports(state, directory, pages=None, page_modes=None):
     modes qui la suivent, page_modes_of) donne le mode de chaque report."""
     pages = pages or {}
     page_modes = page_modes or {}
+    threads = read_threads(directory)
     reports = []
     for key, e in state["checked"].items():
         if e.get("verdict") not in REPORTED and not e.get("decision") and not e.get("fixed_at"):
@@ -2393,6 +2480,7 @@ def export_reports(state, directory, pages=None, page_modes=None):
         reports.append({
             "mode": mode, "modes": modes, "mode_label": MODES[mode]["label"] if mode in MODES else None,
             "first_price": is_first_price(e),  # l'un des 3 prix de clé les moins chers de son édition (03/10/2026)
+            "discord_thread": thread_url(threads.get(key)),  # le fil de feedback Discord de l'offre (03/10/2026)
             "offer": key, "verdict": e.get("verdict"), "product": e.get("product"), "edition": e.get("edition"),
             "merchant": e.get("merchant"), "price": e.get("price"), "region": e.get("region"),
             "region_filter": e.get("region_filter") or "", "platform": e.get("platform"),
@@ -2597,8 +2685,11 @@ def main():
             publish_status()
             if REPORTS_DIR:
                 try:
-                    for key in apply_decisions(state, REPORTS_DIR):
+                    changed = apply_decisions(state, REPORTS_DIR)
+                    for key in changed:
                         log.info("décision de l'admin pour l'offre %s : %s", key, state["checked"][key]["decision"])
+                    if changed and not args.dry_run:
+                        post_admin_decisions(state, changed, read_threads(REPORTS_DIR), send_to_thread)
                 except Exception:  # decisions.jsonl illisible : la surveillance continue, les décisions attendront
                     log.exception("lecture des décisions de l'admin impossible")
             outcome = run_cycle(targets[mode], notify, state, save=lambda: save_state(args.state, state),
@@ -2606,6 +2697,10 @@ def main():
                                 resume_after=resume_after, mode=mode)
             (state.get("running") or {}).pop(mode, None)  # passage demandé terminé
             save_state(args.state, state)
+            if REPORTS_DIR and not args.dry_run:
+                posted = post_follow_ups(state, outcome, read_threads(REPORTS_DIR), send_to_thread)
+                if posted:
+                    log.info("%s : %d suite(s) postée(s) dans les fils de feedback", mode, posted)
             if recheck:
                 last_recheck[mode] = time.monotonic()
                 st["last_recheck"] = {"at": stamp_iso(), "kind": recheck, "checked": outcome["checked"],

@@ -2218,6 +2218,49 @@ class TestReportModes20261003(unittest.TestCase):
             pc.run_cycle([("Home · RPG", 1, "Jeu", "https://www.allkeyshop.com/blog/jeu/")], lambda m: None, state, suspect, mode="homepage")
         self.assertEqual(state["checked"]["1"]["sent_to"], "urgent")
 
+    def test_feedback_threads_get_the_follow_ups(self):
+        """Romain, 03/10/2026 : « envoyer le feedback sur un thread du report sur Discord … ou les 2 ? » — les deux : le bot
+        ouvre un fil par alerte (bot/feedback.py, threads.json), le moniteur y poste les suites et l'admin en a le lien."""
+        import tempfile
+        state = pc.load_state("/nonexistent")
+        fixed = {"verdict": "OK", "fixed_at": "2026-10-03 11:20", "fixed_how": "recontrôle OK, l'offre a changé (URL)"}
+        rule = {"verdict": "OK", "fixed_at": "2026-10-03 11:21"}
+        new = {"verdict": "SUSPECT", "at": "2026-10-03 11:22", "reasons": ["autre produit chez le marchand : « Sonic »"]}
+        lone = {"verdict": "OK", "fixed_at": "2026-10-03 11:23"}
+        state["checked"] = {"1": fixed, "2": rule, "3": new, "4": lone}
+        threads = {"1": {"thread": 901, "guild": 77, "mode": "urgent"}, "2": {"thread": 902, "guild": 77, "mode": "homepage"},
+                   "3": {"thread": 903, "guild": 77, "mode": "top-games"}}
+        outcome = {"fixed": [fixed, lone], "removed": [], "rules": [rule], "verified": [], "new": [new], "still": [], "unknown": []}
+        sent = []
+        self.assertEqual(pc.post_follow_ups(state, outcome, threads, lambda info, msg: sent.append((info["thread"], msg))), 3)
+        self.assertEqual(sent, [
+            (901, "✅ **Réparée** au recontrôle du 2026-10-03 11:20 : recontrôle OK, l'offre a changé (URL)"),
+            (902, "🧹 **Faux positif levé par une règle** au recontrôle du 2026-10-03 11:21 : rien n'a changé dans l'offre"),
+            (903, "🆕 **De nouveau en erreur** au recontrôle du 2026-10-03 11:22 : autre produit chez le marchand : « Sonic »"),
+        ])  # l'offre 4 n'a pas de fil : rien
+        # un envoi raté n'arrête rien
+        self.assertEqual(pc.post_follow_ups(state, outcome, threads, lambda info, msg: (_ for _ in ()).throw(OSError("503"))), 0)
+        # une décision prise dans l'admin est recopiée dans le fil ; celle prise sur Discord y est déjà
+        state["checked"]["1"]["decision"] = {"decision": "faux", "note": "bonne édition", "by": "romain"}
+        state["checked"]["2"]["decision"] = {"decision": "vrai", "note": "", "by": "Rémi (Discord)"}
+        sent.clear()
+        pc.post_admin_decisions(state, ["1", "2"], threads, lambda info, msg: sent.append((info["thread"], msg)))
+        self.assertEqual(sent, [(901, "📝 Décision prise dans l'admin : **Faux positif** — « bonne édition » — par romain")])
+        # le webhook du salon du fil, avec thread_id
+        with mock.patch.dict(os.environ, {"DISCORD_WEBHOOK_URL": "https://hook/top", "DISCORD_WEBHOOK_URL_URGENT": "https://hook/urgent"}), \
+                mock.patch.object(pc, "send_discord") as send:
+            pc.send_to_thread(threads["1"], "x")
+        send.assert_called_once_with("https://hook/urgent?thread_id=901", "x")
+        # l'export donne le lien du fil à l'admin
+        with tempfile.TemporaryDirectory() as d:
+            with open(os.path.join(d, "threads.json"), "w") as f:
+                json.dump({"3": threads["3"]}, f)
+            pc.export_reports(state, d)
+            with open(os.path.join(d, "reports.json"), encoding="utf-8") as f:
+                reports = {r["offer"]: r for r in json.load(f)["reports"]}
+        self.assertEqual(reports["3"]["discord_thread"], "https://discord.com/channels/77/903")
+        self.assertIsNone(reports["1"]["discord_thread"])
+
     def test_run_cycle_keeps_the_mode_that_checked_the_offer(self):
         state = pc.load_state("/nonexistent")
         ok = lambda product, o: {"verdict": "OK", "reasons": [], "notes": [], "url": "https://shop.example/jeu", "method": "URL"}
