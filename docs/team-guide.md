@@ -1,0 +1,162 @@
+# Price check — team guide
+
+As of 03/10/2026. Shared version (Claude Docs, Français and English tabs):
+<https://claude.ai/code/artifact/2c890bc0-9b6c-42e9-b0dc-298c0e11ac84> — this copy is kept in step with it.
+Version française : [guide-equipe.md](guide-equipe.md).
+
+## What price check is for
+
+Price check keeps checking that the first prices on AllKeyShop's most viewed product pages sell what the page shows, and alerts on Discord as soon as an offer does not match.
+
+- **Pages watched**: the tops (first 5 Popular, first 4 Coming soon PC), every 2 min 30; the whole homepage (about 430 pages: home widgets and the TOP 50 of each platform), every 15 min.
+- **Offers checked**: on each page, the 3 cheapest key offers of every edition. These are the "first prices".
+- **How**: the monitor follows each offer's link to the merchant, reads the URL (and the page when needed), then compares it with the product, edition, region and platform AllKeyShop shows.
+
+| Error looked for | Real example |
+| --- | --- |
+| Wrong product | Titanfall 1 sold on the Titanfall 2 page (Kinguin) |
+| Narrower region | ROW key shown EUROPE (Monster Hunter Wilds, G2A) |
+| Other platform | Microsoft Store key shown Steam (Call of Duty MW4, Instant Gaming) |
+| Wrong edition | Complete Edition filed under Standard (GTA 4, Steam) |
+| Gift or account sold as a key | Steam altergift shown as an EU key (AC Black Flag Resynced, Royal CD Keys) |
+| DLC or in-game currency sold as the game | COD Points on the game's page |
+| Out of stock at the merchant | Kinguin redirects the link to another listing, but the price stays in the feed (Stellaris) |
+
+## The three Discord channels
+
+Each alert goes to one channel only: emergencies first, then the tops, then the homepage.
+
+| Channel | What lands there | Priority |
+| --- | --- | --- |
+| #aks_price_emergencies | First-price emergencies: a confirmed problem (SUSPECT) on one of the 3 cheapest offers of an edition, whether the page is in the tops or the homepage. The header says where the alert comes from. | Handle first |
+| #aks_price_checker | The other top alerts (À VÉRIFIER, offers lower in the edition) and the tops' re-check recaps. It is also the bot's channel. | Next |
+| #aks_top_price_checker | The other homepage alerts and their recaps. | Next |
+
+An older report sent again to its right channel carries "Report existant (signalé le …)" (existing report, first reported on …): it is not a new detection.
+
+## Reading an alert
+
+An alert says which offer is at stake, where it shows, and why the monitor thinks it is wrong. Alerts are written in French; a real one, received in #aks_price_emergencies on 03/10:
+
+```
+🚨 URGENCE PREMIER PRIX · Price check homepage
+📌 Report existant (signalé le 2026-10-01 14:58), renvoyé dans le salon des urgences premiers prix
+🔴 SUSPECT · Monster Hunter Wilds (Home · RPG #8) · Deluxe · 2e prix de l'édition
+G2A · EUROPE (STEAM EU) · steam · 44.10 € · offre 136209040 · contrôle : URL
+Raison : région : AllKeyShop EUROPE, marchand ROW
+Marchand : <link to the offer at G2A>
+Page : <link to the AllKeyShop page>
+```
+
+| Line | What it says |
+| --- | --- |
+| URGENCE PREMIER PRIX | First-price emergency: a confirmed problem on one of the edition's 3 first prices, and the mode that found it (top or homepage) |
+| Report existant | An older alert, sent once again to its right channel (absent from a new alert) |
+| Verdict · game (list #rank) · edition · rank | The verdict, the page, the list it appears in, the edition the offer is filed under, and its rank in that edition ("2e prix de l'édition" = 2nd price of the edition) |
+| Merchant · region · platform · price | What AllKeyShop shows: the region with its filter name in brackets (the region's real meaning), the price with card fees, the offer id, and how the monitor checked (contrôle : URL, page) |
+| Raison | What is wrong (reason): here, AllKeyShop shows a EUROPE key, the merchant sells a ROW key (rest of world, without Europe) |
+| Note | When present: what the merchant's page confirmed or contradicted |
+| Marchand, Page | The two links to check: merchant offer, AllKeyShop page |
+
+The verdicts:
+
+- **SUSPECT**: a problem was found, the alert goes out.
+- **À VÉRIFIER** (to check): no conclusion possible (merchant page unreadable), on the first price of a top or coming-soon page. A person checks.
+- **NON VÉRIFIABLE** (not verifiable): the same case elsewhere. Noted in the admin, no alert.
+
+"Recontrôle …" messages are re-check recaps: offers still wrong, repaired, false positives cleared by a rule.
+
+## Giving feedback in the alert's thread
+
+Each alert has its thread "Feedback · game · offre id": you decide there in one line, and the decision shows up in the admin at once.
+
+1. Open the thread under the alert.
+2. Reply starting with one of these words (the bot reads French keywords; the emoji work in any language):
+    - `vrai` (or `vp`, ✅): true positive, the error is real.
+    - `faux` (or `fp`, ❌): false positive, the offer is correct and the alert should not have gone out.
+    - `à discuter` (or 💬): to discuss before deciding.
+3. Add a note after the word saying why, for example `❌ the AllKeyShop page really is a DLC`.
+4. The bot confirms in the thread: "Décision enregistrée : Faux positif — par …" (decision recorded).
+
+- **Who can decide**: the people authorised on the bot. Romain adds them with `!allow @name` in #aks_price_checker. Others get a reminder, and their message stays in the thread.
+- **Discussing without deciding**: a message that does not start with one of these words decides nothing.
+- **What "faux" does**: the offer is no longer re-checked or alerted. The note is used to fix the monitor's rules, for every merchant.
+- **What the thread gets next**: the offer's follow-ups (repaired, false positive cleared by a rule, wrong again) and the decisions taken in the admin.
+
+## What to do with an alert
+
+Check both pages, decide in the thread, then get the offer fixed if the error is real.
+
+1. **Emergencies first** (#aks_price_emergencies): a wrong first price is what visitors see.
+2. **On the AllKeyShop page** ("Page" link): the edition the offer is filed under, the page's other editions, the region's filter name (STEAM EU, STEAM GLOBAL, XBOX X|S EUROPE…), the platform.
+3. **At the merchant** ("Marchand" link): the product, edition, region and platform actually sold.
+4. **Decide in the thread**: vrai, faux or à discuter, with a note.
+5. **If it is true**: get the offer fixed on AllKeyShop (edition, region, platform, page it is attached to) or removed; for an out-of-stock offer at Kinguin, the merchant has to take it out of its feed. At the next re-check (within the hour), the monitor marks the offer "repaired" and writes it in the thread.
+
+Not an error:
+
+- a GLOBAL key shown EUROPE: the merchant sells wider than what is shown;
+- a language restriction (IN ENGLISH ONLY, EN/FR): it is not a region;
+- a gift's zone: it is not compared.
+
+## The Price check admin page
+
+The admin shows every report in one place, with the same decisions as the Discord threads: <https://169.58.5.63.sslip.io/executor/price-check> (admin login).
+
+- **One card per report**: the verdict, the TOP or HOMEPAGE badge (where the problem comes from) and PREMIER PRIX (first price: one of the edition's 3 cheapest offers), the game, edition, rank, merchant, price, reason, and three links: AllKeyShop page, merchant offer, Discord thread.
+- **Deciding**: the buttons Vrai positif, Faux positif, À discuter, with a note. Same effect as a reply in the thread; a decision taken on Discord shows signed "(Discord)".
+- **Filters**: verdict (including Réparées = repaired, Faux positifs levés par une règle = false positives cleared by a rule, Vérifiées OK = verified OK), mode (Price check top or homepage), decision, free search, "encore en tête seulement" (still leading only), "premiers prix seulement" (first prices only).
+- **Counters**: undecided, tops to decide, homepage to decide, first prices in error, repaired.
+- **Running a pass**: the buttons "Lancer le price check top" and "Lancer le price check homepage" re-check every offer of their pages right away. Allow a few minutes for the tops, about 2 h 30 for the homepage.
+
+## What the monitor does on its own
+
+A flagged offer is re-checked every hour until it is fixed, and each follow-up is written in its thread.
+
+```mermaid
+flowchart LR
+    D["Detection<br/>tops: every 2 min 30<br/>homepage: 15 min"] --> A["Alert<br/>emergencies, tops<br/>or homepage"]
+    A --> F["Feedback thread<br/>opened by the bot"]
+    F --> C["Decision<br/>vrai, faux or<br/>à discuter + note"]
+    A -- flagged offer --> R["Re-check<br/>every hour<br/>while still wrong"]
+    R -- OK --> P["Repaired<br/>the offer changed<br/>or left the page"]
+    P -- written in the thread --> F
+    C -- faux --> X["False positive<br/>no more re-checks,<br/>the rule is fixed"]
+```
+
+| Re-check result | What it means |
+| --- | --- |
+| Repaired (Réparée) | The offer changed (URL, region, platform, edition) or left the page |
+| False positive cleared by a rule | Nothing changed: a rule added since clears it |
+| Verified OK | It could not be verified before, now it is |
+| Still wrong | Nothing moved: re-checked the next hour |
+| Wrong again | An OK offer became wrong: a new alert |
+
+An offer decided as a false positive is no longer re-checked. The admin's buttons start a full re-check without waiting for the hour.
+
+## Cases already decided, to calibrate
+
+These decisions set the precedent: the monitor has already been fixed for the false positives, and it still alerts on the real errors. The full register (in French) is [precedents.md](precedents.md).
+
+| Case | Decision | Why |
+| --- | --- | --- |
+| Titanfall 2 Deluxe, Kinguin sells the first Titanfall | True positive | Another game of the series is never the game |
+| Monster Hunter Wilds Deluxe, G2A sells a ROW key shown EUROPE | True positive | ROW (rest of world) does not cover Europe |
+| GTA 4, Steam's Complete Edition filed under Standard | True positive | Wrong edition, even if the buyer gets more: the page has a Complete edition |
+| STAR WARS Zero Company Xbox, a Deluxe filed under "Standard + DLC" | True positive | The page has a Deluxe edition |
+| Stellaris Bundle 1, Kinguin redirects the link to another listing | Out of stock, to report | The link's listing is out of stock, the price stays in the feed |
+| Pokémon Scarlet, DLC "The Hidden Treasure of Area Zero", GameBoost sells the Violet version | False positive | This page covers the DLC of both versions; specific to Pokémon, not generalised |
+| Minecraft Dungeons Triple Bundle, CJS CDKeys "Argentina region" | False positive | The link picks the Europe variant; the page shows Argentina by default |
+| Mario Kart World, K4G sells a GLOBAL key shown EUROPE | False positive | The merchant sells wider than what is shown |
+| EA SPORTS FC 27, Mmoga "IN ENGLISH ONLY" | False positive | A language is not a region |
+| Farming Simulator 25 Year 1 Edition, Loaded sells the Year 1 Season Pass | False positive | The game is included in that pass |
+
+## FAQ and contacts
+
+- **The bot does not take my decision.** You need to be authorised: ask Romain for a `!allow @you`. Also check that the message starts with `vrai`, `faux`, `à discuter` or one of the emoji ✅ ❌ 💬.
+- **I cannot decide.** Reply `à discuter` (or 💬) with what you see on both pages.
+- **The offer has been fixed.** Nothing to do: the hourly re-check marks it "repaired" and writes it in its thread.
+- **An alert comes back after being settled.** The offer became wrong again (new entry, merchant listing changed): it is a new alert, to decide like the others.
+- **I want to check an offer right now.** The admin's "Lancer le price check top" button re-checks the tops in a few minutes.
+- **Talking to the bot.** In #aks_price_checker, by mentioning it (authorised people only); `!help` lists the commands. Note: an authorised person also gets access to Claude on the monitor's server.
+- **Contact**: Romain, for access, rules and any case that fits none of the above.
