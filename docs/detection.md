@@ -110,6 +110,8 @@ Toutes ces règles et leurs cas réels sont dans le [registre des précédents](
 | 🟠 `À VÉRIFIER` | Impossible de conclure (URL sans nom et page illisible, titre traduit, redirection AllKeyShop en échec 3 fois) **et** l'offre est le premier prix de toute la page, sur une page d'un top ou d'un coming soon, au contrôle ou plus tard | Toujours |
 | ⚪ `NON VÉRIFIABLE` | Impossible de conclure, dans les autres cas (2e ou 3e prix, autre édition, page hors top/coming soon) : on prend note, liste par `--unverified` | Jamais (formation du 30/09/2026) |
 
+**Urgences premiers prix** (Romain, 03/10/2026 : « quand c'est vraiment premier prix qui a un problème, c'est une grosse alerte », « premier prix = les 3 prix les moins chers par édition ») : un `SUSPECT` sur l'une des 3 offres de clé les moins chères de son édition (pas un compte) part sur le webhook des urgences (`DISCORD_WEBHOOK_URL_URGENT`), et seulement là, avec l'en-tête `🚨 URGENCE PREMIER PRIX · Price check top` (ou `homepage`, le mode qui l'a trouvée). Le reste (À VÉRIFIER, offres plus bas dans l'édition au recontrôle ou en Full Page, comptes, récapitulatifs) part sur le salon du mode. Dans l'export de l'admin : `first_price`.
+
 Format d'une alerte :
 
 ```

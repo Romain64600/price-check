@@ -1292,7 +1292,8 @@ class TestOfferModes20261001(unittest.TestCase):
         o = pc.page_offers(self.trans, 3)[1]
         msg = pc.format_alert("Popular", 1, "EA SPORTS FC 27", self.TARGETS[0][3], o,
                               {"verdict": "SUSPECT", "reasons": ["x"], "notes": [], "url": None, "method": "URL"})
-        self.assertIn("· Standard · 2e prix de l'édition", msg.splitlines()[0])
+        self.assertEqual(msg.splitlines()[0], pc.URGENT_PREFIX)  # un SUSPECT sur le 2e prix : une urgence premier prix
+        self.assertIn("· Standard · 2e prix de l'édition", msg.splitlines()[1])
         self.assertEqual(pc.rank_label({"edition_rank": 1, "account": True}), "1er prix de l'édition (compte)")
         self.assertEqual(pc.rank_label({}), "")
 
@@ -2125,6 +2126,37 @@ class TestReportModes20261003(unittest.TestCase):
             "4": ("top-games", [], "Price check top"),
             "5": ("homepage", [], "Price check homepage"),
         })
+
+    def test_first_price_problems_are_urgent(self):
+        """Romain, 03/10/2026 : « quand c'est vraiment premier prix qui a un problème, c'est une grosse alerte, reportée sur
+        ce webhook spécialement créé pour les urgences de problème premiers prix (premier prix = les 3 prix les moins
+        chers par édition) »."""
+        suspect = {"verdict": "SUSPECT", "reasons": ["x"], "notes": [], "url": None, "method": "URL"}
+        alert = lambda o, res=suspect: pc.format_alert("Popular", 1, "Jeu", "https://www.allkeyshop.com/blog/jeu/", o, res)
+        for rank in (1, 2, 3):
+            self.assertTrue(alert(offer(edition_rank=rank)).startswith(pc.URGENT_PREFIX + "\n"), rank)
+        # pas une urgence : le 4e prix, un compte, un doute (À VÉRIFIER), une offre sans rang connu
+        for o, res in ((offer(edition_rank=4), suspect), (offer(edition_rank=1, account=True), suspect),
+                       (offer(edition_rank=1), dict(suspect, verdict="À VÉRIFIER")), (offer(), suspect)):
+            self.assertFalse(alert(o, res).startswith(pc.URGENT_PREFIX), (o.get("edition_rank"), o.get("account"), res["verdict"]))
+        # l'urgence part sur le webhook des urgences, avec le mode qui l'a trouvée ; le reste, sur le salon du mode
+        urgent_msg, normal_msg = alert(offer(edition_rank=1)), alert(offer(edition_rank=4))
+        mode_sent, urgent_sent = [], []
+        pc.route_alert(urgent_msg, "homepage", mode_sent.append, urgent_sent.append)
+        pc.route_alert(normal_msg, "homepage", mode_sent.append, urgent_sent.append)
+        self.assertEqual(len(urgent_sent), 1)
+        self.assertTrue(urgent_sent[0].startswith(pc.URGENT_PREFIX + " · Price check homepage\n"), urgent_sent[0])
+        self.assertEqual(mode_sent, [normal_msg])
+        pc.route_alert(urgent_msg, "top-games", mode_sent.append, None)  # sans webhook d'urgence : le salon du mode
+        self.assertEqual(mode_sent[-1], urgent_msg)
+        with mock.patch.dict(os.environ, {"DISCORD_WEBHOOK_URL": "https://hook/top", "DISCORD_WEBHOOK_URL_URGENT": "https://hook/urgent"}):
+            self.assertEqual(pc.webhook_for("urgent"), "https://hook/urgent")
+        with mock.patch.dict(os.environ, {"DISCORD_WEBHOOK_URL": "https://hook/top"}, clear=True):
+            self.assertEqual(pc.webhook_for("urgent"), "https://hook/top")
+        # l'export le dit aussi, pour l'admin
+        self.assertTrue(pc.is_first_price({"edition_rank": 2}))
+        self.assertFalse(pc.is_first_price({"edition_rank": 2, "account": True}))
+        self.assertFalse(pc.is_first_price({"edition_rank": 5}))
 
     def test_run_cycle_keeps_the_mode_that_checked_the_offer(self):
         state = pc.load_state("/nonexistent")

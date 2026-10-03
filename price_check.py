@@ -74,6 +74,14 @@ MODES = {
 }
 # Modes d'offres : prix contrôlés par édition (None = toutes les offres en vente de la page, comptes compris)
 OFFER_MODES = {"top-offers": 3, "full-page": None}
+# Urgences premiers prix (Romain, 03/10/2026 : « quand c'est vraiment premier prix qui a un problème, c'est une grosse
+# alerte, reportée sur ce webhook spécialement créé pour les urgences de problème premiers prix (premier prix = les 3
+# prix les moins chers par édition) ») : un SUSPECT sur l'une des 3 offres de clé les moins chères de son édition part
+# sur ce webhook, et seulement là ; le reste (À VÉRIFIER, offres plus bas dans l'édition, comptes, récapitulatifs)
+# reste sur le salon de son mode. Sans ce webhook, l'alerte part sur le salon du mode, avec son en-tête.
+FIRST_PRICES = 3
+URGENT_WEBHOOK = "DISCORD_WEBHOOK_URL_URGENT"
+URGENT_PREFIX = "🚨 **URGENCE PREMIER PRIX**"
 REDIRECTION_URL = "https://www.allkeyshop.com/redirection/offer/eur/%s?locale=en&merchant=%s"
 
 AKS_UA = "AKS/Staff"  # pages AllKeyShop seulement, jamais chez le marchand
@@ -1626,10 +1634,23 @@ def rank_label(offer):
     return "%s prix de l'édition%s" % ("1er" if r == 1 else "%de" % r, " (compte)" if offer.get("account") else "")
 
 
+def is_first_price(offer):
+    """L'offre est un premier prix : l'une des 3 offres de clé les moins chères de son édition (pas un compte, rangé à
+    part et masqué par défaut sur AllKeyShop)."""
+    rank = offer.get("edition_rank")
+    return isinstance(rank, int) and 1 <= rank <= FIRST_PRICES and not offer.get("account")
+
+
+def is_urgent(offer, res):
+    """Une urgence premier prix : un problème avéré (SUSPECT) sur un premier prix."""
+    return res.get("verdict") == "SUSPECT" and is_first_price(offer)
+
+
 def format_alert(label, rank, product, page_url, offer, res):
     where = rank_label(offer)
     lines = [
-        f"{ICONS[res['verdict']]} **{res['verdict']}** · **{product}** ({label} #{rank}) · {offer['edition']}"
+        (URGENT_PREFIX + "\n" if is_urgent(offer, res) else "")
+        + f"{ICONS[res['verdict']]} **{res['verdict']}** · **{product}** ({label} #{rank}) · {offer['edition']}"
         + (f" · {where}" if where else ""),
         f"{offer['merchantName']} · {offer['region']}"
         + (f" ({offer['region_filter']})" if offer.get("region_filter") and offer["region_filter"] != offer["region"] else "")
@@ -1677,8 +1698,21 @@ def muted():
 
 
 def webhook_for(mode):
-    """Webhook Discord d'un mode de pages (variable MODES[mode]["webhook"]), à défaut DISCORD_WEBHOOK_URL."""
+    """Webhook Discord d'un mode de pages (variable MODES[mode]["webhook"]), à défaut DISCORD_WEBHOOK_URL ; « urgent » :
+    celui des urgences premiers prix (DISCORD_WEBHOOK_URL_URGENT), à défaut celui des top games."""
+    if mode == "urgent":
+        return os.environ.get(URGENT_WEBHOOK, "") or os.environ.get("DISCORD_WEBHOOK_URL", "")
     return os.environ.get(MODES.get(mode, {}).get("webhook", ""), "") or os.environ.get("DISCORD_WEBHOOK_URL", "")
+
+
+def route_alert(msg, mode, send_mode, send_urgent=None):
+    """Une alerte d'urgence premier prix (en-tête URGENT_PREFIX) part sur le webhook des urgences, avec le mode qui l'a
+    trouvée (« Price check top », « Price check homepage ») ; toute autre alerte, sur le salon du mode. Sans webhook
+    d'urgence (`send_urgent` None), tout part sur le salon du mode."""
+    if send_urgent is not None and msg.startswith(URGENT_PREFIX):
+        send_urgent(msg.replace(URGENT_PREFIX, "%s · %s" % (URGENT_PREFIX, MODES.get(mode, {}).get("label", mode)), 1))
+    else:
+        send_mode(msg)
 
 
 def make_notifier(webhook, state, channel=""):
@@ -2272,6 +2306,7 @@ def export_reports(state, directory, pages=None, page_modes=None):
         mode, modes = report_mode(e, e.get("page") or page, page_modes)
         reports.append({
             "mode": mode, "modes": modes, "mode_label": MODES[mode]["label"] if mode in MODES else None,
+            "first_price": is_first_price(e),  # l'un des 3 prix de clé les moins chers de son édition (03/10/2026)
             "offer": key, "verdict": e.get("verdict"), "product": e.get("product"), "edition": e.get("edition"),
             "merchant": e.get("merchant"), "price": e.get("price"), "region": e.get("region"),
             "region_filter": e.get("region_filter") or "", "platform": e.get("platform"),
@@ -2372,6 +2407,12 @@ def main():
             if webhook_for(m) == os.environ.get("DISCORD_WEBHOOK_URL") and MODES[m]["webhook"] != "DISCORD_WEBHOOK_URL":
                 log.info("%s : pas de %s, alertes envoyées sur le webhook des top games", m, MODES[m]["webhook"])
         notifiers = {m: make_notifier(webhook_for(m), state, m) for m in modes}
+    urgent_notifier = None
+    if os.environ.get(URGENT_WEBHOOK):
+        urgent_notifier = (lambda msg: None) if args.dry_run else make_notifier(webhook_for("urgent"), state, "urgent")
+        log.info("urgences premiers prix (SUSPECT sur l'un des %d premiers prix d'une édition) : webhook %s", FIRST_PRICES, URGENT_WEBHOOK)
+    else:
+        log.info("pas de %s : les urgences premiers prix partent sur le salon de leur mode", URGENT_WEBHOOK)
     log.info("modes de pages : %s ; offres : %s", ", ".join(modes), args.offers)
 
     targets = {m: [] for m in modes}
@@ -2450,7 +2491,7 @@ def main():
         outcome = None
 
         def notify(msg, _send=notifiers[mode]):
-            _send(msg)
+            route_alert(msg, mode, _send, urgent_notifier)
             alerts[0] += 1
 
         def progress(count, total):
