@@ -1,7 +1,8 @@
 # Price check — team guide
 
 As of 03/10/2026. For the team, this guide is a page of the admin, "📘 Guide équipe" on the Price check page
-(`/executor/price-check-guide`), generated from this file by `tools/guide_html.py`. Version française :
+(`/executor/price-check-guide`), generated from this file by `tools/guide_html.py`, and a shared doc (Claude Docs,
+Français and English tabs): <https://claude.ai/code/artifact/2c890bc0-9b6c-42e9-b0dc-298c0e11ac84>. All three are kept in step. Version française :
 [guide-equipe.md](guide-equipe.md).
 
 ## What price check is for
