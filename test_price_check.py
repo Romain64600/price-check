@@ -2092,6 +2092,49 @@ class TestDetectionAudit20261002(unittest.TestCase):
         self.assertEqual(self.match("Resident Evil Requiem", "https://www.gamingdragons.com/en/game/buy-resident-evil-requiem-9-steam-key.html"), "exact")
 
 
+@mock.patch.object(pc, "REQUEST_DELAY", 0)
+@mock.patch.object(pc, "PAGE_DELAY", 0)
+class TestReportModes20261003(unittest.TestCase):
+    """Romain, 03/10/2026 : « dans l'admin, je veux que le report des problèmes sur les tops soit identifié des problèmes
+    home page »."""
+
+    def test_each_report_carries_its_mode(self):
+        import tempfile
+        top, home, gone = ("https://www.allkeyshop.com/blog/%s/" % x for x in ("top", "home", "gone"))
+        # une page des tops est aussi dans la homepage (le TOP 50 Popular contient les 5 premiers)
+        page_modes = pc.page_modes_of({"top-games": [("Popular", 1, "Top", top)],
+                                       "homepage": [("TOP 50 · All Popular", 1, "Top", top), ("Home · RPG", 3, "Home", home)]})
+        self.assertEqual(page_modes, {top: ["top-games", "homepage"], home: ["homepage"]})
+        state = pc.load_state("/nonexistent")
+        flagged = lambda **kw: dict({"verdict": "SUSPECT", "product": "Jeu", "merchant": "X", "reasons": ["x"], "at": "2026-10-03 10:00"}, **kw)
+        state["checked"] = {
+            "1": flagged(page=top, mode="homepage"),  # contrôlée par la homepage, sa page est dans les tops : un problème des tops
+            "2": flagged(page=home, mode="homepage"),
+            "3": flagged(page=gone, mode="top-games"),  # sortie des listes : le mode qui l'a contrôlée
+            "4": flagged(page=gone, list="Coming soon PC"),  # entrée d'avant le 03/10 : le mode de sa liste
+            "5": flagged(page=gone, list="TOP 50 · All Popular"),
+        }
+        with tempfile.TemporaryDirectory() as d:
+            pc.export_reports(state, d, {}, page_modes)
+            with open(os.path.join(d, "reports.json"), encoding="utf-8") as f:
+                reports = {r["offer"]: r for r in json.load(f)["reports"]}
+        self.assertEqual({k: (r["mode"], r["modes"], r["mode_label"]) for k, r in reports.items()}, {
+            "1": ("top-games", ["top-games", "homepage"], "Price check top"),
+            "2": ("homepage", ["homepage"], "Price check homepage"),
+            "3": ("top-games", [], "Price check top"),
+            "4": ("top-games", [], "Price check top"),
+            "5": ("homepage", [], "Price check homepage"),
+        })
+
+    def test_run_cycle_keeps_the_mode_that_checked_the_offer(self):
+        state = pc.load_state("/nonexistent")
+        ok = lambda product, o: {"verdict": "OK", "reasons": [], "notes": [], "url": "https://shop.example/jeu", "method": "URL"}
+        with mock.patch.object(pc, "http_get", return_value=(200, None, aks_page([{"id": 1, "price": 5.0}]))), \
+                mock.patch.object(pc, "NOTIFY_OK", False):
+            pc.run_cycle([("Home · RPG", 1, "Jeu", "https://www.allkeyshop.com/blog/jeu/")], lambda m: None, state, ok, mode="homepage")
+        self.assertEqual(state["checked"]["1"]["mode"], "homepage")
+
+
 class TestSecurityAudit20261002(unittest.TestCase):
     """Audit sécurité du 02/10/2026 : le moniteur tourne en root."""
 

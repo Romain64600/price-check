@@ -1994,7 +1994,7 @@ REMOVED_HOW = "offre retirée de la page"
 
 
 def run_cycle(targets, notify, state, checker=None, save=None, per_edition=1, between=None, progress=None, recheck=False,
-              resume_after=None):
+              resume_after=None, mode=None):
     """Lit chaque page suivie et contrôle toute offre retenue (`per_edition` : voir page_offers) pas encore
     contrôlée. `recheck` : "all" recontrôle aussi toutes les offres retenues déjà vues (passage demandé depuis
     l'admin : Romain, 02/10/2026, « toutes les offres concernées par le top check, pareil pour l'autre check ») ;
@@ -2004,7 +2004,8 @@ def run_cycle(targets, notify, state, checker=None, save=None, per_edition=1, be
     `between()` est appelé entre deux pages : un mode urgent (les top games) y passe pendant un long passage.
     `progress(count, total)` est appelé à chaque page : l'avancement publié pour l'admin.
     `resume_after` : reprise d'un recontrôle complet interrompu (redémarrage) : les offres déjà recontrôlées depuis
-    cette date ne le sont pas une seconde fois.
+    cette date ne le sont pas une seconde fois. `mode` : le mode de pages du passage, gardé avec chaque offre contrôlée
+    (l'admin distingue les reports des tops de ceux de la homepage).
     """
     checker = checker or check_offer
     outcome = {"checked": 0, "fixed": [], "removed": [], "rules": [], "verified": [], "still": [], "new": [], "unknown": [],
@@ -2056,6 +2057,8 @@ def run_cycle(targets, notify, state, checker=None, save=None, per_edition=1, be
             handled.add(key)  # une offre retenue est traitée ici, une fois ; recheck_flagged ne voit que les autres
             if entry is not None and not entry.get("page"):  # entrée ancienne sans sa page : jamais recontrôlée sinon
                 entry.update(page=page_url, list=label, rank=rank)
+            if entry is not None and mode and not entry.get("mode"):
+                entry["mode"] = mode
             # une offre déjà vue est recontrôlée sur un passage complet ("all"), si elle est signalée ("flagged"), ou si
             # elle revient sur sa page après en avoir été retirée ; jamais si l'admin l'a jugée faux positif
             again = entry is not None and (entry.get("decision") or {}).get("decision") != "faux" and (
@@ -2106,7 +2109,7 @@ def run_cycle(targets, notify, state, checker=None, save=None, per_edition=1, be
                 "page": page_url, "list": label, "rank": rank,
                 "edition_rank": offer.get("edition_rank"), "account": offer.get("account", False),
                 "page_first": offer.get("page_first", False), "unverifiable": res.get("unverifiable"),
-                "evidence": res.get("evidence"),
+                "evidence": res.get("evidence"), "mode": mode,
             }
             if res["method"] != "aucune":
                 m = state["merchants"].setdefault(offer["merchantName"], {"methods": {}})
@@ -2222,11 +2225,43 @@ def apply_decisions(state, directory):
     return changed
 
 
-def export_reports(state, directory, pages=None):
+TOP_GAMES_LABELS = {label for _, label, _ in TOP_GAMES_LISTS}
+
+
+def page_modes_of(targets_by_mode):
+    """URL de page -> modes de pages dont les listes la suivent en ce moment (une page des tops est aussi dans la
+    homepage : le TOP 50 Popular contient les 5 premiers)."""
+    out = {}
+    for mode, targets in targets_by_mode.items():
+        for _, _, _, url in targets:
+            if mode not in out.setdefault(url, []):
+                out[url].append(mode)
+    return out
+
+
+def report_mode(entry, page_url, page_modes):
+    """Le mode d'un report (Romain, 03/10/2026 : « que le report des problèmes sur les tops soit identifié des problèmes
+    home page ») : « top-games » si sa page est dans les tops en ce moment (5 premiers Popular, 4 premiers Coming soon
+    PC), sinon « homepage » si elle est dans les listes de la home ; une page sortie des listes garde le mode qui l'a
+    contrôlée, ou, pour une entrée d'avant le 03/10, celui de sa liste (« Popular », « Coming soon PC » : les tops)."""
+    current = page_modes.get(page_url) or []
+    if "top-games" in current:
+        return "top-games", current
+    if current:
+        return current[0], current
+    if entry.get("mode") in MODES:
+        return entry["mode"], current
+    label = entry.get("list") or ""
+    return ("top-games" if label in TOP_GAMES_LABELS else "homepage" if label else None), current
+
+
+def export_reports(state, directory, pages=None, page_modes=None):
     """Écrit reports.json : chaque report (SUSPECT, À VÉRIFIER, NON VÉRIFIABLE, ou déjà décidé) avec son
     URL AllKeyShop, son URL marchand, sa raison, sa preuve et sa décision. `pages` (produit -> (liste, rang,
-    URL)) complète les reports anciens, enregistrés avant que l'état garde la page."""
+    URL)) complète les reports anciens, enregistrés avant que l'état garde la page ; `page_modes` (URL de page ->
+    modes qui la suivent, page_modes_of) donne le mode de chaque report."""
     pages = pages or {}
+    page_modes = page_modes or {}
     reports = []
     for key, e in state["checked"].items():
         if e.get("verdict") not in REPORTED and not e.get("decision") and not e.get("fixed_at"):
@@ -2234,7 +2269,9 @@ def export_reports(state, directory, pages=None):
         if merchant_config("", e.get("merchant")).get("skip"):
             continue  # marchand ignoré par sa config (Amazon depuis le 01/10/2026)
         label, rank, page = pages.get(e.get("product"), (None, None, None))
+        mode, modes = report_mode(e, e.get("page") or page, page_modes)
         reports.append({
+            "mode": mode, "modes": modes, "mode_label": MODES[mode]["label"] if mode in MODES else None,
             "offer": key, "verdict": e.get("verdict"), "product": e.get("product"), "edition": e.get("edition"),
             "merchant": e.get("merchant"), "price": e.get("price"), "region": e.get("region"),
             "region_filter": e.get("region_filter") or "", "platform": e.get("platform"),
@@ -2306,11 +2343,12 @@ def main():
     if args.export_reports:
         state = load_state(args.state)
         apply_decisions(state, args.export_reports)
-        pages = {}
+        pages, by_mode = {}, {}
         for mode in MODES:
-            for label, rank, product, url in fetch_targets(MODES[mode]["lists"]):
+            by_mode[mode] = fetch_targets(MODES[mode]["lists"])
+            for label, rank, product, url in by_mode[mode]:
                 pages.setdefault(product, (label, rank, url))
-        print(export_reports(state, args.export_reports, pages), "reports écrits dans", args.export_reports)
+        print(export_reports(state, args.export_reports, pages, page_modes_of(by_mode)), "reports écrits dans", args.export_reports)
         return  # state.json n'est pas réécrit : le service, s'il tourne, en est le seul auteur
     if args.check:
         product, url = args.check
@@ -2438,7 +2476,7 @@ def main():
                     log.exception("lecture des décisions de l'admin impossible")
             outcome = run_cycle(targets[mode], notify, state, save=lambda: save_state(args.state, state),
                                 per_edition=per_edition, between=between, progress=progress, recheck=recheck,
-                                resume_after=resume_after)
+                                resume_after=resume_after, mode=mode)
             (state.get("running") or {}).pop(mode, None)  # passage demandé terminé
             save_state(args.state, state)
             if recheck:
@@ -2456,13 +2494,13 @@ def main():
                         log.error("Envoi Discord du récapitulatif impossible : %s", e)
             if REPORTS_DIR:
                 pages = {t[2]: (t[0], t[1], t[3]) for m in modes for t in targets[m]}
-                export_reports(state, REPORTS_DIR, pages)
+                export_reports(state, REPORTS_DIR, pages, page_modes_of({m: targets[m] for m in modes}))
         except Stop:
             # arrêt du service (SIGTERM) : l'état est écrit, le passage demandé reprendra au démarrage
             save_state(args.state, state)
             if REPORTS_DIR:
                 pages = {t[2]: (t[0], t[1], t[3]) for m in modes for t in targets[m]}
-                export_reports(state, REPORTS_DIR, pages)
+                export_reports(state, REPORTS_DIR, pages, page_modes_of({m: targets[m] for m in modes}))
             raise
         except Exception:
             log.exception("%s : passage en échec, nouvel essai au prochain cycle", mode)
