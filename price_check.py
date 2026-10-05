@@ -1757,7 +1757,9 @@ def loop_banner(loop, channel, resumed=False):
     else:
         lines.append("Ce qui suit vient de cette boucle : 🔴 🟠 nouveau report · 📌 rappel d'un report existant · "
                      "🔁 bilan du recontrôle.")
-    lines += ["Chaque alerte a son fil « Feedback » : réponds **vrai**, **faux** ou **à discuter**, suivi d'une note.",
+    # la note est facultative (Romain, 05/10/2026 : « si on est d'accord avec l'erreur décrite sur le report, il n'y a pas de raison de commenter »)
+    lines += ["Chaque alerte a son fil « Feedback » : réponds **vrai**, **faux** ou **à discuter** ; une note seulement si tu "
+              "n'es pas d'accord avec l'erreur décrite, ou pour préciser.",
               "📘 Guide de l'équipe : <%s>" % GUIDE_URL]
     return "\n".join(lines)
 

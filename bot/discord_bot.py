@@ -13,7 +13,7 @@ propriétaire : !allow @membre, !deny @membre, !who, !mention on|off.
 
 Feedback des reports (Romain, 03/10/2026, voir feedback.py) : chaque alerte des webhooks du moniteur, dans les salons
 d'alertes, reçoit un fil « Feedback · <jeu> · offre <id> » ; une personne autorisée y répond « vrai », « faux » ou
-« à discuter » + une note, et la décision s'ajoute à decisions.jsonl (celui de l'admin). Jamais transmis à Claude.
+« à discuter », + une note si besoin, et la décision s'ajoute à decisions.jsonl (celui de l'admin). Jamais transmis à Claude.
 Réglages dans ../.env : DISCORD_BOT_TOKEN, DISCORD_CHANNEL_ID, DISCORD_OWNER_ID, DISCORD_ALLOWED_IDS
 (ids séparés par des virgules), DISCORD_REQUIRE_MENTION (1 = mention obligatoire au départ),
 CLAUDE_CWD (défaut /root/price-checker), CLAUDE_PERMISSION_MODE (défaut auto), CLAUDE_TIMEOUT (s).

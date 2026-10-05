@@ -3,7 +3,7 @@ Discord », et l'admin aussi : « les 2 »).
 
 Chaque alerte du moniteur (un message de ses webhooks dans un salon d'alertes) reçoit un fil « Feedback · <jeu> ·
 offre <id> ». Une personne autorisée sur le bot (le propriétaire, ou ajoutée par !allow : Romain, 03/10/2026) y répond
-« vrai », « faux » ou « à discuter », suivi d'une note : la décision s'ajoute à decisions.jsonl, le même fichier que
+« vrai », « faux » ou « à discuter », suivi si besoin d'une note : la décision s'ajoute à decisions.jsonl, le même fichier que
 l'admin, que le moniteur relit avant chaque passage. Rien ici ne passe par Claude : des mots-clés seulement, le texte
 d'un fil (une alerte cite des pages marchands) ne devient jamais une consigne.
 
@@ -82,8 +82,10 @@ def parse_decision(text):
     return None
 
 
-INSTRUCTIONS = ("Feedback sur ce report : réponds **vrai** (vrai positif), **faux** (faux positif) ou **à discuter**, "
-                "suivi d'une note (« faux : la page AllKeyShop est bien un DLC »). Seules les personnes autorisées sur le "
+# La note est facultative (Romain, 05/10/2026 : « si on est d'accord avec l'erreur décrite sur le report, il n'y a pas de raison de commenter »).
+INSTRUCTIONS = ("Feedback sur ce report : réponds **vrai** (vrai positif), **faux** (faux positif) ou **à discuter**. "
+                "D'accord avec l'erreur décrite : **vrai** suffit, sans note. Sinon, ajoute une note après le mot "
+                "(« faux : la page AllKeyShop est bien un DLC »). Seules les personnes autorisées sur le "
                 "bot peuvent trancher. La décision s'enregistre dans l'admin Price check ; le moniteur la prend en compte "
                 "à son prochain passage, et poste ici les suites (réparée, toujours en erreur…).")
 

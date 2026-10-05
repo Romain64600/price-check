@@ -84,7 +84,7 @@ Each alert has its thread "Feedback · game · offre id": you decide there in on
     - `vrai` (or `vp`, ✅): true positive, the error is real.
     - `faux` (or `fp`, ❌): false positive, the offer is correct and the alert should not have gone out.
     - `à discuter` (or 💬): to discuss before deciding.
-3. Add a note after the word saying why, for example `❌ the AllKeyShop page really is a DLC`.
+3. Only if needed, add a note after the word saying why, for example `❌ the AllKeyShop page really is a DLC`. You agree with the error described on the report: `vrai` is enough, there is nothing to comment.
 4. The bot confirms in the thread: "Décision enregistrée : Faux positif — par …" (decision recorded).
 
 - **Who can decide**: the people authorised on the bot. Romain adds them with `!allow @name` in #aks_price_checker. Others get a reminder, and their message stays in the thread.
@@ -99,7 +99,7 @@ Check both pages, decide in the thread, then get the offer fixed if the error is
 1. **Emergencies first** (#aks_price_emergencies): a wrong first price is what visitors see.
 2. **On the AllKeyShop page** ("Page" link): the edition the offer is filed under, the page's other editions, the region's filter name (STEAM EU, STEAM GLOBAL, XBOX X|S EUROPE…), the platform.
 3. **At the merchant** ("Marchand" link): the product, edition, region and platform actually sold.
-4. **Decide in the thread**: vrai, faux or à discuter, with a note.
+4. **Decide in the thread**: vrai, faux or à discuter. You agree with the error described: no note; otherwise, a note saying why.
 5. **If it is true**: get the offer fixed on AllKeyShop (edition, region, platform, page it is attached to) or removed; for an out-of-stock offer at Kinguin, the merchant has to take it out of its feed. At the next re-check (within the hour), the monitor marks the offer "repaired" and writes it in the thread.
 
 Not an error:
@@ -113,7 +113,7 @@ Not an error:
 The admin shows every report in one place, with the same decisions as the Discord threads: <https://169.58.5.63.sslip.io/executor/price-check> (admin login).
 
 - **One card per report**: the verdict, the TOP or HOMEPAGE badge (where the problem comes from) and PREMIER PRIX (first price: one of the edition's 3 cheapest offers), the game, edition, rank, merchant, price, reason, and three links: AllKeyShop page, merchant offer, Discord thread.
-- **Deciding**: the buttons Vrai positif, Faux positif, À discuter, with a note. Same effect as a reply in the thread; a decision taken on Discord shows signed "(Discord)".
+- **Deciding**: each card reads in two steps, ① Pourquoi ? (why: the note, only if needed) on the left and ② Ta décision (your decision: Vrai positif, Faux positif, À discuter) on the right. You agree with the error described on the report: click Vrai positif, no note, there is nothing to comment. Otherwise, write the note then click your decision: both leave together; a note changed afterwards is saved with "Mettre à jour la note" (or Enter), and a note not saved yet is flagged in orange. A "Comment trancher un report" box at the top of the list says so. Same effect as a reply in the thread; a decision taken on Discord shows signed "(Discord)".
 - **Filters**: verdict (including Réparées = repaired, Faux positifs levés par une règle = false positives cleared by a rule, Vérifiées OK = verified OK), mode (Price check top or homepage), decision, free search, "encore en tête seulement" (still leading only), "premiers prix seulement" (first prices only).
 - **Counters**: undecided, tops to decide, homepage to decide, first prices in error, repaired.
 - **Running a pass**: the buttons "Lancer le price check top" and "Lancer le price check homepage" re-check every offer of their pages right away. Allow a few minutes for the tops, about 2 h 30 for the homepage.

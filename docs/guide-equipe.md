@@ -84,7 +84,7 @@ Chaque alerte a son fil « Feedback · jeu · offre id » : on y tranche en une 
     - `vrai` (ou `vp`, ✅) : l'erreur est réelle.
     - `faux` (ou `fp`, ❌) : l'offre est correcte, l'alerte n'aurait pas dû partir.
     - `à discuter` (ou 💬) : on en parle avant de trancher.
-3. Ajouter après le mot une note qui dit pourquoi, par exemple `faux : la page AllKeyShop est bien un DLC`.
+3. Seulement si besoin, ajouter après le mot une note qui dit pourquoi, par exemple `faux : la page AllKeyShop est bien un DLC`. D'accord avec l'erreur décrite sur le report : `vrai` suffit, il n'y a rien à commenter.
 4. Le bot confirme dans le fil : « Décision enregistrée : Faux positif — par … ».
 
 - **Qui peut trancher** : les personnes autorisées sur le bot. Romain les ajoute avec `!allow @nom` dans #aks_price_checker. Les autres reçoivent un rappel, et leur message reste dans le fil.
@@ -99,7 +99,7 @@ Vérifier sur les deux pages, trancher dans le fil, puis faire corriger l'offre 
 1. **Les urgences d'abord** (#aks_price_emergencies) : un premier prix faux, c'est ce que voient les visiteurs.
 2. **Sur la page AllKeyShop** (lien « Page ») : l'édition où l'offre est rangée, les autres éditions de la page, le nom de filtre de la région (STEAM EU, STEAM GLOBAL, XBOX X|S EUROPE…), la plateforme.
 3. **Chez le marchand** (lien « Marchand ») : le produit, l'édition, la région et la plateforme réellement vendus.
-4. **Trancher dans le fil** : vrai, faux ou à discuter, avec une note.
+4. **Trancher dans le fil** : vrai, faux ou à discuter. D'accord avec l'erreur décrite : pas de note ; sinon, une note qui dit pourquoi.
 5. **Si c'est vrai** : faire corriger l'offre sur AllKeyShop (édition, région, plateforme, rattachement à la page) ou la faire retirer ; pour une rupture chez Kinguin, c'est au marchand de sortir l'offre de son feed. Au recontrôle suivant (moins d'une heure), le moniteur classe l'offre « réparée » et l'écrit dans le fil.
 
 Ce qui n'est pas une erreur :
@@ -113,7 +113,7 @@ Ce qui n'est pas une erreur :
 L'admin montre tous les reports au même endroit, avec les mêmes décisions que les fils Discord : <https://169.58.5.63.sslip.io/executor/price-check> (identifiant de l'admin).
 
 - **Une carte par report** : le verdict, les pastilles TOP ou HOMEPAGE (d'où vient le problème) et PREMIER PRIX (l'une des 3 offres les moins chères de l'édition), le jeu, l'édition, le rang, le marchand, le prix, la raison, et trois liens : page AllKeyShop, offre chez le marchand, fil Discord.
-- **Trancher** : les boutons Vrai positif, Faux positif, À discuter, avec une note. Même effet qu'une réponse dans le fil ; une décision prise sur Discord s'affiche signée « (Discord) ».
+- **Trancher** : chaque carte se lit en deux étapes, ① Pourquoi ? (la note, seulement si besoin) à gauche et ② Ta décision (Vrai positif, Faux positif, À discuter) à droite. D'accord avec l'erreur décrite sur le report : clique Vrai positif, sans note, il n'y a rien à commenter. Sinon, écris la note puis clique ta décision : les deux partent ensemble ; une note modifiée après coup s'enregistre avec « Mettre à jour la note » (ou Entrée), et une note pas encore enregistrée est signalée en orange. Un encadré « Comment trancher un report » le rappelle en haut de la liste. Même effet qu'une réponse dans le fil ; une décision prise sur Discord s'affiche signée « (Discord) ».
 - **Filtres** : verdict (dont Réparées, Faux positifs levés par une règle, Vérifiées OK), mode (Price check top ou homepage), décision, recherche libre, « encore en tête seulement », « premiers prix seulement ».
 - **Compteurs** : sans décision, tops à trancher, homepage à trancher, premiers prix en erreur, réparées.
 - **Lancer un passage** : les boutons « Lancer le price check top » et « Lancer le price check homepage » recontrôlent tout de suite toutes les offres de leurs pages. Compter quelques minutes pour les tops, environ 2 h 30 pour la homepage.
