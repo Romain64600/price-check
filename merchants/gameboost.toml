@@ -1,0 +1,15 @@
+# GameBoost (gameboost.com) — Dying Light: The Beast, clé « ROW » affichée STEAM GLOBAL (offre 138082170) : décision
+# « à discuter » de Rémy le 05/10/2026 (« si l'offre est activable au US et en EU on considère que c'est du global »),
+# validée par Romain le 05/10/2026. Chez GameBoost, le mot de région de l'URL et du titre ne fait pas foi : sa clé
+# « ROW » s'active dans 249 pays, Europe et États-Unis compris (seul le Japon est exclu, « restrictions_notice »),
+# quand sa clé « Global » en couvre 247. Quand l'URL contredit la région d'AllKeyShop, la région se lit dans la liste
+# « supported_countries » de la fiche (JSON de la page ; Chromium, HTTP répond 403) : Europe et États-Unis = GLOBAL,
+# Europe seule = EUROPE, sans l'Europe = ROW.
+name = "GameBoost"
+hosts = ["gameboost.com"]
+
+[page]
+parser = "supported-countries"
+
+[region]
+from = "page"

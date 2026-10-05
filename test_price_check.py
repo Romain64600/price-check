@@ -2398,6 +2398,106 @@ class TestLoopBanner20261003(unittest.TestCase):
         self.assertEqual(state["queued"][1][1], "🔴 alerte")
 
 
+class TestDecisions20261005(unittest.TestCase):
+    """Les décisions de Rémy dans l'admin, relues avec Romain le 05/10/2026."""
+
+    EU27 = ["at", "be", "bg", "cy", "cz", "de", "dk", "ee", "es", "fi", "fr", "gr", "hr", "hu", "ie", "it", "lt", "lu",
+            "lv", "mt", "nl", "pl", "pt", "ro", "se", "si", "sk"]
+
+    @staticmethod
+    def reasons(product, url, merchant="", **kw):
+        cfg = pc.merchant_config(url, merchant)
+        o = offer(**kw)
+        return pc.analyze(product, o, pc.shop_url_text(url, cfg), "URL", region=pc.region_text(url, cfg))["reasons"]
+
+    # -- Règle générale de traitement des régions (Rémy : « si l'offre est activable au US et en EU on considère que
+    # -- c'est du global » ; Romain : « c'est une décision du traitement des régions », pour tous les marchands)
+    def test_a_key_for_europe_and_the_us_counts_as_global(self):
+        for url in ("https://gameseal.com/star-wars-galactic-racer-pc-steam-key-eu-na",
+                    "https://www.example-shop.com/star-wars-galactic-racer-steam-key-europe-usa"):
+            with self.subTest(url):
+                self.assertEqual(self.reasons("STAR WARS Galactic Racer", url, region="GLOBAL", region_filter="STEAM GLOBAL"), [])
+
+    def test_narrower_zones_shown_global_still_alert(self):
+        """Jamais au prix d'une erreur manquée : l'Europe seule, les États-Unis seuls, ou ROW (Monster Hunter Wilds chez
+        G2A, vrai positif) restent plus étroits que GLOBAL."""
+        for url, found in (("https://gameseal.com/star-wars-galactic-racer-pc-steam-key-eu", "EU"),
+                           ("https://www.example-shop.com/star-wars-galactic-racer-steam-key-united-states", "US"),
+                           ("https://www.g2a.com/star-wars-galactic-racer-pc-steam-key-row-i10000", "ROW")):
+            with self.subTest(found):
+                self.assertEqual(self.reasons("STAR WARS Galactic Racer", url, region="GLOBAL", region_filter="STEAM GLOBAL"),
+                                 ["région : AllKeyShop GLOBAL, marchand %s" % found])
+
+    def test_the_region_of_a_list_of_activation_countries(self):
+        everywhere_but_japan = set(self.EU27) | {"us", "gb", "br", "cn", "in"}
+        self.assertEqual(pc.region_from_countries(everywhere_but_japan), "eu-us")
+        self.assertEqual(pc.region_from_countries(set(self.EU27) | {"gb"}), "eu")
+        self.assertEqual(pc.region_from_countries((set(self.EU27) - {"de"}) | {"us"}), "usa")  # l'Allemagne exclue
+        self.assertEqual(pc.region_from_countries({"br", "in", "jp"}), "row")
+
+    # -- GameBoost : « ROW » = partout sauf le Japon (Dying Light The Beast, offre 138082170, « à discuter » de Rémy)
+    URL = "https://gameboost.com/dying-light-the-beast-pc-steam-key-row-00-42386"
+
+    def dom(self, countries, other_first=True):
+        """Le JSON de la fiche, comme la page le sert (attribut data-page, guillemets échappés), avec une autre variante
+        (Europe) avant la clé du lien."""
+        listing = lambda ids: ",".join('{"code":"%s","name":"%s"}' % (c, c.upper()) for c in sorted(ids))
+        other = '{"id":36103,"region":{"id":2,"name":"Europe"},"supported_countries":[%s]}' % listing(self.EU27)
+        link = ('"gameKey":{"id":42386,"region":{"id":41,"name":"ROW","slug":"ROW"},"restrictions_notice":"This is a '
+                'restricted product and it CANNOT be activated and played in Japan.","supported_countries":[%s]}' % listing(countries))
+        data = ('{"props":{"variants":[%s],%s}}' % (other, link)) if other_first else '{"props":{%s}}' % link
+        return ('<html><head><title>Buy Cheap Dying Light: The Beast - Dying Light: The Beast Steam Key | GameBoost</title>'
+                '</head><body><div id="app" data-page="%s"></div></body></html>' % data.replace('"', "&quot;"))
+
+    def test_gameboost_reads_the_activation_countries_of_the_key_of_the_link(self):
+        everywhere_but_japan = set(self.EU27) | {"us", "gb", "br", "cn", "in"}
+        self.assertEqual(pc.supported_countries_region(self.dom(everywhere_but_japan), self.URL), "eu-us")
+        self.assertEqual(pc.supported_countries_region(self.dom({"us", "br", "in"}), self.URL), "usa")
+        self.assertIsNone(pc.supported_countries_region("<html><title>GameBoost</title></html>", self.URL))
+        text = pc.page_text_from_dom(self.dom(everywhere_but_japan), self.URL, "supported-countries")
+        self.assertTrue(text.endswith(" | REGION eu-us"), text)
+
+    def check(self, countries):
+        page = TestCheckOffer().interstitial(self.URL)
+        with mock.patch.object(pc, "http_get", side_effect=[(200, None, page), (403, None, "")]), \
+                mock.patch.object(pc, "chromium_dom", return_value=self.dom(countries)), mock.patch.object(pc.time, "sleep"):
+            return pc.check_offer("Dying Light The Beast", offer(merchantName="GameBoost", region="GLOBAL",
+                                                                 region_filter="STEAM GLOBAL", platform="steam"))
+
+    def test_gameboost_row_key_activable_in_europe_and_the_us_is_global(self):
+        res = self.check(set(self.EU27) | {"us", "gb", "br", "cn", "in"})
+        self.assertEqual((res["verdict"], res["reasons"]), ("OK", []))
+        self.assertTrue(res["method"].startswith("URL et pays d'activation de la page"), res["method"])
+        self.assertIn("région lue sur la page, d'après les pays d'activation de la clé : eu-us", res["notes"])
+
+    def test_gameboost_key_without_europe_still_alerts(self):
+        res = self.check({"us", "br", "in"})
+        self.assertEqual((res["verdict"], res["reasons"]), ("SUSPECT", ["région : AllKeyShop GLOBAL, marchand US"]))
+
+    # -- Les vrais positifs de Rémy : le moniteur doit continuer d'alerter
+    def test_the_true_positives_of_05_10_still_alert(self):
+        cases = [
+            ("EA SPORTS FC 27 Xbox Series", "https://www.hrkgame.com/en/product/ea-sports-fc-27-xbox-one-xbox-series-x-row", "HRK",
+             dict(region="EU XBOX X|S", region_filter="XBOX X|S EUROPE", platform="xbox"),
+             ["région : AllKeyShop EU XBOX X|S, marchand ROW"]),
+            ("Call of Duty Black Ops 3", "https://www.gamivo.com/product/call-of-duty-black-ops-iii-zombies-chronicles-edition-eu", "GAMIVO",
+             dict(region="ROW", region_filter="STEAM ROW", edition="Limited"), ["région : AllKeyShop ROW, marchand EU"]),
+            ("Assassin’s Creed Black Flag Resynced",
+             "https://royalcdkeys.com/products/assassins-creed-black-flag-resynced-deluxe-edition-eu-pc-steam-altergift", "Royal CD Keys",
+             dict(region="EUROPE", region_filter="STEAM EU", edition="Deluxe"), ["gift chez le marchand, affiché en clé EUROPE"]),
+            ("Crusader Kings 3", "https://www.eneba.com/steam-crusader-kings-iii-starter-edition-pc-steam-key-europe", "Eneba",
+             dict(region="IN ENGLISH ONLY", region_filter="STEAM ENG ONLY", edition="Starter Edition"),
+             ["région : AllKeyShop IN ENGLISH ONLY, marchand EU"]),
+            ("TCG Card Shop Simulator Nintendo Switch 2",
+             "https://www.nintendo.com/en-gb/Games/Nintendo-Switch-download-software/Horse-Spirit-Valley-2-3173803.html", "Nintendo eShop IT",
+             dict(region="GLOBAL", region_filter="GLOBAL", platform="nintendo-eshop"),
+             ["autre produit chez le marchand : « Horse Spirit Valley 2 » au lieu de « TCG Card Shop Simulator Nintendo Switch 2 » (URL)"]),
+        ]
+        for product, url, merchant, kw, expected in cases:
+            with self.subTest(merchant):
+                self.assertEqual(self.reasons(product, url, merchant, **kw), expected)
+
+
 class TestSecurityAudit20261002(unittest.TestCase):
     """Audit sécurité du 02/10/2026 : le moniteur tourne en root."""
 

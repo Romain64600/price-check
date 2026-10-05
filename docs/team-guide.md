@@ -105,6 +105,7 @@ Check both pages, decide in the thread, then get the offer fixed if the error is
 Not an error:
 
 - a GLOBAL key shown EUROPE: the merchant sells wider than what is shown;
+- a key that activates in Europe and the US, shown GLOBAL: it counts as GLOBAL (region rule, 05/10/2026);
 - a language restriction (IN ENGLISH ONLY, EN/FR): it is not a region;
 - a gift's zone: it is not compared.
 
@@ -157,6 +158,7 @@ These decisions set the precedent: the monitor has already been fixed for the fa
 | Pokémon Scarlet, DLC "The Hidden Treasure of Area Zero", GameBoost sells the Violet version | False positive | This page covers the DLC of both versions; specific to Pokémon, not generalised |
 | Minecraft Dungeons Triple Bundle, CJS CDKeys "Argentina region" | False positive | The link picks the Europe variant; the page shows Argentina by default |
 | Mario Kart World, K4G sells a GLOBAL key shown EUROPE | False positive | The merchant sells wider than what is shown |
+| Dying Light The Beast, GameBoost sells a "ROW" key that activates everywhere but Japan, shown GLOBAL | False positive | A key that activates in Europe and the US counts as GLOBAL (Rémy's decision, approved by Romain) |
 | EA SPORTS FC 27, Mmoga "IN ENGLISH ONLY" | False positive | A language is not a region |
 | Farming Simulator 25 Year 1 Edition, Loaded sells the Year 1 Season Pass | False positive | The game is included in that pass |
 

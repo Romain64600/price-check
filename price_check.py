@@ -957,7 +957,11 @@ def merchant_zones(words):
 
 
 def zone_coverage(zones):
-    return frozenset().union(*(ZONE_COVERAGE[z] for z in zones)) if zones else frozenset()
+    """Les pays que couvre l'offre du marchand. Règle générale de traitement des régions (Rémy, validée par Romain le
+    05/10/2026, pour tous les marchands : « si l'offre est activable au US et en EU on considère que c'est du global ») :
+    une offre qui couvre l'Europe et les États-Unis compte comme GLOBAL."""
+    cov = frozenset().union(*(ZONE_COVERAGE[z] for z in zones)) if zones else frozenset()
+    return ZONE_COVERAGE["GLOBAL"] if ZONE_COVERAGE["EUUS"] <= cov else cov
 
 
 def region_family(region_name):  # compatibilité (anciens appels)
@@ -1323,6 +1327,41 @@ def url_variation_label(dom, url, param="variation"):
     return re.sub(r"\s+", " ", label).strip() or None
 
 
+# Les 27 pays de l'Union européenne (codes ISO) : une clé « couvre l'Europe » quand elle s'active dans chacun.
+EU27 = ("at", "be", "bg", "cy", "cz", "de", "dk", "ee", "es", "fi", "fr", "gr", "hr", "hu", "ie", "it", "lt", "lu",
+        "lv", "mt", "nl", "pl", "pt", "ro", "se", "si", "sk")
+SUPPORTED_COUNTRIES_RE = re.compile(r'"supported_countries"\s*:\s*\[')
+URL_TRAILING_ID_RE = re.compile(r"-(\d+)/?$")
+
+
+def region_from_countries(codes):
+    """La région d'une clé d'après la liste des pays où elle s'active (règle générale, pour tout marchand dont la page
+    donne cette liste) : l'Europe (les 27 pays de l'UE) et les États-Unis = « eu-us », comptée GLOBAL (zone_coverage) ;
+    l'Europe seule = « eu » ; les États-Unis sans l'Europe = « usa » ; ni l'un ni l'autre = « row »."""
+    europe = all(c in codes for c in EU27)
+    return "eu-us" if europe and "us" in codes else "eu" if europe else "usa" if "us" in codes else "row"
+
+
+def supported_countries_region(dom, url):
+    """Lecteur de page « supported-countries » (format GameBoost : liste « supported_countries » de la fiche, JSON de la
+    page) : la région de la clé d'après ses pays d'activation, pas d'après le mot de l'URL. Chez GameBoost, « ROW » veut
+    dire « partout sauf le Japon » : 249 pays, Europe et États-Unis compris (Dying Light The Beast, 05/10/2026).
+    None : liste introuvable."""
+    text = html.unescape(dom or "")
+    start = 0
+    m_id = URL_TRAILING_ID_RE.search(urllib.parse.urlparse(url or "").path)
+    if m_id:  # la fiche de la clé du lien (la page liste aussi les autres variantes : Global, Europe…)
+        anchor = re.search(r'"gameKey"\s*:\s*\{\s*"id"\s*:\s*%s\b' % m_id.group(1), text)
+        if anchor:
+            start = anchor.start()
+    m = SUPPORTED_COUNTRIES_RE.search(text, start)
+    if not m:
+        return None
+    end = text.find("]", m.end())
+    codes = set(re.findall(r'"code"\s*:\s*"([a-z]{2})"', text[m.end():end if end > 0 else None]))
+    return region_from_countries(codes) if codes else None
+
+
 def page_text_from_dom(dom, url, parser, variation_param="variation"):
     if parser == "playstation":
         return playstation_text(dom, url) or page_title_from_html(dom)
@@ -1331,6 +1370,12 @@ def page_text_from_dom(dom, url, parser, variation_param="variation"):
         option = selected_option_text(dom)
         if option:
             text = "%s | option choisie : %s" % (text, option)
+    if parser == "supported-countries" and text:
+        # la région se lit dans la liste des pays d'activation (GameBoost), elle remplace le mot de la page (« ROW »)
+        region = supported_countries_region(dom, url)
+        if region:
+            parts = [p for p in text.split(" | ") if not p.upper().startswith("REGION ")]
+            text = " | ".join(parts + ["REGION %s" % region])
     if parser == "url-variation" and text:
         # le champ « Region » de la page montre la variante mise en avant, pas celle du lien : il est remplacé
         parts = [p for p in text.split(" | ") if not p.upper().startswith("REGION ")]
@@ -1580,6 +1625,21 @@ def check_offer(product, offer):
         else:
             result["notes"].append("variante choisie par le lien non lue (page illisible) : région de l'URL seule")
 
+    region_from_page = False
+    if (cfg.get("region") or {}).get("from") == "page" and result["match"] is not None and "zone" in result["kinds"]:
+        # le mot de région de l'URL ne fait pas foi chez ce marchand (GameBoost : « ROW » = partout sauf le Japon) : la
+        # page dit où la clé s'active, et c'est cette région qui est comparée à celle d'AllKeyShop (règle générale :
+        # Europe et États-Unis = GLOBAL, voir zone_coverage)
+        countries_text, countries_via = merchant_page_text(url, cfg)
+        chosen = [p[len("REGION "):] for p in (countries_text or "").split(" | ") if p.startswith("REGION ")]
+        if chosen:
+            page_text, page_via, region_from_page = countries_text, countries_via, True
+            result = analyze(product, offer, shop_url_text(url, cfg), "URL", region=chosen[0])
+            result["notes"].append("région lue sur la page, d'après les pays d'activation de la clé : %s" % chosen[0])
+            method = "URL et pays d'activation de la page (%s)" % (countries_via or "page")
+        else:
+            result["notes"].append("pays d'activation non lus (page illisible) : région de l'URL seule")
+
     if result["match"] is None:
         # 2e repli : lire la page marchand (HTTP simple, puis Chromium si la config le permet)
         page_text, page_method = merchant_page_text(url, cfg)
@@ -1600,7 +1660,7 @@ def check_offer(product, offer):
     # le DLC aussi, sur une édition « X + Y » : le « + » du titre (le jeu plus le contenu) disparaît dans l'URL
     confirmable = [k for k in result["kinds"] if k in ("platform", "console", "zone")
                    or (k == "dlc" and "+" in offer["edition"])]
-    if confirmable and method.startswith("URL") and not (cfg.get("region") or {}).get("from") == "query":
+    if confirmable and method.startswith("URL") and not (cfg.get("region") or {}).get("from") == "query" and not region_from_page:
         # l'URL contredit AllKeyShop : avant d'alerter, on regarde la page (URL trompeuse chez Gamingdragons)
         page_text, page_via = merchant_page_text(url, cfg)
         if page_text:

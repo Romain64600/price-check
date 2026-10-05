@@ -62,7 +62,7 @@ Testé sur les pages EA SPORTS FC 27 (Popular #1) et Dynasty Warriors 3 Complete
 | Driffle | URL directe | oui | global, ea-play, key | `www.driffle.com/ea-sports-fc-27-global-pc-ea-play-digital-key-p9997937` |  |
 | Eneba | URL directe | oui | europe, ea-app, key | `www.eneba.com/ea-app-ea-sports-fc-27-ea-app-key-pc-europe` |  |
 | G2A | URL directe (page à ouvrir pour un bundle) | oui | europe, ea-app, key | `www.g2a.com/ea-sports-fc-27-pc-ea-app-key-europe-i10000515240002` |  |
-| GameBoost | URL directe (écrit « II » pour « 2 », géré) | oui | ea-app | `gameboost.com/ea-sports-fc-27-ea-app-00-79268` |  |
+| GameBoost | URL directe (écrit « II » pour « 2 », géré) ; région lue sur la page (pays d'activation `supported_countries`, Chromium) quand l'URL contredit AllKeyShop : son « ROW » = partout sauf le Japon (05/10/2026, `merchants/gameboost.toml`) | oui | ea-app | `gameboost.com/ea-sports-fc-27-ea-app-00-79268` |  |
 | Gamers Outlet | URL directe | oui | global, ea-app, key | `www.gamers-outlet.net/en/ea-sports-fc-27-pc-ea-app-key-global` | Page lisible en HTTP simple. |
 | GamersGate | URL directe | oui | — | `www.gamersgate.com/product/dynasty-warriors-3-complete-edition-remastered/` |  |
 | GAMESEAL | URL directe | oui | global, ea-app, key | `gameseal.com/ea-sports-fc-27-pc-ea-app-key-global` |  |

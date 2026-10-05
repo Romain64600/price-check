@@ -105,6 +105,7 @@ Vérifier sur les deux pages, trancher dans le fil, puis faire corriger l'offre 
 Ce qui n'est pas une erreur :
 
 - une clé GLOBAL affichée EUROPE : le marchand vend plus large que ce qui est affiché ;
+- une clé activable en Europe et aux États-Unis affichée GLOBAL : elle compte comme GLOBAL (règle de traitement des régions, 05/10/2026) ;
 - une restriction de langue (IN ENGLISH ONLY, EN/FR) : ce n'est pas une région ;
 - la zone d'un gift : elle n'est pas comparée.
 
@@ -157,6 +158,7 @@ Ces décisions font jurisprudence : le moniteur a déjà été corrigé pour les
 | Pokémon Scarlet, DLC « The Hidden Treasure of Area Zero », GameBoost vend la version Violet | Faux positif | Cette page couvre le DLC des deux versions ; cas propre à Pokémon, sans généralisation |
 | Minecraft Dungeons Triple Bundle, CJS CDKeys « région Argentine » | Faux positif | Le lien choisit la variante Europe ; la page montre l'Argentine par défaut |
 | Mario Kart World, K4G vend une clé GLOBAL affichée EUROPE | Faux positif | Le marchand vend plus large que l'affichage |
+| Dying Light The Beast, GameBoost vend une clé « ROW » activable partout sauf au Japon, affichée GLOBAL | Faux positif | Une clé activable en Europe et aux États-Unis compte comme GLOBAL (décision de Rémy, validée par Romain) |
 | EA SPORTS FC 27, Mmoga « IN ENGLISH ONLY » | Faux positif | Une langue n'est pas une région |
 | Farming Simulator 25 Year 1 Edition, Loaded vend le Year 1 Season Pass | Faux positif | Le jeu est inclus dans ce pass |
 
