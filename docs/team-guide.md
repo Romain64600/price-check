@@ -41,7 +41,9 @@ Each loop starts, in every channel it posts to, with a very visible banner: "�
 | ↪️ Suite de la boucle | The same loop resumes after another loop's messages |
 | 🚨 URGENCE PREMIER PRIX, 🔴 SUSPECT, 🟠 À VÉRIFIER | A new report |
 | 📌 Rappel · report existant | An older report sent again to its right channel (reminder): not a new detection |
+| 📌 Rappel · toujours en erreur après traitement | An offer already decided "vrai" or "à discuter", still wrong at the re-check (still wrong after being handled): the fix did not take |
 | 🔁 Recontrôle | The re-check recap: repaired, still wrong, new errors |
+| 📋 Rappel du matin | Every day at 9 am, in emergencies (morning reminder): the first prices still wrong and the last 24 hours' summary |
 
 ## Reading an alert
 
@@ -71,6 +73,7 @@ The verdicts:
 
 - **SUSPECT**: a problem was found, the alert goes out.
 - **À VÉRIFIER** (to check): no conclusion possible (merchant page unreadable), on the first price of a top or coming-soon page. A person checks.
+- **À VÉRIFIER, "en doute : mots en plus après le nom"** (in doubt: extra words after the name): the offer's URL adds words after the game's name that the monitor does not know (Minecraft ← "minecraft-dungeons-2", Control ← "control-resonant"): another game, or just a subtitle? Whatever the offer's rank, a single alert per page and per words; the decision applies to every offer of the page with those words.
 - **NON VÉRIFIABLE** (not verifiable): the same case elsewhere. Noted in the admin, no alert.
 
 "Recontrôle …" messages are re-check recaps: offers still wrong, repaired, false positives cleared by a rule.
@@ -89,7 +92,8 @@ Each alert has its thread "Feedback · game · offre id": you decide there in on
 
 - **Who can decide**: the people authorised on the bot. Romain adds them with `!allow @name` in #aks_price_checker. Others get a reminder, and their message stays in the thread.
 - **Discussing without deciding**: a message that does not start with one of these words decides nothing.
-- **What "faux" does**: the offer is no longer re-checked or alerted. The note is used to fix the monitor's rules, for every merchant.
+- **What "faux" does**: the offer is no longer re-checked or alerted. The note is used to fix the monitor's rules, for every merchant. On an "en doute : mots en plus" alert, "faux" teaches those words for the page (a subtitle, for example): the page's other offers with them pass.
+- **What "vrai" (or "à discuter") does**: the offer is still re-checked every hour. Still wrong at least a quarter of an hour after the decision, it goes out once more, with "📌 Rappel · toujours en erreur après traitement par …": deciding is not enough, the offer has to be fixed. On an "en doute : mots en plus" alert, "vrai" makes it an error for every offer of the page with those words.
 - **What the thread gets next**: the offer's follow-ups (repaired, false positive cleared by a rule, wrong again) and the decisions taken in the admin.
 
 ## What to do with an alert
@@ -100,7 +104,7 @@ Check both pages, decide in the thread, then get the offer fixed if the error is
 2. **On the AllKeyShop page** ("Page" link): the edition the offer is filed under, the page's other editions, the region's filter name (STEAM EU, STEAM GLOBAL, XBOX X|S EUROPE…), the platform.
 3. **At the merchant** ("Marchand" link): the product, edition, region and platform actually sold.
 4. **Decide in the thread**: vrai, faux or à discuter. You agree with the error described: no note; otherwise, a note saying why.
-5. **If it is true**: get the offer fixed on AllKeyShop (edition, region, platform, page it is attached to) or removed; for an out-of-stock offer at Kinguin, the merchant has to take it out of its feed. At the next re-check (within the hour), the monitor marks the offer "repaired" and writes it in the thread.
+5. **If it is true**: get the offer fixed on AllKeyShop (edition, region, platform, page it is attached to) or removed; for an out-of-stock offer at Kinguin, the merchant has to take it out of its feed. At the next re-check (within the hour), the monitor marks the offer "repaired" and writes it in the thread. If it is still wrong, the alert comes back once, with "📌 Rappel · toujours en erreur après traitement par …": the fix did not take.
 
 Not an error:
 
@@ -115,7 +119,7 @@ The admin shows every report in one place, with the same decisions as the Discor
 
 - **One card per report**: the verdict, "✔ Traité par <operator>" (handled by; or "À traiter", to handle), the TOP or HOMEPAGE badge (where the problem comes from) and PREMIER PRIX (first price: one of the edition's 3 cheapest offers), the game, edition, rank, merchant, price, reason, and three links: AllKeyShop page, merchant offer, Discord thread.
 - **Two parts**: the tops' reports first (title "Price check top", blue TOP band and badge), then the homepage's; an empty part says so ("Aucun report sur les tops"). The "Mode" filter keeps one of them.
-- **Deciding**: each card reads in two steps, ① Pourquoi ? (why: the note, only if needed) on the left and ② Ta décision (your decision: Vrai positif, Faux positif, À discuter) on the right. You agree with the error described on the report: click Vrai positif, no note, there is nothing to comment. Otherwise, write the note then click your decision: both leave together; a note changed afterwards is saved with "Mettre à jour la note" (or Enter), and a note not saved yet is flagged in orange. A "Comment trancher un report" box at the top of the list says so. Same effect as a reply in the thread; a decision taken on Discord shows signed "(Discord)".
+- **Deciding**: each card reads in two steps, ① Pourquoi ? (why: the note, only if needed) on the left and ② Ta décision (your decision: Vrai positif, Faux positif, À discuter) on the right. You agree with the error described on the report: click Vrai positif, no note, there is nothing to comment. Otherwise, write the note then click your decision: both leave together; a note changed afterwards is saved with "Mettre à jour la note" (or Enter), and a note not saved yet is flagged in orange. A "Comment trancher un report" box at the top of the list says so. A report just decided stays in place a few seconds, outlined in green ("✔ Décision enregistrée"), then fades out if it no longer matches the filters: the next card does not slide under the cursor. Same effect as a reply in the thread; a decision taken on Discord shows signed "(Discord)".
 - **Filters**: verdict (including Réparées = repaired, Faux positifs levés par une règle = false positives cleared by a rule, Vérifiées OK = verified OK), mode (Price check top or homepage), decision, "Traité par" (one operator, or nobody: to handle), free search, "encore en tête seulement" (still leading only), "premiers prix seulement" (first prices only).
 - **Counters**: undecided, tops to decide, homepage to decide, first prices in error, repaired; and the number of reports handled by each operator.
 - **Running a pass**: the buttons "Lancer le price check top" and "Lancer le price check homepage" re-check every offer of their pages right away. Allow a few minutes for the tops, about 2 h 30 for the homepage.
@@ -141,9 +145,12 @@ flowchart LR
 | False positive cleared by a rule | Nothing changed: a rule added since clears it |
 | Verified OK | It could not be verified before, now it is |
 | Still wrong | Nothing moved: re-checked the next hour |
+| Still wrong after a "vrai" or "à discuter" decision | Reported again, once per decision and at least 15 min after it: "📌 Rappel · toujours en erreur après traitement par …" |
 | Wrong again | An OK offer became wrong: a new alert |
 
 An offer decided as a false positive is no longer re-checked. The admin's buttons start a full re-check without waiting for the hour.
+
+**The morning reminder**: every day at 9 am, #aks_price_emergencies gets "📋 Rappel du matin · urgences premiers prix". It lists the first prices still wrong (even those decided "vrai" or "à discuter"), oldest first, with their age, their status (to handle, or the decision and who took it) and the link to their card in the admin. Then the last 24 hours' summary: new reports, repaired, false positives cleared by a rule, decisions per operator.
 
 ## Cases already decided, to calibrate
 

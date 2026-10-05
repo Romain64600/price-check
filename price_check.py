@@ -21,6 +21,8 @@ Voir docs/detection.md et docs/marchands.md.
 """
 
 import argparse
+import collections
+import datetime
 import glob
 import html
 import http.client
@@ -87,6 +89,9 @@ URGENT_PREFIX = "🚨 **URGENCE PREMIER PRIX**"
 # petit message pour expliquer et un lien vers la doc … très visible, qui fasse bien la séparation entre les
 # boucles », dans chaque salon de check) : avant le premier message d'une boucle dans un salon (loop_banner).
 GUIDE_URL = os.environ.get("PRICE_CHECK_GUIDE_URL", "https://169.58.5.63.sslip.io/executor/price-check-guide")
+ADMIN_URL = os.environ.get("PRICE_CHECK_ADMIN_URL", "https://169.58.5.63.sslip.io/executor/price-check")
+# Le rappel du matin (Romain, 05/10/2026) : chaque jour à cette heure locale, dans le salon des urgences. Vide : aucun.
+DAILY_REMINDER_AT = os.environ.get("DAILY_REMINDER_AT", "09:00")
 REDIRECTION_URL = "https://www.allkeyshop.com/redirection/offer/eur/%s?locale=en&merchant=%s"
 
 AKS_UA = "AKS/Staff"  # pages AllKeyShop seulement, jamais chez le marchand
@@ -839,6 +844,35 @@ LABEL_NOISE = {"buy", "cheap", "acheter", "kaufen", "comprar", "key", "keys", "c
                "es", "gb", "us", "uk", "card", "dp", "gp", "ref", "the-game", "windows", "microsoft", "account", "s",
                "rockstar", "ubisoft", "uplay", "connect", "battle", "net", "battlenet", "social", "club",
                "bundle", "bundles", "sub", "preorder", "page", "pages"}  # « bundle/27059 », « preorder-page »
+# Mots qu'une URL marchand ajoute après le nom du produit sans nommer un autre produit : service, plateforme, zone,
+# édition, langue (relevé sur les 4 212 URL OK en mémoire, 05/10/2026). Les identifiants de fiche (« p10001977 »,
+# « i10000515240006 ») contiennent des chiffres : ils ne comptent pas non plus.
+TAIL_SERVICE_WORDS = {"xs", "xboxseries", "xboxoneseries", "xboxone", "xboxwindows", "onexbox", "pcxbox", "steamgift",
+                      "steamkey", "com", "net", "checkout", "launcher", "linux", "mac", "macos", "os", "online", "ms", "java",
+                      "bedrock", "gogcom", "drm", "eur", "usd", "gbp", "cdkey", "pcsteam", "alter", "play", "anywhere",
+                      "website", "multi", "multilanguage", "languages", "lang", "vr", "ps"}
+KNOWN_TAIL_WORDS = (LABEL_NOISE | FILLER_WORDS | set(EDITION_WORDS) | GENERIC_EDITION_WORDS | set(GIFT_WORDS)
+                    | set(ACCOUNT_WORDS) | {w for d in DLC_WORDS for w in d.split("-")} | set(FORBIDDEN_REGION_WORDS)
+                    | TAIL_SERVICE_WORDS | {w for ws in MERCHANT_ZONE_WORDS.values() for x in ws for w in x.split("-")}
+                    | {w for ws in PLATFORM_FAMILIES.values() for x in ws for w in x.split("-")} | set(ARABIC))
+DOUBT_PREFIX = "en doute : mots en plus après le nom"
+
+
+def tail_words(product, offer, normed):
+    """Les mots qui suivent le nom du produit dans l'URL et ne disent rien de connu (service, plateforme, zone, édition,
+    langue, identifiant) : ils nomment souvent un autre jeu ou un DLC (« minecraft-dungeons-2 » pour Minecraft,
+    « control-resonant » pour Control, « elden-ring-shadow-of-the-erdtree » pour Elden Ring). Romain, 05/10/2026 :
+    « alerter tous ces cas », une alerte par page et par mots (apply_tail_words). Triés, sans doublons : la clé."""
+    tokens = [t for t in normed.split("-") if t]
+    product_words = {w for n in name_variants(product) for w in norm(n).split("-") if w}
+    i = next((k for k, t in enumerate(tokens) if t in product_words), None)
+    if i is None:
+        return []
+    while i < len(tokens) and tokens[i] in product_words:
+        i += 1
+    edition_words = set(norm(offer.get("edition") or "").split("-"))
+    return sorted({t for t in drop_language_lists(tokens[i:]) if len(t) > 1 and not any(c.isdigit() for c in t)
+                   and t not in KNOWN_TAIL_WORDS and t not in product_words and t not in edition_words})
 
 
 def merchant_label(text, source):
@@ -1476,7 +1510,19 @@ def offer_signature(result):
             tuple(e for e in result.get("editions", ()) if e != "standard"), frozenset(result["kinds"]) - {"name", "stock"})
 
 
-def flag_out_of_stock(result, product, offer, served):
+def other_listing(url, served, cfg):
+    """Le lien et la fiche servie sont-ils deux fiches différentes chez ce marchand, d'après l'identifiant de fiche de sa
+    config (Kinguin : « /category/<id>/ ») ? Romain, 05/10/2026 : une redirection vers une fiche d'un autre identifiant,
+    même nom, même région, même plateforme, même édition, est une rupture (le prix AllKeyShop peut être périmé)."""
+    pattern = ((cfg or {}).get("redirect") or {}).get("listing_id")
+    if not pattern or not url:
+        return False
+    a = re.search(pattern, urllib.parse.urlparse(url).path)
+    b = re.search(pattern, urllib.parse.urlparse(urllib.parse.urljoin(url, served)).path)
+    return bool(a and b and a.group(1) != b.group(1))
+
+
+def flag_out_of_stock(result, product, offer, served, url=None, cfg=None):
     """Groupe Kinguin : le lien mène à une autre fiche. Si elle dit la même chose de l'offre (nom, région, plateforme,
     édition), Kinguin a seulement renommé sa fiche (« dayz-eu-steam-altergift » -> « dayz-eu-pc-steam-altergift » :
     24 des 25 redirections en mémoire le 02/10/2026) : une note. Sinon, c'est une autre offre servie à la place d'une
@@ -1484,7 +1530,7 @@ def flag_out_of_stock(result, product, offer, served):
     du lien remplacée par la globale, Rust : « eu » -> « de »). La région n'est plus reprochée quand la fiche servie,
     ce que l'acheteur obtient, correspond à l'affichage (Stellaris, 01/10/2026)."""
     again = analyze(product, offer, url_text(served), "URL de la fiche servie")
-    if offer_signature(again) == offer_signature(result):
+    if offer_signature(again) == offer_signature(result) and not other_listing(url, served, cfg):
         result["notes"].append("fiche renommée chez le marchand : %s" % served)
         return
     if "zone" in result["kinds"]:
@@ -1594,7 +1640,7 @@ def check_offer(product, offer):
         url2 = unwrap_affiliate(urllib.parse.urljoin(url, location))
         if redirect_untrusted(cfg):
             if moved(url, url2):
-                flag_out_of_stock(result, product, offer, url2)
+                flag_out_of_stock(result, product, offer, url2, url, cfg)
                 served = url2
         elif result["match"] is None:
             result2 = analyze(product, offer, shop_url_text(url2, cfg), "URL après redirection du marchand", region=region_text(url2, cfg))
@@ -1680,7 +1726,7 @@ def check_offer(product, offer):
             canonical = page_canonical(url, cfg)
             if moved(url, canonical):
                 served = urllib.parse.urljoin(url, canonical)
-                flag_out_of_stock(result, product, offer, served)
+                flag_out_of_stock(result, product, offer, served, url, cfg)
 
     return done("SUSPECT" if result["reasons"] else "OK", method, result["reasons"], result["notes"])
 
@@ -1842,6 +1888,12 @@ def make_announcer(key_of=webhook_for):
             log.info("%s : bandeau « %s » dans le salon %s", loop["mode"], "suite de la boucle" if resumed else "nouvelle boucle",
                      channel)
         send(msg)
+
+    def forget(channel):
+        """Un message hors boucle (le rappel du matin) vient de passer dans ce salon : le message suivant de la boucle en
+        cours y remet son bandeau (« suite »), la séparation reste visible."""
+        last.pop(key_of(channel), None)
+    announce.forget = forget
     return announce
 
 
@@ -2030,6 +2082,36 @@ def reroute_existing(entry, label, rank, product, page_url, offer, notify, mode)
     entry["sent_to"] = target
 
 
+def apply_tail_words(res, state, page_url, key, stamp, product, offer):
+    """Les mots en plus après le nom (Romain, 05/10/2026 : « alerter tous ces cas », « une alerte par page et par
+    mots ») : une offre jugée OK sur son URL, mais dont l'URL ajoute après le nom des mots inconnus (tail_words), part en
+    À VÉRIFIER, une fois par page et par mots. Les offres suivantes de la page aux mêmes mots restent À VÉRIFIER sans
+    nouvelle alerte ; un « faux » sur la première apprend ces mots pour la page (les offres passent OK), un « vrai » en
+    fait une erreur avérée pour toutes les offres de la page (SUSPECT). Registre : state["tail_words"][page][mots]."""
+    if res.get("verdict") != "OK" or not str(res.get("method") or "").startswith("URL") or not res.get("url"):
+        return res
+    cfg = merchant_config(res["url"], offer.get("merchantName"))
+    tail = tail_words(product, offer, norm(shop_url_text(res["url"], cfg)))
+    if not tail:
+        return res
+    words = " ".join(tail)
+    reg = state.setdefault("tail_words", {}).setdefault(page_url, {})
+    seen = reg.get(words)
+    if seen is None:
+        reg[words] = seen = {"offer": key, "at": stamp, "decision": None}
+    decision = seen.get("decision") if seen.get("offer") != key else None
+    if decision == "faux":
+        return dict(res, notes=res["notes"] + ["mots en plus acceptés pour cette page : « %s » (offre %s jugée faux positif)" % (
+            words, seen["offer"])])
+    if decision == "vrai":
+        return dict(res, verdict="SUSPECT", reasons=["mots en plus déjà jugés comme une erreur sur cette page : « %s » (offre %s)" % (
+            words, seen["offer"])], tail=tail)
+    out = dict(res, verdict="À VÉRIFIER", reasons=["%s : « %s »" % (DOUBT_PREFIX, words)], unverifiable="report", tail=tail)
+    if seen.get("offer") != key:  # le même doute qu'une offre déjà signalée de la page : pas de nouvelle alerte
+        out.update(quiet=True, notes=res["notes"] + ["même doute que l'offre %s : une seule alerte par page et par mots" % seen["offer"]])
+    return out
+
+
 RECHECK_EVERY = 3600  # s : recontrôle des offres signalées encore sur leurs pages (et à chaque passage demandé depuis l'admin)
 
 
@@ -2083,21 +2165,61 @@ def apply_recheck(entry, label, rank, product, page_url, offer, res, notify, sta
             entry["verdict"] = "OK"
         return
     entry["verdict"] = res["verdict"]
+    entry["tail"] = res.get("tail")
+    rereport = False
     if was in REPORTED:
         entry["still_wrong_at"] = stamp
         outcome["still"].append(entry)
         alert = res["verdict"] == "SUSPECT" and was != "SUSPECT"  # une offre notée devient une erreur avérée
+        rereport = not alert and res["verdict"] == "SUSPECT" and rereport_due(entry)
     else:  # était OK (ou réparée) : nouvelle erreur
         entry.update(at=stamp, fixed_at=None, fixed_how=None, fixed_from=None, fixed_kind=None, still_wrong_at=None)
         outcome["new"].append(entry)
-        alert = res["verdict"] not in NOT_SENT
-    if alert:
+        alert = res["verdict"] not in NOT_SENT and not res.get("quiet")
+    if alert or rereport:
         msg = format_alert(label, rank, product, page_url, offer, res)
+        if rereport:
+            msg = with_note(msg, rereport_note(entry["decision"]))
         log.info("%s", msg.replace("\n", " | "))
         try:
             notify(msg)
         except Exception as e:
             log.error("Envoi Discord impossible : %s", e)
+            return
+        if rereport:
+            entry["rereported_for"] = entry["decision"].get("at")
+
+
+REREPORT_GRACE = 900  # s : le temps de corriger l'offre après l'avoir tranchée, avant le rappel
+DECISION_LABELS = {"vrai": "Vrai positif", "faux": "Faux positif", "a_discuter": "À discuter"}
+
+
+def rereport_due(entry, now=None):
+    """Romain, 05/10/2026 : « même si un opérateur est passé et a traité l'offre, si, au prochain passage, l'offre est
+    toujours en erreur, on doit encore la reporter ». Une offre tranchée « vrai » ou « à discuter », toujours en erreur
+    au recontrôle, est reportée de nouveau : une fois par décision, au moins REREPORT_GRACE après elle. Un « faux »
+    arrête le suivi (l'offre n'est plus recontrôlée)."""
+    d = entry.get("decision") or {}
+    if d.get("decision") not in ("vrai", "a_discuter") or entry.get("rereported_for") == d.get("at"):
+        return False
+    try:
+        decided = datetime.datetime.fromisoformat(d.get("at") or "").timestamp()
+    except ValueError:
+        return False
+    return (time.time() if now is None else now) - decided >= REREPORT_GRACE
+
+
+def rereport_note(decision):
+    at = decision.get("at") or ""
+    when = "%s/%s %s" % (at[8:10], at[5:7], at[11:16]) if len(at) >= 16 else at
+    return "📌 **Rappel** · toujours en erreur après traitement par %s (%s le %s)" % (
+        decision.get("by") or "?", DECISION_LABELS.get(decision.get("decision"), decision.get("decision")), when)
+
+
+def with_note(msg, note):
+    """Une ligne en tête de l'alerte, sous l'en-tête d'urgence s'il y en a un (le bot lit l'urgence en tête)."""
+    head, _, rest = msg.partition("\n")
+    return "%s\n%s\n%s" % (head, note, rest) if msg.startswith(URGENT_PREFIX) else "%s\n%s" % (note, msg)
 
 
 def seen_changes(entry, res):
@@ -2155,7 +2277,7 @@ def recheck_flagged(label, rank, product, page_url, trans, state, notify, checke
             continue
         offer["page_dlc"] = offer_on_dlc_page(page_dlc, offer)
         try:
-            res = checker(product, offer)
+            res = apply_tail_words(checker(product, offer), state, page_url, key, stamp, product, offer)
         except Exception as e:
             if not isinstance(e, CheckError):
                 log.exception("%s / %s : %s (%s) : erreur imprévue", product, offer["edition"], offer["merchantName"], key)
@@ -2209,6 +2331,82 @@ def recap_due(requested, outcome):
     seulement s'il y a du nouveau : une offre réparée, retirée, levée par une règle, ou une nouvelle erreur."""
     return bool(requested or outcome["fixed"] or outcome["removed"] or outcome["rules"] or outcome.get("verified")
                 or outcome["new"])
+
+
+def entry_time(at):
+    """« 2026-10-05 15:13 » (heure locale du moniteur) -> heure Unix, ou None."""
+    try:
+        return time.mktime(time.strptime((at or "")[:16], "%Y-%m-%d %H:%M"))
+    except ValueError:
+        return None
+
+
+def iso_time(at):
+    try:
+        return datetime.datetime.fromisoformat(at or "").timestamp()
+    except ValueError:
+        return None
+
+
+def age_label(seconds):
+    hours = int(seconds // 3600)
+    return "moins d'une heure" if hours < 1 else "%d h" % hours if hours < 48 else "%d j" % (hours // 24)
+
+
+def daily_reminder_due(state, t=None):
+    """Le rappel du matin est-il dû : une fois par jour, à partir de DAILY_REMINDER_AT (heure locale) ?"""
+    if not DAILY_REMINDER_AT:
+        return False
+    t = t or time.localtime()
+    return state.get("daily_reminder") != time.strftime("%Y-%m-%d", t) and time.strftime("%H:%M", t) >= DAILY_REMINDER_AT
+
+
+def format_daily_reminder(state, decisions, now=None, limit=1900):
+    """Le rappel du matin (Romain, 05/10/2026 : « un message chaque matin dans #aks_price_emergencies les listerait avec
+    leur ancienneté, avec un bilan du jour : nouveaux, réparés, traités par chacun »). Les premiers prix en erreur pas
+    encore corrigés, les plus anciens d'abord (un « faux » n'en est plus un), puis le bilan des dernières 24 h.
+    Renvoie les messages, chacun sous la limite de Discord."""
+    now = time.time() if now is None else now
+    since = now - 86400
+    checked = state.get("checked") or {}
+    first = lambda e: isinstance(e.get("edition_rank"), int) and 1 <= e["edition_rank"] <= FIRST_PRICES and not e.get("account")
+    live = lambda e: not e.get("fixed_at") and (e.get("decision") or {}).get("decision") != "faux"
+    urgent = sorted(((k, e) for k, e in checked.items() if e.get("verdict") == "SUSPECT" and first(e) and live(e)),
+                    key=lambda ke: ke[1].get("at") or "")
+    others = sum(1 for e in checked.values() if e.get("verdict") in ("SUSPECT", "À VÉRIFIER") and live(e)
+                 and not (e.get("verdict") == "SUSPECT" and first(e)))
+    lines = ["📋 **Rappel du matin · urgences premiers prix** · %s" % time.strftime("%d/%m/%Y", time.localtime(now))]
+    if urgent:
+        lines.append("**%d premier%s prix en erreur, pas encore corrigé%s** (les plus anciens d'abord) :" % (
+            len(urgent), "s" if len(urgent) > 1 else "", "s" if len(urgent) > 1 else ""))
+        for k, e in urgent:
+            d = e.get("decision") or {}
+            status = "%s (%s)" % (DECISION_LABELS.get(d.get("decision"), d.get("decision")), d.get("by") or "?") if d.get("decision") else "à traiter"
+            seen = entry_time(e.get("at"))
+            lines.append("• **%s** · %s · %s · %s · %s · %s · <%s#offer-%s>" % (
+                e.get("product"), e.get("edition"), e.get("merchant"), rank_label(e) or "premier prix",
+                "depuis " + age_label(now - seen) if seen else "depuis ?", status, ADMIN_URL, k))
+    else:
+        lines.append("✅ **Aucun premier prix en erreur ce matin.**")
+    if others:
+        lines.append("… et %d autre%s report%s ouvert%s dans l'admin (hors urgences)." % ((others,) + ("s",) * 3 if others > 1 else (others, "", "", "")))
+    new = sum(1 for e in checked.values() if e.get("verdict") in REPORTED and (entry_time(e.get("at")) or 0) >= since)
+    fixed = lambda kind: sum(1 for e in checked.values() if e.get("fixed_kind") == kind and (entry_time(e.get("fixed_at")) or 0) >= since)
+    by = collections.Counter(d.get("by") or "?" for d in (decisions or {}).values() if (iso_time(d.get("at")) or 0) >= since)
+    lines.append("**Bilan des dernières 24 h** : %d nouveau%s report%s · %d réparé%s · %d faux positif%s levé%s par une règle · "
+                 "%d décision%s%s" % (new, "x" if new > 1 else "", "s" if new > 1 else "", fixed("repaired"), "s" if fixed("repaired") > 1 else "",
+                                     fixed("rule"), "s" if fixed("rule") > 1 else "", "s" if fixed("rule") > 1 else "",
+                                     sum(by.values()), "s" if sum(by.values()) > 1 else "",
+                                     " (%s)" % ", ".join("%s %d" % (n, c) for n, c in by.most_common()) if by else ""))
+    lines.append("📘 Admin : <%s> · guide : <%s>" % (ADMIN_URL, GUIDE_URL))
+    messages, current = [], ""
+    for line in lines:
+        if current and len(current) + 1 + len(line) > limit:
+            messages.append(current)
+            current = line
+        else:
+            current = current + "\n" + line if current else line
+    return messages + [current]
 
 
 class Stop(Exception):
@@ -2317,7 +2515,7 @@ def run_cycle(targets, notify, state, checker=None, save=None, per_edition=1, be
                 reroute_existing(entry, label, rank, product, page_url, offer, page_notify, mode)
                 continue
             try:
-                res = checker(product, offer)
+                res = apply_tail_words(checker(product, offer), state, page_url, key, stamp, product, offer)
             except Exception as e:  # CheckError, ou toute erreur imprévue : l'offre est retentée, le passage continue
                 if not isinstance(e, CheckError):
                     log.exception("%s / %s : %s (%s) : erreur imprévue", product, offer["edition"], offer["merchantName"], key)
@@ -2340,7 +2538,7 @@ def run_cycle(targets, notify, state, checker=None, save=None, per_edition=1, be
                 continue
             msg = format_alert(label, rank, product, page_url, offer, res)
             log.info("%s", msg.replace("\n", " | "))
-            if res["verdict"] not in NOT_SENT or (res["verdict"] == "OK" and NOTIFY_OK):
+            if (res["verdict"] not in NOT_SENT or (res["verdict"] == "OK" and NOTIFY_OK)) and not res.get("quiet"):
                 try:
                     page_notify(msg)
                 except Exception as e:
@@ -2355,7 +2553,7 @@ def run_cycle(targets, notify, state, checker=None, save=None, per_edition=1, be
                 "page": page_url, "list": label, "rank": rank,
                 "edition_rank": offer.get("edition_rank"), "account": offer.get("account", False),
                 "page_first": offer.get("page_first", False), "unverifiable": res.get("unverifiable"),
-                "evidence": res.get("evidence"), "mode": mode,
+                "evidence": res.get("evidence"), "mode": mode, "tail": res.get("tail"),
                 "sent_to": ("urgent" if is_urgent(offer, res) else mode_channel({}, mode)) if res["verdict"] not in NOT_SENT else None,
             }
             if res["method"] != "aucune":
@@ -2556,6 +2754,10 @@ def apply_decisions(state, directory):
         if entry is not None and entry.get("decision") != decision:
             entry["decision"] = decision
             changed.append(key)
+            for reg in (state.get("tail_words") or {}).values():  # le doute « mots en plus » dont elle est la première offre
+                for info in reg.values():
+                    if info.get("offer") == key:
+                        info["decision"] = (decision or {}).get("decision")
     return changed
 
 
@@ -2762,6 +2964,25 @@ def main():
     last_recheck = {m: 0.0 for m in modes}
     last_flush = [0.0]
     announce = make_announcer()  # le bandeau de chaque boucle, dans chaque salon où elle poste
+    if DAILY_REMINDER_AT and "daily_reminder" not in state and time.strftime("%H:%M") >= DAILY_REMINDER_AT:
+        state["daily_reminder"] = time.strftime("%Y-%m-%d")  # premier démarrage après l'heure : le premier rappel est demain
+
+    def daily_reminder():
+        """Le rappel du matin, une fois par jour à partir de DAILY_REMINDER_AT, dans le salon des urgences (à défaut, celui
+        des top games). Il passe aussi entre deux pages d'un long passage homepage."""
+        if args.dry_run or not daily_reminder_due(state):
+            return
+        state["daily_reminder"] = time.strftime("%Y-%m-%d")
+        try:
+            decisions = read_decisions(REPORTS_DIR) if REPORTS_DIR else {}
+        except Exception:
+            decisions = {}
+        send = urgent_notifier or notifiers[modes[0]]
+        for part in format_daily_reminder(state, decisions):
+            send(part)
+        announce.forget("urgent" if urgent_notifier else modes[0])
+        log.info("rappel du matin envoyé")
+        save_state(args.state, state)
 
     def flush_alerts(every=0):
         """Les alertes en file (pause terminée, Discord de nouveau joignable), au plus une tentative par `every` s."""
@@ -2871,6 +3092,7 @@ def main():
         check_stop()
         honor_requests()
         flush_alerts(every=60)
+        daily_reminder()
         for m in modes:
             if MODES[m].get("urgent") and time.monotonic() >= due[m]:
                 run_mode(m)
@@ -2885,6 +3107,7 @@ def main():
         while True:
             check_stop()
             flush_alerts()
+            daily_reminder()
             honor_requests()
             for mode in modes:
                 if time.monotonic() >= due[mode]:

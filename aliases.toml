@@ -19,7 +19,7 @@
 "Crimson Desert" = ["Crimson Desert Enhanced"]
 # Instant Gaming vend l'édition « Hatred Edition » de Diablo 4 Lord of Hatred sous le nom « Diablo IV: Age of Hatred
 # Collection » (étude des 80 reports, 30/09/2026 ; offre 139777205). Depuis le 02/10/2026, un mot du nom remplacé par un
-# autre (« Age » pour « Lord ») n'est plus toléré : l'alias garde ce cas OK. À confirmer par Romain.
+# autre (« Age » pour « Lord ») n'est plus toléré : l'alias garde ce cas OK. Confirmé par Romain le 05/10/2026 (même édition).
 "Diablo 4 Lord of Hatred" = ["Diablo IV Age of Hatred"]
 # Gamingdragons écrit « dynasty-warriors-3-complete-edition » pour le remaster (le Dynasty Warriors 3 d'origine n'a jamais
 # été vendu en clé PC) ; depuis le 02/10/2026, « Remastered » compte dans le nom (l'original n'est pas le remaster).

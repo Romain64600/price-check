@@ -41,7 +41,9 @@ Chaque boucle commence, dans chaque salon où elle poste, par un bandeau très v
 | ↪️ Suite de la boucle | La même boucle reprend après les messages d'une autre |
 | 🚨 URGENCE PREMIER PRIX, 🔴 SUSPECT, 🟠 À VÉRIFIER | Un nouveau report |
 | 📌 Rappel · report existant | Un ancien report renvoyé dans son bon salon : pas une nouvelle détection |
+| 📌 Rappel · toujours en erreur après traitement | Une offre déjà tranchée « vrai » ou « à discuter », toujours en erreur au recontrôle : la correction n'a pas pris |
 | 🔁 Recontrôle | Le bilan du recontrôle : réparées, toujours en erreur, nouvelles erreurs |
+| 📋 Rappel du matin | Chaque jour à 9 h, aux urgences : les premiers prix encore en erreur et le bilan des dernières 24 h |
 
 ## Lire une alerte
 
@@ -71,6 +73,7 @@ Les verdicts :
 
 - **SUSPECT** : un problème est trouvé, l'alerte part.
 - **À VÉRIFIER** : impossible de conclure (page du marchand illisible), sur le premier prix d'une page des tops ou d'un coming soon. Un humain vérifie.
+- **À VÉRIFIER, « en doute : mots en plus après le nom »** : l'URL de l'offre ajoute après le nom du jeu des mots que le moniteur ne connaît pas (Minecraft ← « minecraft-dungeons-2 », Control ← « control-resonant ») : un autre jeu, ou un simple sous-titre ? Quel que soit le rang de l'offre, une seule alerte par page et par mots ; la décision vaut pour toutes les offres de la page qui ont ces mots.
 - **NON VÉRIFIABLE** : le même cas ailleurs. Noté dans l'admin, sans alerte.
 
 Les messages « Recontrôle … » sont des bilans : offres toujours en erreur, réparées, faux positifs levés par une règle.
@@ -89,7 +92,8 @@ Chaque alerte a son fil « Feedback · jeu · offre id » : on y tranche en une 
 
 - **Qui peut trancher** : les personnes autorisées sur le bot. Romain les ajoute avec `!allow @nom` dans #aks_price_checker. Les autres reçoivent un rappel, et leur message reste dans le fil.
 - **Discuter sans trancher** : un message qui ne commence pas par l'un de ces mots ne décide rien.
-- **Ce que fait un « faux »** : l'offre n'est plus recontrôlée ni alertée. La note sert à corriger les règles du moniteur, pour tous les marchands.
+- **Ce que fait un « faux »** : l'offre n'est plus recontrôlée ni alertée. La note sert à corriger les règles du moniteur, pour tous les marchands. Sur une alerte « en doute : mots en plus », un « faux » apprend ces mots pour la page (un sous-titre, par exemple) : les autres offres de la page qui les ont passent.
+- **Ce que fait un « vrai » (ou « à discuter »)** : l'offre reste recontrôlée toutes les heures. Toujours en erreur au moins un quart d'heure après la décision, elle repart une fois, avec « 📌 Rappel · toujours en erreur après traitement par … » : trancher ne suffit pas, il faut que l'offre soit corrigée. Sur une alerte « en doute : mots en plus », un « vrai » en fait une erreur pour toutes les offres de la page qui ont ces mots.
 - **Ce que le fil reçoit ensuite** : les suites de l'offre (réparée, faux positif levé par une règle, de nouveau en erreur) et les décisions prises dans l'admin.
 
 ## Que faire face à une alerte
@@ -100,7 +104,7 @@ Vérifier sur les deux pages, trancher dans le fil, puis faire corriger l'offre 
 2. **Sur la page AllKeyShop** (lien « Page ») : l'édition où l'offre est rangée, les autres éditions de la page, le nom de filtre de la région (STEAM EU, STEAM GLOBAL, XBOX X|S EUROPE…), la plateforme.
 3. **Chez le marchand** (lien « Marchand ») : le produit, l'édition, la région et la plateforme réellement vendus.
 4. **Trancher dans le fil** : vrai, faux ou à discuter. D'accord avec l'erreur décrite : pas de note ; sinon, une note qui dit pourquoi.
-5. **Si c'est vrai** : faire corriger l'offre sur AllKeyShop (édition, région, plateforme, rattachement à la page) ou la faire retirer ; pour une rupture chez Kinguin, c'est au marchand de sortir l'offre de son feed. Au recontrôle suivant (moins d'une heure), le moniteur classe l'offre « réparée » et l'écrit dans le fil.
+5. **Si c'est vrai** : faire corriger l'offre sur AllKeyShop (édition, région, plateforme, rattachement à la page) ou la faire retirer ; pour une rupture chez Kinguin, c'est au marchand de sortir l'offre de son feed. Au recontrôle suivant (moins d'une heure), le moniteur classe l'offre « réparée » et l'écrit dans le fil. Si elle est encore en erreur, l'alerte revient une fois, avec « 📌 Rappel · toujours en erreur après traitement par … » : la correction n'a pas pris.
 
 Ce qui n'est pas une erreur :
 
@@ -115,7 +119,7 @@ L'admin montre tous les reports au même endroit, avec les mêmes décisions que
 
 - **Une carte par report** : le verdict, « ✔ Traité par <opérateur> » (ou « À traiter »), les pastilles TOP ou HOMEPAGE (d'où vient le problème) et PREMIER PRIX (l'une des 3 offres les moins chères de l'édition), le jeu, l'édition, le rang, le marchand, le prix, la raison, et trois liens : page AllKeyShop, offre chez le marchand, fil Discord.
 - **Deux parties** : les reports des tops d'abord (titre « Price check top », bande et badge TOP en bleu), puis ceux de la homepage ; une partie vide le dit (« Aucun report sur les tops »). Le filtre « Mode » n'en garde qu'une.
-- **Trancher** : chaque carte se lit en deux étapes, ① Pourquoi ? (la note, seulement si besoin) à gauche et ② Ta décision (Vrai positif, Faux positif, À discuter) à droite. D'accord avec l'erreur décrite sur le report : clique Vrai positif, sans note, il n'y a rien à commenter. Sinon, écris la note puis clique ta décision : les deux partent ensemble ; une note modifiée après coup s'enregistre avec « Mettre à jour la note » (ou Entrée), et une note pas encore enregistrée est signalée en orange. Un encadré « Comment trancher un report » le rappelle en haut de la liste. Même effet qu'une réponse dans le fil ; une décision prise sur Discord s'affiche signée « (Discord) ».
+- **Trancher** : chaque carte se lit en deux étapes, ① Pourquoi ? (la note, seulement si besoin) à gauche et ② Ta décision (Vrai positif, Faux positif, À discuter) à droite. D'accord avec l'erreur décrite sur le report : clique Vrai positif, sans note, il n'y a rien à commenter. Sinon, écris la note puis clique ta décision : les deux partent ensemble ; une note modifiée après coup s'enregistre avec « Mettre à jour la note » (ou Entrée), et une note pas encore enregistrée est signalée en orange. Un encadré « Comment trancher un report » le rappelle en haut de la liste. Un report tranché reste quelques secondes à sa place, bordé de vert (« ✔ Décision enregistrée »), puis s'efface s'il ne correspond plus aux filtres : la carte suivante ne glisse pas sous le curseur. Même effet qu'une réponse dans le fil ; une décision prise sur Discord s'affiche signée « (Discord) ».
 - **Filtres** : verdict (dont Réparées, Faux positifs levés par une règle, Vérifiées OK), mode (Price check top ou homepage), décision, « Traité par » (un opérateur, ou personne : à traiter), recherche libre, « encore en tête seulement », « premiers prix seulement ».
 - **Compteurs** : sans décision, tops à trancher, homepage à trancher, premiers prix en erreur, réparées ; et le nombre de reports traités par chaque opérateur.
 - **Lancer un passage** : les boutons « Lancer le price check top » et « Lancer le price check homepage » recontrôlent tout de suite toutes les offres de leurs pages. Compter quelques minutes pour les tops, environ 2 h 30 pour la homepage.
@@ -141,9 +145,12 @@ flowchart LR
 | Faux positif levé par une règle | Rien n'a changé : une règle ajoutée depuis la blanchit |
 | Vérifiée OK | Elle n'avait pas pu être vérifiée, elle l'est maintenant |
 | Toujours en erreur | Rien n'a bougé : recontrôlée l'heure suivante |
+| Toujours en erreur après une décision « vrai » ou « à discuter » | Reportée de nouveau, une fois par décision et au moins 15 min après elle : « 📌 Rappel · toujours en erreur après traitement par … » |
 | De nouveau en erreur | Une offre OK devenue fausse : nouvelle alerte |
 
 Une offre jugée faux positif n'est plus recontrôlée. Les boutons de l'admin lancent un recontrôle complet sans attendre l'heure.
+
+**Le rappel du matin** : chaque jour à 9 h, #aks_price_emergencies reçoit « 📋 Rappel du matin · urgences premiers prix ». Il liste les premiers prix encore en erreur (même tranchés « vrai » ou « à discuter »), les plus anciens d'abord, avec leur ancienneté, leur statut (à traiter, ou la décision et qui l'a prise) et le lien de leur carte dans l'admin. Suit le bilan des dernières 24 h : nouveaux reports, réparés, faux positifs levés par une règle, décisions par opérateur.
 
 ## Cas déjà jugés, pour se caler
 

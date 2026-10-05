@@ -15,6 +15,8 @@ Deux modes de **pages**, qui tournent dans le même processus avec la même mém
 
 **Bandeau de boucle** (depuis le 03/10/2026, Romain : « qu'on sache qu'une nouvelle boucle a commencé … très visible, qui fasse bien la séparation entre les boucles ») : dans chaque salon, le premier message d'une boucle suit un bandeau « 🔄 Nouvelle boucle · Price check top » (🚨 aux urgences) qui explique la boucle, donne la légende des messages (🔴 🟠 nouveau report, 📌 rappel d'un report existant, 🔁 bilan du recontrôle) et le lien du guide de l'équipe ; une boucle sans message ne poste rien. Détail : [docs/detection.md](docs/detection.md).
 
+**Suivi après décision et rappel du matin** (revue du 05/10/2026 avec Romain) : une offre tranchée « vrai » ou « à discuter » et toujours en erreur au recontrôle est reportée de nouveau (« 📌 Rappel · toujours en erreur après traitement »), une fois par décision ; chaque matin à 9 h, le salon des urgences reçoit les premiers prix encore en erreur et le bilan des dernières 24 h. Une URL qui ajoute après le nom des mots inconnus part « à vérifier », une fois par page et par mots (un « faux » apprend les mots pour la page). Détail : [docs/detection.md](docs/detection.md).
+
 Deux modes d'**offres** : quelles offres de chaque page sont contrôlées (`--offers`, ou `PRICE_CHECK_OFFERS`). Décision de Romain du 01/10/2026, en réponse à la question « vraiment un premier prix » :
 
 | Mode | Offres contrôlées sur chaque page |

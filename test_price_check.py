@@ -1,9 +1,11 @@
 """Tests hors ligne, sur les fichiers de samples/ : python3 -m unittest -v"""
 
 import copy
+import datetime
 import json
 import os
 import re
+import time
 import unittest
 import urllib.request
 from unittest import mock
@@ -2496,6 +2498,176 @@ class TestDecisions20261005(unittest.TestCase):
         for product, url, merchant, kw, expected in cases:
             with self.subTest(merchant):
                 self.assertEqual(self.reasons(product, url, merchant, **kw), expected)
+
+
+@mock.patch.object(pc, "REQUEST_DELAY", 0)
+@mock.patch.object(pc, "PAGE_DELAY", 0)
+class TestReview20261005(unittest.TestCase):
+    """La revue des cas en suspens avec Romain, le 05/10/2026, et ses suites."""
+    PAGE = "https://www.allkeyshop.com/blog/buy-jeu-cd-key-compare-prices/"
+
+    # -- « Le nom suivi de mots en plus » : « alerter tous ces cas », « une alerte par page et par mots »
+    def test_the_words_after_the_name(self):
+        tail = lambda product, url, **kw: pc.tail_words(product, offer(**kw), pc.norm(pc.url_text(url)))
+        self.assertEqual(tail("Minecraft", "https://shop.example/minecraft-dungeons-2-pc-key"), ["dungeons"])
+        self.assertEqual(tail("Elden Ring", "https://shop.example/elden-ring-shadow-of-the-erdtree-pc-steam-key-global"),
+                         ["erdtree", "shadow"])
+        self.assertEqual(tail("Ace Combat 8", "https://www.instant-gaming.com/en/9408-buy-ace-combat-8-wings-of-theve-pc-steam/"),
+                         ["theve", "wings"])
+        # service, plateforme, zone, édition de l'offre, langue, identifiant de fiche : rien à dire
+        for url, product, edition in (
+                ("https://www.instant-gaming.com/en/21656-buy-ea-sports-fc-27-pc-ea-app/", "EA SPORTS FC 27", "Standard"),
+                ("https://www.g2a.com/ea-sports-fc-27-pc-steam-gift-global-i10000515240006", "EA SPORTS FC 27", "Standard"),
+                ("https://www.driffle.com/crusader-kings-iii-eu-pc-steam-digital-code-p9881931", "Crusader Kings 3", "Standard"),
+                ("https://www.eneba.com/steam-crusader-kings-iii-starter-edition-pc-steam-key-europe", "Crusader Kings 3", "Starter Edition"),
+                ("https://www.gamivo.com/product/bodycam-pc-steam-global-en-de-fr-ru-zh-es", "Bodycam", "Standard")):
+            with self.subTest(url):
+                self.assertEqual(tail(product, url, edition=edition), [])
+
+    @staticmethod
+    def ok(url):
+        return {"verdict": "OK", "reasons": [], "notes": [], "url": url, "method": "URL"}
+
+    def test_one_alert_per_page_and_words_then_the_decision_teaches(self):
+        state = pc.load_state("/nonexistent")
+        url = "https://www.instant-gaming.com/en/9408-buy-ace-combat-8-wings-of-theve-pc-steam/"
+        o = offer(merchantName="Instant Gaming")
+        first = pc.apply_tail_words(self.ok(url), state, self.PAGE, "1001", "2026-10-05 17:00", "Ace Combat 8", o)
+        self.assertEqual((first["verdict"], first["reasons"], first.get("quiet")),
+                         ("À VÉRIFIER", ["en doute : mots en plus après le nom : « theve wings »"], None))
+        self.assertEqual(first["unverifiable"], "report")  # envoyée quel que soit le rang de l'offre
+        second = pc.apply_tail_words(self.ok(url), state, self.PAGE, "1002", "2026-10-05 17:00", "Ace Combat 8", o)
+        self.assertEqual((second["verdict"], second.get("quiet")), ("À VÉRIFIER", True))
+        self.assertIn("même doute que l'offre 1001 : une seule alerte par page et par mots", second["notes"])
+        other_page = pc.apply_tail_words(self.ok(url), state, self.PAGE + "x", "1003", "2026-10-05 17:00", "Ace Combat 8", o)
+        self.assertIsNone(other_page.get("quiet"))  # une autre page : sa propre alerte
+        # la décision sur la première offre (lue dans decisions.jsonl) apprend les mots pour la page
+        import tempfile
+        with tempfile.TemporaryDirectory() as d:
+            state["checked"]["1001"] = {"verdict": "À VÉRIFIER", "product": "Ace Combat 8", "page": self.PAGE}
+            with open(os.path.join(d, "decisions.jsonl"), "w") as f:
+                f.write(json.dumps({"offer": "1001", "decision": "faux", "note": "c'est le sous-titre du jeu", "by": "romain",
+                                    "at": "2026-10-05T17:10:00+02:00"}) + "\n")
+            pc.apply_decisions(state, d)
+        self.assertEqual(state["tail_words"][self.PAGE]["theve wings"]["decision"], "faux")
+        learnt = pc.apply_tail_words(self.ok(url), state, self.PAGE, "1002", "2026-10-05 18:00", "Ace Combat 8", o)
+        self.assertEqual((learnt["verdict"], learnt["reasons"]), ("OK", []))
+        state["tail_words"][self.PAGE]["theve wings"]["decision"] = "vrai"
+        wrong = pc.apply_tail_words(self.ok(url), state, self.PAGE, "1002", "2026-10-05 18:00", "Ace Combat 8", o)
+        self.assertEqual((wrong["verdict"], wrong["reasons"]),
+                         ("SUSPECT", ["mots en plus déjà jugés comme une erreur sur cette page : « theve wings » (offre 1001)"]))
+        # une offre jugée sur sa page (pas sur son URL) n'est pas concernée
+        page_ok = dict(self.ok(url), method="page (Chromium)")
+        self.assertIs(pc.apply_tail_words(page_ok, state, self.PAGE, "1004", "x", "Ace Combat 8", o), page_ok)
+
+    def test_the_loop_sends_one_alert_per_page_and_words(self):
+        html = aks_page([{"id": 2001, "price": 5.0}, {"id": 2002, "price": 6.0}], product="Ace Combat 8")
+        url = "https://www.instant-gaming.com/en/9408-buy-ace-combat-8-wings-of-theve-pc-steam/"
+        state, sent = pc.load_state("/nonexistent"), []
+        with mock.patch.object(pc, "http_get", return_value=(200, None, html)), mock.patch.object(pc, "NOTIFY_OK", False):
+            pc.run_cycle([("Popular", 1, "Ace Combat 8", self.PAGE)], sent.append, state, lambda product, o: self.ok(url),
+                         per_edition=3, mode="top-games")
+        self.assertEqual(len(sent), 1, sent)
+        self.assertIn("en doute : mots en plus après le nom : « theve wings »", sent[0])
+        self.assertEqual([state["checked"][k]["verdict"] for k in ("2001", "2002")], ["À VÉRIFIER", "À VÉRIFIER"])
+
+    # -- « Même si un opérateur est passé et a traité l'offre, si, au prochain passage, l'offre est toujours en erreur,
+    # -- on doit encore la reporter »
+    def entry(self, decided_ago, decision="vrai"):
+        at = datetime.datetime.fromtimestamp(time.time() - decided_ago).astimezone().isoformat(timespec="seconds")
+        return {"verdict": "SUSPECT", "product": "Jeu", "edition": "Standard", "merchant": "Kinguin", "page": self.PAGE,
+                "reasons": ["région : AllKeyShop GLOBAL, marchand EU"], "url": "https://shop.example/jeu-eu", "method": "URL",
+                "at": "2026-10-05 09:00", "decision": {"decision": decision, "note": "", "by": "remy", "at": at}}
+
+    def recheck(self, entry):
+        sent, outcome = [], {"checked": 0, "fixed": [], "removed": [], "rules": [], "verified": [], "still": [], "new": [], "unknown": []}
+        res = {"verdict": "SUSPECT", "reasons": ["région : AllKeyShop GLOBAL, marchand EU"], "notes": [],
+               "url": "https://shop.example/jeu-eu", "method": "URL"}
+        pc.apply_recheck(entry, "Popular", 1, "Jeu", self.PAGE, offer(id=3001, edition_rank=4), res, sent.append,
+                         "2026-10-05 18:00", time.time(), outcome)
+        return sent
+
+    def test_a_handled_offer_still_wrong_is_reported_again_once(self):
+        e = self.entry(decided_ago=3600)
+        sent = self.recheck(e)
+        self.assertEqual(len(sent), 1)
+        self.assertTrue(sent[0].startswith("📌 **Rappel** · toujours en erreur après traitement par remy (Vrai positif le "), sent[0])
+        self.assertEqual(self.recheck(e), [], "the reminder comes back at every re-check")
+        e["decision"] = dict(e["decision"], at=datetime.datetime.now().astimezone().isoformat(timespec="seconds"), decision="a_discuter")
+        self.assertEqual(self.recheck(e), [], "no time to fix the offer after the decision")
+
+    def test_a_handled_offer_gets_time_to_be_fixed(self):
+        self.assertEqual(self.recheck(self.entry(decided_ago=300)), [])  # moins de 15 min après la décision
+
+    # -- Kinguin : une redirection vers une fiche d'un autre identifiant est une rupture (même nom, région, édition)
+    def test_kinguin_another_listing_id_is_out_of_stock(self):
+        cfg = pc.merchant_config("https://www.kinguin.net/category/1/x", "Kinguin")
+        link = "https://www.kinguin.net/category/111/stellaris-eu-pc-steam-cd-key"
+        def flag(served):
+            result = pc.analyze("Stellaris", offer(region="EUROPE", region_filter="STEAM EU"), pc.url_text(link), "URL")
+            pc.flag_out_of_stock(result, "Stellaris", offer(region="EUROPE", region_filter="STEAM EU"), served, link, cfg)
+            return result
+        moved = flag("https://www.kinguin.net/category/222/stellaris-eu-pc-steam-cd-key")
+        self.assertIn("stock", moved["kinds"])
+        renamed = flag("https://www.kinguin.net/category/111/stellaris-eu-steam-cd-key")
+        self.assertNotIn("stock", renamed["kinds"])
+        self.assertIn("fiche renommée chez le marchand : https://www.kinguin.net/category/111/stellaris-eu-steam-cd-key", renamed["notes"])
+
+    # -- Le rappel du matin dans le salon des urgences
+    def test_the_morning_reminder(self):
+        now = time.mktime(time.strptime("2026-10-06 09:00", "%Y-%m-%d %H:%M"))
+        base = {"edition": "Standard", "merchant": "G2A", "edition_rank": 1, "account": False}
+        state = {"checked": {
+            "1": dict(base, verdict="SUSPECT", product="Ancien", at="2026-10-02 08:00"),
+            "2": dict(base, verdict="SUSPECT", product="Tranché", at="2026-10-05 20:00", edition_rank=2,
+                      decision={"decision": "vrai", "by": "remy", "at": "2026-10-05T21:00:00+02:00"}),
+            "3": dict(base, verdict="SUSPECT", product="Faux positif", at="2026-10-05 10:00",
+                      decision={"decision": "faux", "by": "remy", "at": "2026-10-05T11:00:00+02:00"}),
+            "4": dict(base, verdict="SUSPECT", product="Quatrième", at="2026-10-05 10:00", edition_rank=4),
+            "5": dict(base, verdict="OK", product="Réparé", at="2026-10-04 10:00", fixed_at="2026-10-05 18:00", fixed_kind="repaired"),
+        }}
+        decisions = {"2": {"decision": "vrai", "by": "remy", "at": "2026-10-05T21:00:00+02:00"},
+                     "3": {"decision": "faux", "by": "remy", "at": "2026-10-05T11:00:00+02:00"},
+                     "9": {"decision": "vrai", "by": "romain", "at": "2026-10-01T11:00:00+02:00"}}
+        with mock.patch.object(pc, "ADMIN_URL", "https://admin.example/price-check"):
+            parts = pc.format_daily_reminder(state, decisions, now=now)
+        self.assertEqual(len(parts), 1)
+        lines = parts[0].splitlines()
+        self.assertEqual(lines[0], "📋 **Rappel du matin · urgences premiers prix** · 06/10/2026")
+        self.assertEqual(lines[1], "**2 premiers prix en erreur, pas encore corrigés** (les plus anciens d'abord) :")
+        self.assertEqual(lines[2], "• **Ancien** · Standard · G2A · 1er prix de l'édition · depuis 4 j · à traiter · <https://admin.example/price-check#offer-1>")
+        self.assertTrue(lines[3].startswith("• **Tranché** · Standard · G2A · 2e prix de l'édition · depuis 13 h · Vrai positif (remy) · "), lines[3])
+        self.assertEqual(lines[4], "… et 1 autre report ouvert dans l'admin (hors urgences).")
+        # 3 nouveaux reports en 24 h, dont celui jugé faux ensuite : il a bien été signalé
+        self.assertEqual(lines[5], "**Bilan des dernières 24 h** : 3 nouveaux reports · 1 réparé · 0 faux positif levé par une règle · "
+                                   "2 décisions (remy 2)")
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("feedback", os.path.join(os.path.dirname(__file__), "bot", "feedback.py"))
+        fb = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(fb)
+        self.assertIsNone(fb.alert_offer(parts[0]), "the bot opens a feedback thread on the reminder")
+
+    def test_the_morning_reminder_is_due_once_a_day_from_its_hour(self):
+        at = lambda hm: time.strptime("2026-10-06 " + hm, "%Y-%m-%d %H:%M")
+        with mock.patch.object(pc, "DAILY_REMINDER_AT", "09:00"):
+            self.assertFalse(pc.daily_reminder_due({"daily_reminder": "2026-10-05"}, at("08:59")))
+            self.assertTrue(pc.daily_reminder_due({"daily_reminder": "2026-10-05"}, at("09:00")))
+            self.assertFalse(pc.daily_reminder_due({"daily_reminder": "2026-10-06"}, at("15:00")))
+        with mock.patch.object(pc, "DAILY_REMINDER_AT", ""):
+            self.assertFalse(pc.daily_reminder_due({}, at("10:00")))
+
+    def test_after_the_reminder_the_loop_shows_its_banner_again(self):
+        """Le rappel du matin passe hors boucle : l'alerte suivante de la boucle en cours remet son bandeau (« suite »)."""
+        sent = []
+        announce = pc.make_announcer(key_of=lambda channel: channel)
+        home = dict(pc.new_loop("homepage"), start="06/10/2026 08:40")
+        to_urgent = lambda m: sent.append(m.splitlines()[1] if m.startswith(pc.BANNER_RULE) else m)
+        announce(home, "urgent", to_urgent, "🚨 alerte 1")
+        to_urgent("📋 rappel du matin")
+        announce.forget("urgent")
+        announce(home, "urgent", to_urgent, "🚨 alerte 2")
+        self.assertEqual(sent, ["# 🚨 Nouvelle boucle · Price check homepage", "🚨 alerte 1", "📋 rappel du matin",
+                                "### ↪️ Suite de la boucle · Price check homepage, commencée le 06/10/2026 08:40", "🚨 alerte 2"])
 
 
 class TestSecurityAudit20261002(unittest.TestCase):

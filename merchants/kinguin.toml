@@ -17,3 +17,6 @@ hosts = ["kinguin.net"]
 
 [redirect]
 means = "out-of-stock"  # l'autre groupe (défaut) : la redirection mène à la fiche actuelle de la même offre (Instant Gaming)
+# Romain, 05/10/2026 : une redirection vers une fiche d'un AUTRE identifiant, même avec le même nom, la même région, la
+# même plateforme et la même édition, est une rupture ; le même identifiant avec un autre slug reste un renommage.
+listing_id = "/category/(\\d+)(?:/|$)"
