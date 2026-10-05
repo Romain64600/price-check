@@ -113,11 +113,11 @@ Not an error:
 
 The admin shows every report in one place, with the same decisions as the Discord threads: <https://169.58.5.63.sslip.io/executor/price-check> (admin login).
 
-- **One card per report**: the verdict, the TOP or HOMEPAGE badge (where the problem comes from) and PREMIER PRIX (first price: one of the edition's 3 cheapest offers), the game, edition, rank, merchant, price, reason, and three links: AllKeyShop page, merchant offer, Discord thread.
+- **One card per report**: the verdict, "✔ Traité par <operator>" (handled by; or "À traiter", to handle), the TOP or HOMEPAGE badge (where the problem comes from) and PREMIER PRIX (first price: one of the edition's 3 cheapest offers), the game, edition, rank, merchant, price, reason, and three links: AllKeyShop page, merchant offer, Discord thread.
 - **Two parts**: the tops' reports first (title "Price check top", blue TOP band and badge), then the homepage's; an empty part says so ("Aucun report sur les tops"). The "Mode" filter keeps one of them.
 - **Deciding**: each card reads in two steps, ① Pourquoi ? (why: the note, only if needed) on the left and ② Ta décision (your decision: Vrai positif, Faux positif, À discuter) on the right. You agree with the error described on the report: click Vrai positif, no note, there is nothing to comment. Otherwise, write the note then click your decision: both leave together; a note changed afterwards is saved with "Mettre à jour la note" (or Enter), and a note not saved yet is flagged in orange. A "Comment trancher un report" box at the top of the list says so. Same effect as a reply in the thread; a decision taken on Discord shows signed "(Discord)".
-- **Filters**: verdict (including Réparées = repaired, Faux positifs levés par une règle = false positives cleared by a rule, Vérifiées OK = verified OK), mode (Price check top or homepage), decision, free search, "encore en tête seulement" (still leading only), "premiers prix seulement" (first prices only).
-- **Counters**: undecided, tops to decide, homepage to decide, first prices in error, repaired.
+- **Filters**: verdict (including Réparées = repaired, Faux positifs levés par une règle = false positives cleared by a rule, Vérifiées OK = verified OK), mode (Price check top or homepage), decision, "Traité par" (one operator, or nobody: to handle), free search, "encore en tête seulement" (still leading only), "premiers prix seulement" (first prices only).
+- **Counters**: undecided, tops to decide, homepage to decide, first prices in error, repaired; and the number of reports handled by each operator.
 - **Running a pass**: the buttons "Lancer le price check top" and "Lancer le price check homepage" re-check every offer of their pages right away. Allow a few minutes for the tops, about 2 h 30 for the homepage.
 
 ## What the monitor does on its own
