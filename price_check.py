@@ -1192,6 +1192,31 @@ def is_base_edition(edition_name):
     return not any(canonical_edition(w) in aks for w in EDITION_WORDS if w != "standard")
 
 
+def page_edition_reason(offer, words, product=""):
+    """Romain, 06/10/2026 (revue des doutes : Stellaris Nova Edition rangée en Deluxe, Galaxy Edition en Limited, Explorer
+    en Bonus ; Black Ops 3 Zombies Chronicles en Limited ; F1 25 Iconic Edition en Standard) : l'URL nomme une autre
+    édition de la page par tous ses mots propres (« nova » pour « Nova Edition ») ; l'offre devrait y être rangée. Les mots
+    propres : ni génériques, ni mots d'édition connus, ni chiffres, ni mots du produit ou de l'édition affichée ; au
+    singulier comme au pluriel. L'édition qui en partage le plus l'emporte."""
+    aks = offer.get("edition") or ""
+    taken = set(norm(aks).split("-")) | name_words(name_variants(product)) if product else set(norm(aks).split("-"))
+    tokens = {singular(t) for t in words.split("-") if t}
+    found = []
+    for other in offer.get("page_editions") or []:
+        if other == aks:
+            continue
+        own = [t for t in norm(other).split("-") if t and len(t) >= 3 and not t.isdigit() and t not in GENERIC_EDITION_WORDS
+               and t not in EDITION_WORDS and t not in taken and singular(t) not in {singular(x) for x in taken}]
+        if own and all(singular(t) in tokens for t in own):
+            found.append((len(own), other, own))
+    if not found:
+        return None
+    most = max(n for n, _, _ in found)
+    best = [(other, own) for n, other, own in found if n == most]  # à égalité, toutes nommées
+    return "édition : rangée en %s, le marchand vend %s (la page a une édition %s)" % (
+        aks, " ".join(best[0][1]), " ou ".join(other for other, _ in best))
+
+
 def edition_reason(offer, merchant_editions, words):
     """Raison de SUSPECT sur l'édition, ou None. L'écart compte quand l'offre aurait pu être rangée dans une
     autre édition de la page, même si l'acheteur reçoit plus (arbitrage du 01/10/2026 : GTA 4, Complete
@@ -1323,7 +1348,7 @@ def analyze(product, offer, text, source, region=None):
             reason("console", "plateforme : page AllKeyShop %s, marchand %s" % (
                 CONSOLE_LABELS[console], "/".join(CONSOLE_LABELS[c] for c in sorted(url_consoles))))
     merchant_editions = [w for w in EDITION_WORDS if has(w)]
-    er = edition_reason(offer, merchant_editions, words)
+    er = edition_reason(offer, merchant_editions, words) or page_edition_reason(offer, words, product)
     if er:
         reason("edition", er)
     dlc = [w for w in DLC_WORDS if has(w)]
@@ -2224,6 +2249,38 @@ def page_slug_words(page_url):
     return {w for w in norm(slug).split("-") if w} - {"buy", "compare", "prices", "cd", "key", "keys"}
 
 
+PRICE_GAP = 0.70  # Romain, 06/10/2026 : un premier prix de page sous 70 % du deuxième prix est une alerte urgente
+
+
+def price_gap(offer, offers):
+    """Le premier prix (clé) de la page comparé au deuxième prix de clé de la page : (rapport, offre suivante) quand il est
+    sous PRICE_GAP, sinon None."""
+    if not offer.get("page_first") or offer.get("account") or not offer.get("price"):
+        return None
+    others = sorted((o for o in offers if not o.get("account") and str(o.get("id")) != str(offer.get("id")) and o.get("price")),
+                    key=lambda o: o["price"])
+    if not others:
+        return None
+    ratio = offer["price"] / others[0]["price"]
+    return (ratio, others[0]) if ratio < PRICE_GAP else None
+
+
+def apply_price_gap(res, offer, offers):
+    """Romain, 06/10/2026 : « un premier prix de la page, vraiment pas cher par rapport au deuxième prix, ça peut être une
+    alerte importante, une top alerte » ; « on préfère avoir des reports avec des faux positifs quand on est dans le
+    doute ». Transport Fever 3 : une clé « or mystery » à 2,96 € contre 33 € (Kinguin, jugée OK le 01/10) ; Elden Ring :
+    « Elden Sword » à 0,77 € contre 42,35 € (Gameseal). Sous PRICE_GAP du deuxième prix de la page, l'offre est SUSPECT,
+    donc une urgence premier prix, quel que soit le verdict de son URL ; ses autres raisons restent."""
+    gap = price_gap(offer, offers)
+    if not gap:
+        return res
+    ratio, nxt = gap
+    reason = "premier prix anormalement bas : %.2f €, %d %% du deuxième prix de la page (%.2f €, %s, %s)" % (
+        offer["price"], round(100 * ratio), nxt["price"], nxt.get("merchantName") or "?", nxt.get("edition") or "?")
+    kept = list(res.get("reasons") or []) if res.get("verdict") != "OK" else []
+    return dict(res, verdict="SUSPECT", reasons=kept + [reason], quiet=False)
+
+
 def apply_tail_words(res, state, page_url, key, stamp, product, offer):
     """Les mots en plus après le nom (Romain, 05/10/2026 : « alerter tous ces cas », « une alerte par page et par
     mots ») : une offre jugée OK sur son URL, mais dont l'URL ajoute après le nom des mots inconnus (tail_words), part en
@@ -2758,6 +2815,7 @@ def run_cycle(targets, notify, state, checker=None, save=None, per_edition=1, be
             FAILURES.pop(key, None)
             if res["verdict"] == "À VÉRIFIER":
                 res = dict(res, verdict=unverifiable_verdict(offer, label, page_url, res.get("unverifiable", "first-price")))
+            res = apply_price_gap(res, offer, offers)  # un premier prix très en dessous du deuxième : urgence (06/10/2026)
             if entry is not None:  # recontrôle d'une offre déjà vue
                 before = sends[0]
                 apply_recheck(entry, label, rank, product, page_url, offer, res, page_notify, stamp, now, outcome)

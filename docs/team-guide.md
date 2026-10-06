@@ -73,6 +73,7 @@ The verdicts:
 
 - **SUSPECT**: a problem was found, the alert goes out.
 - **À VÉRIFIER** (to check): no conclusion possible (merchant page unreadable), on the first price of a top or coming-soon page. A person checks.
+- **SUSPECT, "premier prix anormalement bas : … % du deuxième prix de la page"** (first price abnormally low): the page's cheapest offer costs less than 70 % of the next one (Transport Fever 3: a "mystery" key at 2.96 € against 33 €). An emergency, even when the URL looks right: check that the merchant really sells this game, edition and region; a genuine good price is decided Faux positif.
 - **À VÉRIFIER, "en doute : région …"** (in doubt: region): at G2A, a ROW key shown EUROPE. G2A's "row" does not say which countries the key covers: read the activation countries on the G2A page; Europe is covered: Faux positif.
 - **À VÉRIFIER, "en doute : mots en plus après le nom"** (in doubt: extra words after the name): the offer's URL adds words after the game's name that the monitor does not know (Minecraft ← "minecraft-dungeons-2", Control ← "control-resonant"): another game, or just a subtitle? Whatever the offer's rank, a single alert per page and per words; the decision applies to every offer of the page with those words, and "faux" to every page of the game (PC, Xbox, PS5).
 - **NON VÉRIFIABLE** (not verifiable): the same case elsewhere. Noted in the admin, no alert.

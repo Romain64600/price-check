@@ -73,6 +73,7 @@ Les verdicts :
 
 - **SUSPECT** : un problème est trouvé, l'alerte part.
 - **À VÉRIFIER** : impossible de conclure (page du marchand illisible), sur le premier prix d'une page des tops ou d'un coming soon. Un humain vérifie.
+- **SUSPECT, « premier prix anormalement bas : … % du deuxième prix de la page »** : l'offre la moins chère de la page coûte moins de 70 % de la suivante (Transport Fever 3 : une clé « mystère » à 2,96 € contre 33 €). Une urgence, même quand l'URL semble correcte : vérifier que le marchand vend bien ce jeu, cette édition, cette région ; un vrai bon prix se tranche Faux positif.
 - **À VÉRIFIER, « en doute : région … »** : chez G2A, une clé ROW affichée EUROPE. Le « row » de G2A ne dit pas quels pays la clé couvre : lire les pays d'activation sur la page G2A ; l'Europe est couverte : Faux positif.
 - **À VÉRIFIER, « en doute : mots en plus après le nom »** : l'URL de l'offre ajoute après le nom du jeu des mots que le moniteur ne connaît pas (Minecraft ← « minecraft-dungeons-2 », Control ← « control-resonant ») : un autre jeu, ou un simple sous-titre ? Quel que soit le rang de l'offre, une seule alerte par page et par mots ; la décision vaut pour toutes les offres de la page qui ont ces mots, et un « faux » pour toutes les pages du jeu (PC, Xbox, PS5).
 - **NON VÉRIFIABLE** : le même cas ailleurs. Noté dans l'admin, sans alerte.

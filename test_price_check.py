@@ -564,9 +564,11 @@ class TestStudy20260930(unittest.TestCase):
         fs25 = ["Standard", "Highlands Fishing Edition", "Year 1 Bundle", "Year 1 Edition"]
         url = "https://www.loaded.com/farming-simulator-25-year-1-season-pass-pc-steam"
         self.assertEqual(self.reasons("Farming Simulator 25", url, edition="Year 1 Edition", page_editions=fs25), [])
-        # le même pass rangé ailleurs, ou le pass d'une autre année, reste du contenu additionnel
+        # le même pass rangé ailleurs, ou le pass d'une autre année, reste du contenu additionnel ; rangé en Standard, il est
+        # aussi dans la mauvaise édition (06/10/2026 : les éditions de la page nommées par l'URL)
         self.assertEqual(self.reasons("Farming Simulator 25", url, edition="Standard", page_editions=fs25),
-                         ["contenu additionnel : season-pass"])
+                         ["édition : rangée en Standard, le marchand vend year (la page a une édition Year 1 Bundle ou Year 1 Edition)",
+                          "contenu additionnel : season-pass"])
         self.assertEqual(self.reasons("Farming Simulator 25", "https://www.loaded.com/farming-simulator-25-year-2-season-pass-pc-steam",
                                       edition="Year 1 Edition", page_editions=fs25),
                          ["contenu additionnel : season-pass"])
@@ -2952,6 +2954,39 @@ class TestStillWrongAfterAFix20261006(unittest.TestCase):
                                                                       region="GLOBAL", region_filter="STEAM GLOBAL"))
         self.assertFalse(any("Agecheck" in r for r in res["reasons"]), res)
         self.assertEqual(res["verdict"], "OK", res)  # le nom et l'édition lus sur la fiche Steam, pas sur la vérification d'âge
+
+
+class TestPriceGap20261006(unittest.TestCase):
+    """Romain, 06/10/2026 : « un premier prix de la page, vraiment pas cher par rapport au deuxième prix, ça peut être une
+    alerte importante, une top alerte », sous 70 % du deuxième prix. Transport Fever 3 chez Kinguin : une clé « or
+    mystery » à 2,96 € contre 33 €, jugée OK le 01/10 ; Elden Ring chez Gameseal : « Elden Sword » à 0,77 €."""
+
+    def offers(self):
+        return [offer(id=1, price=2.96, page_first=True, edition_rank=1), offer(id=2, price=33.03, edition_rank=2),
+                offer(id=3, price=33.04, edition_rank=3), offer(id=4, price=1.00, account=True)]
+
+    def test_a_first_price_far_below_the_second_is_an_urgent_alert(self):
+        o = self.offers()
+        ok = {"verdict": "OK", "reasons": [], "notes": [], "url": "https://www.kinguin.net/x", "method": "URL"}
+        res = pc.apply_price_gap(ok, o[0], o)
+        self.assertEqual(res["verdict"], "SUSPECT")
+        self.assertEqual(res["reasons"], ["premier prix anormalement bas : 2.96 €, 9 % du deuxième prix de la page (33.03 €, Kinguin, Standard)"])
+        self.assertTrue(pc.is_urgent(o[0], res), "not sent to the emergencies")
+        doubt = {"verdict": "À VÉRIFIER", "reasons": ["en doute : mots en plus après le nom : « by mystery or »"], "notes": [],
+                 "quiet": True}
+        both = pc.apply_price_gap(doubt, o[0], o)
+        self.assertEqual((both["verdict"], len(both["reasons"]), both["quiet"]), ("SUSPECT", 2, False))
+
+    def test_the_gap_stays_narrow(self):
+        o = self.offers()
+        ok = {"verdict": "OK", "reasons": [], "notes": []}
+        self.assertIs(pc.apply_price_gap(ok, o[1], o), ok, "only the page's first price")
+        close = [offer(id=1, price=24.0, page_first=True), offer(id=2, price=33.0)]
+        self.assertIs(pc.apply_price_gap(ok, close[0], close), ok, "73 % of the second price is not a gap")
+        alone = [offer(id=1, price=2.0, page_first=True)]
+        self.assertIs(pc.apply_price_gap(ok, alone[0], alone), ok, "no second price")
+        self.assertIsNotNone(pc.price_gap(offer(id=1, price=6.79, page_first=True), [offer(id=1, price=6.79), offer(id=2, price=15.51)]),
+                             "Age of Wonders 4 : the DLC at 44 % of the game")
 
 
 class TestSecurityAudit20261002(unittest.TestCase):
