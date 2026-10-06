@@ -3054,7 +3054,11 @@ class TestCompetitors20261006(unittest.TestCase):
             {"id": 4, "price": 20.00, "priceCard": 20.00, "dispo": 0, "edition": "1", "merchantName": "Épuisé"}]}
         self.assertEqual(pc.aks_best_price(trans), {"price": 30.87, "merchant": "Kinguin", "account": True, "edition": "Standard"})
         self.assertEqual(pc.compare_prices({"price": 30.87}, {"price": 32.48}), "aks")
-        self.assertEqual(pc.compare_prices({"price": 32.48}, {"price": 32.48}), "aks", "the same price is not lost")
+        # Romain, 06/10/2026 : « couleur orange quand on est au même prix que le concurrent » (au centime près)
+        self.assertEqual(pc.compare_prices({"price": 32.48}, {"price": 32.48}), "same")
+        self.assertEqual(pc.compare_prices({"price": 32.48}, {"price": 32.480000001}), "same")
+        self.assertEqual(pc.compare_prices({"price": 32.47}, {"price": 32.48}), "aks", "one cent cheaper is cheaper")
+        self.assertEqual(pc.compare_prices({"price": 32.49}, {"price": 32.48}), "competitor")
         self.assertEqual(pc.compare_prices({"price": 30.87}, {"price": 22.67}), "competitor")
         self.assertIsNone(pc.compare_prices({"price": 30.87}, None))
 

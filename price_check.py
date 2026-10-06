@@ -3263,10 +3263,12 @@ def aks_best_price(trans):
 
 
 def compare_prices(aks, competitor):
-    """« aks » (AllKeyShop moins cher ou au même prix : vert), « competitor » (le concurrent moins cher : rouge), ou None."""
+    """« aks » (AllKeyShop moins cher : vert), « same » (au même prix, au centime près : orange, Romain, 06/10/2026),
+    « competitor » (le concurrent moins cher : rouge), ou None."""
     if not aks or not competitor:
         return None
-    return "aks" if aks["price"] <= competitor["price"] else "competitor"
+    a, c = round(aks["price"] * 100), round(competitor["price"] * 100)
+    return "same" if a == c else "aks" if a < c else "competitor"
 
 
 def check_competitors(targets, state, now=None):
@@ -3610,8 +3612,9 @@ def main():
         write_shared(os.path.join(REPORTS_DIR, COMPETITORS_FILE), payload)
         found = sum(1 for site in payload["sites"] for r in site["rows"] if r.get("competitor"))
         red = sum(1 for site in payload["sites"] for r in site["rows"] if r.get("cheaper") == "competitor")
-        log.info("concurrents : %d page(s) des tops, %d prix trouvés, %d où le concurrent est moins cher",
-                 len(targets["top-games"]), found, red)
+        same = sum(1 for site in payload["sites"] for r in site["rows"] if r.get("cheaper") == "same")
+        log.info("concurrents : %d page(s) des tops, %d prix trouvés, %d où le concurrent est moins cher, %d au même prix",
+                 len(targets["top-games"]), found, red, same)
         save_state(args.state, state)
 
     def run_urgent():
