@@ -2849,6 +2849,59 @@ class TestTailWordsReview20261006(unittest.TestCase):
         self.assertEqual(other["verdict"], "À VÉRIFIER", "another game learns nothing")
 
 
+class TestOrphanPages20261006(unittest.TestCase):
+    """Romain, 06/10/2026 : « les bugs qui ont été traités et réparés par Rémy sont re-reportés ». GTA 4 (Steam, rangée en
+    Standard au lieu de Complete) et Warhammer 40k Space Marine 2 étaient réparés sur AllKeyShop, mais leurs pages étaient
+    sorties du TOP 50 : plus jamais recontrôlées, elles restaient « à corriger ». TORO 2 n'avait même pas sa page."""
+
+    GTA4 = "https://www.allkeyshop.com/blog/buy-gta-4-cd-key-compare-prices/"
+    TORO = "https://www.allkeyshop.com/blog/buy-toro-2-nintendo-switch-compare-prices/"
+
+    def trans(self, *prices):
+        return {"editions": {"1": {"name": "Standard"}, "7": {"name": "Complete"}},
+                "regions": {"1": {"region_name": "GLOBAL", "filter_name": "STEAM GLOBAL"}},
+                "prices": [dict({"price": 5.99, "priceCard": 5.99, "dispo": 1, "region": "1", "merchant": 1, "merchantName": "Steam",
+                                 "activationPlatform": "steam", "account": False}, **p) for p in prices]}
+
+    def test_a_flagged_offer_on_a_page_no_longer_followed_is_rechecked_there(self):
+        vrai = {"decision": "vrai", "by": "remy", "at": "2026-10-06T05:31:00+02:00"}
+        flagged = lambda **kw: dict({"verdict": "SUSPECT", "reasons": ["x"], "at": "2026-09-30 15:54", "decision": vrai,
+                                     "url": "https://store.steampowered.com/app/12210/", "merchant": "Steam", "edition": "Standard",
+                                     "region": "GLOBAL", "region_filter": "STEAM GLOBAL", "platform": "steam"}, **kw)
+        state = {"checked": {
+            "80523": flagged(product="GTA 4", page=self.GTA4),  # réparée : rangée dans l'édition Complete
+            "140421891": flagged(product="TORO 2 Nintendo Switch"),  # sans page : retrouvée par son nom, offre retirée
+            "1": flagged(product="Jeu suivi", page="https://www.allkeyshop.com/blog/buy-suivi-cd-key-compare-prices/"),
+            "2": flagged(product="GTA 4", page=self.GTA4, decision={"decision": "faux", "by": "remy"}),  # jugée faux : rien
+        }}
+        pages = {self.GTA4: (200, None, "<title>Buy GTA 4 CD Key Compare Prices</title>"),
+                 self.TORO.replace("-compare-prices", "-cd-key-compare-prices"): (404, None, ""),
+                 self.TORO: (200, None, "<title>Buy TORO 2 Nintendo Switch Compare Prices</title>")}
+        fetched = []
+        def get(url, ua, follow=True, timeout=30):
+            fetched.append(url)
+            self.assertEqual(ua, pc.AKS_UA)
+            return pages[url]
+        parsed = {"<title>Buy GTA 4 CD Key Compare Prices</title>": self.trans({"id": 80523, "edition": "7"}),
+                  "<title>Buy TORO 2 Nintendo Switch Compare Prices</title>": self.trans({"id": 999, "edition": "1"})}
+        sent = []
+        ok = lambda product, o: {"verdict": "OK", "method": "URL", "url": "https://store.steampowered.com/app/12210/",
+                                 "notes": [], "reasons": []}
+        with mock.patch.object(pc, "http_get", side_effect=get), mock.patch.object(pc, "parse_game_page", side_effect=parsed.get), \
+             mock.patch.object(pc, "PAGE_DELAY", 0):
+            outcome = pc.recheck_orphans(state, {"https://www.allkeyshop.com/blog/buy-suivi-cd-key-compare-prices/"}, sent.append,
+                                         checker=ok)
+        gta, toro = state["checked"]["80523"], state["checked"]["140421891"]
+        self.assertEqual((gta["verdict"], gta["fixed_kind"]), ("OK", "repaired"))
+        self.assertIn("édition", gta["fixed_how"])
+        self.assertEqual((toro["verdict"], toro["fixed_how"], toro["page"]), ("OK", pc.REMOVED_HOW, self.TORO))
+        self.assertEqual(state["checked"]["1"]["verdict"], "SUSPECT", "a followed page is the passes' job")
+        self.assertNotIn("fixed_at", state["checked"]["2"])
+        self.assertEqual((outcome["pages"], outcome["offers"], len(outcome["fixed"]), len(outcome["removed"])), (2, 2, 1, 1))
+        self.assertEqual(sent, [], "a repaired offer sent something")
+        self.assertNotIn("https://www.allkeyshop.com/blog/buy-suivi-cd-key-compare-prices/", fetched)
+
+
 class TestSecurityAudit20261002(unittest.TestCase):
     """Audit sécurité du 02/10/2026 : le moniteur tourne en root."""
 

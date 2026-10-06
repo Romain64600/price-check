@@ -2387,7 +2387,7 @@ def offer_facts(url, region, region_filter, platform, edition):
 
 
 def recheck_flagged(label, rank, product, page_url, trans, state, notify, checker, stamp, now, outcome, skip=(), mode=None,
-                    sends=None):
+                    sends=None, reroute=True):
     """Romain, 02/10/2026 : « il faut qu'il contrôle les offres déjà vues, comme ça on saura si elles sont réparées ou
     pas ». Les offres signalées de la page qui ne sont plus parmi les offres retenues (`skip` : déjà recontrôlées) :
     disparues de la page = retirées ; encore là (plus bas dans l'édition) = recontrôlées."""
@@ -2428,7 +2428,72 @@ def recheck_flagged(label, rank, product, page_url, trans, state, notify, checke
         apply_recheck(entry, label, rank, product, page_url, offer, res, notify, stamp, now, outcome)
         if sends and sends[0] > before:
             entry["sent_to"] = channel_of(entry, offer, mode)
-        reroute_existing(entry, label, rank, product, page_url, offer, notify, mode)
+        if reroute:  # une page sortie des listes (recheck_orphans) : jamais de « report existant » renvoyé
+            reroute_existing(entry, label, rank, product, page_url, offer, notify, mode)
+
+
+ORPHAN_EVERY = 3600  # s : les pages sorties des listes, relues pour leurs offres signalées
+ORPHAN_LIMIT = 30    # pages au plus par tour
+
+
+def page_guesses(product):
+    """Les URL possibles de la page AllKeyShop d'un produit, pour une offre signalée enregistrée sans sa page (avant le
+    01/10/2026 : TORO 2, EA SPORTS FC 26)."""
+    slug = norm(product or "")
+    return ["https://www.allkeyshop.com/blog/buy-%s-cd-key-compare-prices/" % slug,
+            "https://www.allkeyshop.com/blog/buy-%s-compare-prices/" % slug] if slug else []
+
+
+def recheck_orphans(state, followed, notify, checker=None, now=None):
+    """Romain, 06/10/2026 : « les bugs qui ont été traités et réparés par Rémy sont re-reportés ». Une offre signalée dont
+    la page n'est plus dans les listes suivies (GTA 4, Warhammer 40k Space Marine 2 : sortis du TOP 50) n'était plus jamais
+    recontrôlée : réparée par l'équipe (rangée dans la bonne édition, retirée de la page), elle restait SUSPECT, « à
+    corriger » dans l'admin et dans le rappel du matin. Sa page est relue directement et recheck_flagged y fait le même
+    travail que sur une page suivie : retirée = réparée, encore là = recontrôlée. Une entrée sans sa page la retrouve par le
+    nom du produit (page_guesses), si le titre de la page le confirme. Renvoie le bilan."""
+    checker = checker or check_offer
+    now = time.time() if now is None else now
+    stamp = time.strftime("%Y-%m-%d %H:%M", time.localtime(now))
+    outcome = {"checked": 0, "fixed": [], "removed": [], "rules": [], "verified": [], "still": [], "new": [], "unknown": [],
+               "pages": 0, "offers": 0}
+    orphans = {}
+    for key, e in state["checked"].items():
+        if (e.get("verdict") in REPORTED and not e.get("fixed_at") and (e.get("decision") or {}).get("decision") != "faux"
+                and e.get("page") not in followed):
+            orphans.setdefault(e.get("page") or "", []).append(e)
+    for page_url, entries in list(orphans.items())[:ORPHAN_LIMIT]:
+        check_stop()
+        product = entries[0].get("product")
+        found = None
+        for url in [page_url] if page_url else page_guesses(product):
+            try:
+                status, _, page_html = http_get(url, AKS_UA)
+            except OSError as e:
+                log.warning("page sortie des listes %s : %s", url, e)
+                continue
+            finally:
+                time.sleep(PAGE_DELAY)
+            if status != 200 or (not page_url and norm(product or "") not in norm(page_title_from_html(page_html) or "")):
+                continue  # une page devinée doit être celle du produit
+            found = (url, page_html)
+            break
+        if not found:
+            outcome["unknown"] += [(e, "page AllKeyShop introuvable") for e in entries]
+            continue
+        url, page_html = found
+        try:
+            trans = parse_game_page(page_html)
+        except Exception as e:
+            outcome["unknown"] += [(entry, "page illisible : %s" % e) for entry in entries]
+            continue
+        for e in entries:
+            e["page"] = url
+        outcome["pages"] += 1
+        outcome["offers"] += len(entries)
+        first = entries[0]
+        recheck_flagged(first.get("list") or "", first.get("rank") or 0, product, url, trans, state, notify, checker, stamp, now,
+                        outcome, reroute=False)
+    return outcome
 
 
 def format_recheck(label, by, outcome, full=False):
@@ -3242,6 +3307,37 @@ def main():
                       last_alerts=alerts[0], progress=None, requested_by=None)
             publish_status()
 
+    orphans_due = [time.monotonic() + 120]
+
+    def orphans():
+        """Les offres signalées dont la page n'est plus suivie, recontrôlées sur leur page toutes les heures (06/10/2026)."""
+        if args.dry_run or time.monotonic() < orphans_due[0] or not all(targets[m] for m in modes):
+            return  # listes pas encore toutes lues : on ne sait pas quelles pages en sont sorties
+        orphans_due[0] = time.monotonic() + ORPHAN_EVERY
+        mode = "homepage" if "homepage" in modes else modes[0]
+        loop = new_loop(mode)
+        to_urgent = None if urgent_notifier is None else (lambda m: announce(loop, "urgent", urgent_notifier, m))
+
+        def notify(msg, _send=notifiers[mode]):
+            route_alert(msg, mode, lambda m: announce(loop, mode, _send, m), to_urgent)
+        try:
+            outcome = recheck_orphans(state, {t[3] for m in modes for t in targets[m]}, notify)
+        except Stop:
+            raise
+        except Exception:
+            log.exception("recontrôle des pages sorties des listes en échec")
+            return
+        if not outcome["offers"] and not outcome["unknown"]:
+            return
+        log.info("pages sorties des listes : %d page(s), %d offre(s) signalée(s) recontrôlée(s), %d réparée(s), %d retirée(s), "
+                 "%d toujours en erreur, %d sans conclusion", outcome["pages"], outcome["offers"], len(outcome["fixed"]),
+                 len(outcome["removed"]), len(outcome["still"]), len(outcome["unknown"]))
+        if REPORTS_DIR:
+            post_follow_ups(state, outcome, read_threads(REPORTS_DIR), send_to_thread)
+            pages = {t[2]: (t[0], t[1], t[3]) for m in modes for t in targets[m]}
+            export_reports(state, REPORTS_DIR, pages, page_modes_of({m: targets[m] for m in modes}))
+        save_state(args.state, state)
+
     def run_urgent():
         """Entre deux pages d'un long passage : les demandes de l'admin, les alertes en file, puis les modes urgents
         (top games) dont l'heure est venue."""
@@ -3249,6 +3345,7 @@ def main():
         honor_requests()
         flush_alerts(every=60)
         daily_reminder()
+        orphans()
         for m in modes:
             if MODES[m].get("urgent") and time.monotonic() >= due[m]:
                 run_mode(m)
@@ -3264,6 +3361,7 @@ def main():
             check_stop()
             flush_alerts()
             daily_reminder()
+            orphans()
             honor_requests()
             for mode in modes:
                 if time.monotonic() >= due[mode]:
