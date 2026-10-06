@@ -73,6 +73,7 @@ The verdicts:
 
 - **SUSPECT**: a problem was found, the alert goes out.
 - **À VÉRIFIER** (to check): no conclusion possible (merchant page unreadable), on the first price of a top or coming-soon page. A person checks.
+- **À VÉRIFIER, "en doute : région …"** (in doubt: region): at G2A, a ROW key shown EUROPE. G2A's "row" does not say which countries the key covers: read the activation countries on the G2A page; Europe is covered: Faux positif.
 - **À VÉRIFIER, "en doute : mots en plus après le nom"** (in doubt: extra words after the name): the offer's URL adds words after the game's name that the monitor does not know (Minecraft ← "minecraft-dungeons-2", Control ← "control-resonant"): another game, or just a subtitle? Whatever the offer's rank, a single alert per page and per words; the decision applies to every offer of the page with those words.
 - **NON VÉRIFIABLE** (not verifiable): the same case elsewhere. Noted in the admin, no alert.
 
@@ -161,7 +162,7 @@ These decisions set the precedent: the monitor has already been fixed for the fa
 | Case | Decision | Why |
 | --- | --- | --- |
 | Titanfall 2 Deluxe, Kinguin sells the first Titanfall | True positive | Another game of the series is never the game |
-| Monster Hunter Wilds Deluxe, G2A sells a ROW key shown EUROPE | True positive | ROW (rest of world) does not cover Europe |
+| Monster Hunter Wilds Deluxe, G2A sells a ROW key shown EUROPE | False positive | Rémy checked: the key activates in Europe, only the United States are excluded. At G2A, a ROW key shown EUROPE now goes out "to check": look at the activation countries on the G2A page |
 | GTA 4, Steam's Complete Edition filed under Standard | True positive | Wrong edition, even if the buyer gets more: the page has a Complete edition |
 | STAR WARS Zero Company Xbox, a Deluxe filed under "Standard + DLC" | True positive | The page has a Deluxe edition |
 | Stellaris Bundle 1, Kinguin redirects the link to another listing | Out of stock, to report | The link's listing is out of stock, the price stays in the feed |

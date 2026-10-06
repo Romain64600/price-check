@@ -73,6 +73,7 @@ Les verdicts :
 
 - **SUSPECT** : un problème est trouvé, l'alerte part.
 - **À VÉRIFIER** : impossible de conclure (page du marchand illisible), sur le premier prix d'une page des tops ou d'un coming soon. Un humain vérifie.
+- **À VÉRIFIER, « en doute : région … »** : chez G2A, une clé ROW affichée EUROPE. Le « row » de G2A ne dit pas quels pays la clé couvre : lire les pays d'activation sur la page G2A ; l'Europe est couverte : Faux positif.
 - **À VÉRIFIER, « en doute : mots en plus après le nom »** : l'URL de l'offre ajoute après le nom du jeu des mots que le moniteur ne connaît pas (Minecraft ← « minecraft-dungeons-2 », Control ← « control-resonant ») : un autre jeu, ou un simple sous-titre ? Quel que soit le rang de l'offre, une seule alerte par page et par mots ; la décision vaut pour toutes les offres de la page qui ont ces mots.
 - **NON VÉRIFIABLE** : le même cas ailleurs. Noté dans l'admin, sans alerte.
 
@@ -161,7 +162,7 @@ Ces décisions font jurisprudence : le moniteur a déjà été corrigé pour les
 | Cas | Décision | Pourquoi |
 | --- | --- | --- |
 | Titanfall 2 Deluxe, Kinguin vend le premier Titanfall | Vrai positif | Un autre jeu de la série n'est jamais le jeu |
-| Monster Hunter Wilds Deluxe, G2A vend une clé ROW affichée EUROPE | Vrai positif | ROW (reste du monde) ne couvre pas l'Europe |
+| Monster Hunter Wilds Deluxe, G2A vend une clé ROW affichée EUROPE | Faux positif | Rémy a vérifié : la clé s'active en Europe, seuls les États-Unis sont exclus. Chez G2A, une clé ROW affichée EUROPE part désormais « à vérifier » : regarder les pays d'activation sur la page G2A |
 | GTA 4, la Complete Edition de Steam rangée en Standard | Vrai positif | Mauvaise édition, même si l'acheteur reçoit plus : la page a une édition Complete |
 | STAR WARS Zero Company Xbox, une Deluxe rangée en « Standard + DLC » | Vrai positif | La page a une édition Deluxe |
 | Stellaris Bundle 1, Kinguin redirige le lien vers une autre fiche | Rupture à signaler | La fiche du lien est en rupture, le prix reste dans le feed |

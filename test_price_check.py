@@ -2680,6 +2680,53 @@ class TestReview20261005(unittest.TestCase):
                                 "### ↪️ Suite de la boucle · Price check homepage, commencée le 06/10/2026 08:40", "🚨 alerte 2"])
 
 
+class TestReview20261006(unittest.TestCase):
+    """Romain, 06/10/2026 : Monster Hunter Wilds chez G2A (offre 136209040), clé « ROW » affichée EUROPE. Rémy : « l'offre
+    n'est pas activable aux États-Unis, mais fonctionne en Europe » ; faux positif. La page G2A est illisible depuis le
+    serveur : une clé ROW de G2A affichée EUROPE part en À VÉRIFIER (« en doute »), pas en SUSPECT."""
+
+    G2A = "https://www.g2a.com/en/monster-hunter-wilds-deluxe-edition-pc-steam-key-row-i10000507334026"
+
+    def doubt(self, url, region, filter_name, merchant="G2A", product="Monster Hunter Wilds"):
+        o = offer(merchantName=merchant, edition="Deluxe", region=region, region_filter=filter_name)
+        result = pc.analyze(product, o, pc.url_text(url), "URL")
+        return result, pc.unsure_zone(result, o, pc.merchant_config(url, merchant))
+
+    def test_a_g2a_row_key_shown_europe_is_a_doubt(self):
+        result, doubt = self.doubt(self.G2A, "EUROPE", "STEAM EU")
+        self.assertEqual(result["reasons"], ["région : AllKeyShop EUROPE, marchand ROW"])
+        self.assertEqual(doubt, ["en doute : région : AllKeyShop EUROPE, marchand ROW ; chez G2A, une clé ROW peut s'activer en "
+                                 "EUROPE : vérifier les pays d'activation sur la page du marchand"])
+
+    def test_the_doubt_stays_narrow(self):
+        # une clé ROW de G2A affichée GLOBAL reste une erreur : sans les États-Unis, ce n'est pas GLOBAL
+        self.assertIsNone(self.doubt(self.G2A, "GLOBAL", "STEAM GLOBAL")[1])
+        # chez HRK, une clé ROW affichée EUROPE reste une erreur (EA SPORTS FC 27 Xbox, Rémy et Romain, 05/10/2026)
+        hrk = "https://www.hrkgame.com/en/games/product/ea-sports-fc-27-xbox-one-xbox-series-x-row"
+        self.assertIsNone(self.doubt(hrk, "EUROPE", "XBOX X|S EUROPE", merchant="HRK", product="EA SPORTS FC 27")[1])
+        # un autre problème que la région : l'alerte reste une erreur
+        other = "https://www.g2a.com/en/monster-hunter-rise-deluxe-edition-pc-steam-key-row-i10000507334027"
+        result, doubt = self.doubt(other, "EUROPE", "STEAM EU")
+        self.assertIn("name", result["kinds"])
+        self.assertIsNone(doubt)
+
+    def test_check_offer_sends_it_as_a_doubt_whatever_its_rank(self):
+        title = "<title>Buy Monster Hunter Wilds | Deluxe Edition (PC) - Steam Key - ROW - Cheap - G2A.COM!</title>"
+        interstitial = TestConfirmOnMerchantPage.INTERSTITIAL.replace(TestRedirection.KINGUIN, self.G2A).replace(
+            TestRedirection.KINGUIN.replace("/", "\\/"), self.G2A.replace("/", "\\/"))
+        calls = []
+        def fake_get(url, ua, follow=True, timeout=30):
+            calls.append(url)
+            return (200, None, interstitial if len(calls) == 1 else title)
+        with mock.patch.object(pc, "http_get", side_effect=fake_get), mock.patch.object(pc, "page_title", return_value=None), \
+             mock.patch.object(pc, "chromium_dom", return_value=None), mock.patch.object(pc, "REQUEST_DELAY", 0):
+            res = pc.check_offer("Monster Hunter Wilds", offer(merchantName="G2A", edition="Deluxe", region="EUROPE",
+                                                               region_filter="STEAM EU"))
+        self.assertEqual((res["verdict"], res["unverifiable"]), ("À VÉRIFIER", "report"), res)
+        self.assertTrue(res["reasons"][0].startswith("en doute : région : AllKeyShop EUROPE, marchand ROW ; chez G2A"), res["reasons"])
+        self.assertEqual(pc.unverifiable_verdict(offer(edition_rank=9), "TOP 50", "https://x", res["unverifiable"]), "À VÉRIFIER")
+
+
 class TestSecurityAudit20261002(unittest.TestCase):
     """Audit sécurité du 02/10/2026 : le moniteur tourne en root."""
 

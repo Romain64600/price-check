@@ -1,0 +1,13 @@
+# G2A (g2a.com) — Monster Hunter Wilds Deluxe, clé « ROW » affichée EUROPE (`STEAM EU`, offre 136209040) : jugée vraie
+# erreur le 01/10/2026 (« ROW ne couvre pas l'Europe ») ; Rémy, « à discuter » le 06/10/2026 : « l'offre n'est pas
+# activable aux États-Unis, mais fonctionne en Europe, dans ce cas-là le « row » sera en région « EU » » ; faux positif
+# pour Romain le 06/10/2026. Chez G2A, le mot « row » de l'URL ne dit pas quels pays la clé couvre (ici : partout sauf
+# les États-Unis), et la page G2A est illisible depuis le serveur (« Access Denied »). Romain, 06/10/2026 : une clé ROW
+# de G2A affichée EUROPE part en À VÉRIFIER (« en doute »), pas en SUSPECT : l'équipe lit les pays d'activation sur la
+# page G2A. Une clé ROW affichée GLOBAL reste une erreur.
+name = "G2A"
+hosts = ["g2a.com"]
+
+[region.unsure]
+# zone du marchand = zones AllKeyShop pour lesquelles la contradiction n'est qu'un doute
+ROW = ["EU"]

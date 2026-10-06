@@ -551,6 +551,25 @@ def out_of_stock_reason(served):
     return STOCK_REASON_START + " : le lien redirige vers une autre fiche (%s), mais le prix reste dans le feed" % served
 
 
+def unsure_zone(result, offer, cfg):
+    """Romain, 06/10/2026 (Monster Hunter Wilds chez G2A, offre 136209040 : clé « ROW » affichée EUROPE, jugée vraie
+    erreur le 01/10 ; Rémy : « l'offre n'est pas activable aux États-Unis, mais fonctionne en Europe ») : chez certains
+    marchands, le mot de région de l'URL ne dit pas quels pays la clé couvre, et leur page est illisible depuis le
+    serveur. `[region.unsure]` de leur config : zone du marchand -> zones AllKeyShop pour lesquelles la contradiction
+    n'est qu'un doute. Quand elle est le seul problème de l'offre, l'offre part en À VÉRIFIER (« en doute »), quel que
+    soit son rang : l'équipe lit les pays d'activation sur la page. Renvoie les raisons du doute, ou None."""
+    unsure = (cfg.get("region") or {}).get("unsure") or {}
+    found = result.get("zones") or []
+    if (not unsure or not found or set(result["kinds"]) != {"zone"}
+            or not all(r.startswith("région : AllKeyShop ") for r in result["reasons"])):
+        return None
+    zone = aks_zone(offer)
+    if not all(zone in unsure.get(z, ()) for z in found):
+        return None
+    return ["en doute : %s ; chez %s, une clé %s peut s'activer en %s : vérifier les pays d'activation sur la page du marchand"
+            % (r, cfg.get("name", "ce marchand"), "/".join(found), offer["region"]) for r in result["reasons"]]
+
+
 def redirect_untrusted(cfg):
     """Groupe Kinguin (Romain, 02/10/2026) : chez ce marchand, une redirection mène à UNE AUTRE OFFRE, parce que la
     fiche du lien est en rupture. Elle ne dit rien de l'offre AllKeyShop : on ne s'y fie ni pour l'accuser, ni pour la
@@ -1728,6 +1747,9 @@ def check_offer(product, offer):
                 served = urllib.parse.urljoin(url, canonical)
                 flag_out_of_stock(result, product, offer, served, url, cfg)
 
+    doubt = unsure_zone(result, offer, cfg)
+    if doubt:  # G2A : une clé ROW affichée EUROPE est un doute, pas une erreur avérée (Romain, 06/10/2026)
+        return done("À VÉRIFIER", method, doubt, result["notes"], unverifiable="report")
     return done("SUSPECT" if result["reasons"] else "OK", method, result["reasons"], result["notes"])
 
 
