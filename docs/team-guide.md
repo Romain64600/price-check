@@ -120,12 +120,33 @@ Not an error:
 The admin shows every report in one place, with the same decisions as the Discord threads: <https://169.58.5.63.sslip.io/executor/price-check> (admin login).
 
 - **One card per report**: the verdict, "✔ Traité par <operator>" (handled by; or "À traiter", to handle, or "💬 À discuter", to discuss), the TOP or HOMEPAGE badge (where the problem comes from) and PREMIER PRIX (first price: one of the edition's 3 cheapest offers), the game, edition, rank, merchant, price, reason, and three links: AllKeyShop page, merchant offer, Discord thread.
-- **Two tabs**: **"En cours"** (in progress), what is left to do, and **"Archives"**, the reports decided Vrai positif or Faux positif and those the monitor found repaired (or cleared by a rule, or verified OK). Put "À discuter", an archived report comes back in progress, at the top. A link to a report (morning reminder, Discord) opens the tab it is in.
+- **Two tabs**: **"En cours"** (in progress), what is left to do (to handle, to discuss, to fix), and **"Archives"**, the settled reports: repaired, false positives cleared by a rule, verified OK, false positives judged. A **true positive** whose offer has not changed yet stays in progress, marked "🔧 À corriger" (to fix): the error is confirmed, it still has to be fixed on AllKeyShop; it moves to the archives when the re-check finds it repaired. Put "À discuter", an archived report comes back in progress, at the top. A link to a report (morning reminder, Discord) opens the tab it is in.
 - **Three parts in "En cours"** (the archives keep the tops and the homepage): first, **"💬 À discuter"** (to discuss, orange title): the reports put to discussion, with the comment of whoever put them there, until the final decision (Vrai positif or Faux positif, which archives it). On these cards, the buttons say what they mean: "Vrai positif : l'erreur est réelle" (the error is real), "Faux positif : l'offre est correcte" (the offer is correct). It always shows: a report to discuss hidden by the filters is counted there ("1 masqué par les filtres", 1 hidden by the filters). Then the tops' reports (title "Price check top", blue TOP band and badge): a report found on a top page stays there until it is decided when the page leaves the tops, marked "sortie des tops le …" (left the tops on …). Then the homepage's; an empty part says so ("Aucun report à discuter", "Aucun report sur les tops"). The "Mode" filter keeps only the tops or the homepage.
 - **Deciding**: each card reads in two steps, ① Pourquoi ? (why: the note, only if needed) on the left and ② Ta décision (your decision: Vrai positif, Faux positif, À discuter) on the right. You agree with the error described on the report: click Vrai positif, no note, there is nothing to comment. Otherwise, write the note then click your decision: both leave together; a note changed afterwards is saved with "Mettre à jour la note" (or Enter), and a note not saved yet is flagged in orange. A "Comment trancher un report" box at the top of the list says so. A report just decided stays in place a few seconds, outlined in green ("✔ Décision enregistrée"), then moves to the archives or to its new part, or fades out if it no longer matches the filters (the banner says where it goes): the next card does not slide under the cursor. Same effect as a reply in the thread; a decision taken on Discord shows signed "(Discord)".
 - **Filters**: verdict (including Réparées = repaired, Faux positifs levés par une règle = false positives cleared by a rule, Vérifiées OK = verified OK), mode (Price check top or homepage), decision, "Traité par" (one operator, or nobody: to handle), free search, "encore en tête seulement" (still leading only), "premiers prix seulement" (first prices only).
-- **Counters**: undecided, to discuss (outlined in orange while there are some), tops to decide, homepage to decide, first prices in error, repaired; and the number of reports handled by each operator.
+- **Counters**: at the top of the list, then the number of reports handled by each operator; the details are just below.
 - **Running a pass**: the buttons "Lancer le price check top" and "Lancer le price check homepage" re-check every offer of their pages right away. Allow a few minutes for the tops, about 2 h 30 for the homepage.
+
+### The counters
+
+Each report has **a single state**, and the counters add up: nothing is counted twice. The first four and the next two say what is left to do ("En cours" tab); the last four, what is settled ("Archives" tab).
+
+| Counter | What it counts |
+| --- | --- |
+| à traiter (to handle) | Reports with no decision, not repaired: to decide (Vrai positif, Faux positif or À discuter) |
+| à discuter (to discuss) | Reports put "À discuter", waiting for the final decision; outlined in orange while there are some |
+| à corriger (to fix) | True positives whose offer has not changed yet: the error is confirmed, it has to be fixed on AllKeyShop |
+| premiers prix en erreur (first prices in error) | Among the reports in progress (to handle, to discuss, to fix), the SUSPECT ones on one of their edition's 3 first prices: what visitors see, the priority. Same definition as the morning reminder |
+| tops à trancher, homepage à trancher (tops / homepage to decide) | The reports "to handle", split between the tops and the homepage |
+| réparées (repaired) | The offer changed (URL, region, platform, edition) or left its page: the re-check found it OK |
+| faux positifs levés (false positives cleared) | Nothing changed in the offer, but a rule added since clears it: the alert was a false positive |
+| vérifiées OK (verified OK) | The offer could not be verified (unreadable page), a re-check verified it OK |
+| faux positifs jugés (false positives judged) | Reports decided "Faux positif": the offer is correct, it is no longer re-checked |
+| reports | The total: in progress + archives |
+
+In progress = to handle + to discuss + to fix; archives = repaired + false positives cleared + verified OK + false positives judged. On 06/10/2026, for example: 69 reports = 7 in progress (0 to handle, 0 to discuss, 7 to fix, including 4 first prices in error: The Witcher 3 at Instant Gaming, Warhammer 40k Space Marine 2 and GTA 4 at Steam, The Blood of Dawnwalker at Eneba) + 62 archived (27 repaired, 8 false positives cleared, 6 verified OK, 21 false positives judged).
+
+The monitor's verdict (SUSPECT, À VÉRIFIER, NON VÉRIFIABLE) is shown on each card and can be filtered ("Verdict"); it no longer has its own counter, because it mixed the states: a SUSPECT judged a false positive was still counted as SUSPECT.
 
 ## What the monitor does on its own
 

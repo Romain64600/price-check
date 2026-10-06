@@ -163,6 +163,10 @@ def render(md, lang):
             toc.append((anchor, text))
             out.append('<h2 id="%s">%s</h2>' % (anchor, inline(text)))
             i += 1
+        elif line.startswith("### "):  # un sous-titre (« Les compteurs », 06/10/2026), hors table des matières
+            text = line[4:].strip()
+            out.append('<h3 id="%s-%s">%s</h3>' % (lang, slug(text), inline(text)))
+            i += 1
         elif line.startswith("|"):
             rows = []
             while i < len(lines) and lines[i].startswith("|"):
@@ -178,6 +182,9 @@ def render(md, lang):
         else:
             para = []
             while i < len(lines) and lines[i].strip() and not re.match(r"^(```|#|\|)", lines[i]) and not LIST_RE.match(lines[i]):
+                para.append(lines[i].strip())
+                i += 1
+            if not para:  # une ligne qu'aucune règle ne lit (« #### … ») : en paragraphe, jamais de boucle sans fin
                 para.append(lines[i].strip())
                 i += 1
             text = " ".join(para)

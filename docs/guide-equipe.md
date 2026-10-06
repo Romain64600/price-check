@@ -120,12 +120,33 @@ Ce qui n'est pas une erreur :
 L'admin montre tous les reports au même endroit, avec les mêmes décisions que les fils Discord : <https://169.58.5.63.sslip.io/executor/price-check> (identifiant de l'admin).
 
 - **Une carte par report** : le verdict, « ✔ Traité par <opérateur> » (ou « À traiter », ou « 💬 À discuter »), les pastilles TOP ou HOMEPAGE (d'où vient le problème) et PREMIER PRIX (l'une des 3 offres les moins chères de l'édition), le jeu, l'édition, le rang, le marchand, le prix, la raison, et trois liens : page AllKeyShop, offre chez le marchand, fil Discord.
-- **Deux onglets** : **« En cours »**, ce qui reste à faire, et **« Archives »**, les reports tranchés Vrai positif ou Faux positif et ceux que le moniteur a trouvés réparés (ou levés par une règle, ou vérifiés OK). Mis « À discuter », un report archivé revient en cours, en tête. Un lien vers un report (rappel du matin, Discord) ouvre l'onglet où il se trouve.
+- **Deux onglets** : **« En cours »**, ce qui reste à faire (à traiter, à discuter, à corriger), et **« Archives »**, les reports réglés : réparés, faux positifs levés par une règle, vérifiés OK, faux positifs jugés. Un **vrai positif** dont l'offre n'a pas encore changé reste en cours, marqué « 🔧 À corriger » : l'erreur est confirmée, il reste à la faire corriger sur AllKeyShop ; il passe dans les archives quand le recontrôle la voit réparée. Mis « À discuter », un report archivé revient en cours, en tête. Un lien vers un report (rappel du matin, Discord) ouvre l'onglet où il se trouve.
 - **Trois parties dans « En cours »** (les archives gardent les tops et la homepage) : en tête, **« 💬 À discuter »** (titre orange) : les reports mis à discuter, avec le commentaire de celui qui les y a mis, jusqu'à la décision finale (Vrai positif ou Faux positif, qui l'archive). Sur ces cartes, le sens des boutons est écrit en clair : « Vrai positif : l'erreur est réelle », « Faux positif : l'offre est correcte ». Elle s'affiche toujours : un report à discuter que les filtres cachent y est compté (« 1 masqué par les filtres »). Puis les reports des tops (titre « Price check top », bande et badge TOP en bleu) : un report trouvé sur une page des tops y reste jusqu'à sa décision quand la page sort des tops, marqué « sortie des tops le … ». Puis ceux de la homepage ; une partie vide le dit (« Aucun report à discuter », « Aucun report sur les tops »). Le filtre « Mode » ne garde que les tops ou la homepage.
 - **Trancher** : chaque carte se lit en deux étapes, ① Pourquoi ? (la note, seulement si besoin) à gauche et ② Ta décision (Vrai positif, Faux positif, À discuter) à droite. D'accord avec l'erreur décrite sur le report : clique Vrai positif, sans note, il n'y a rien à commenter. Sinon, écris la note puis clique ta décision : les deux partent ensemble ; une note modifiée après coup s'enregistre avec « Mettre à jour la note » (ou Entrée), et une note pas encore enregistrée est signalée en orange. Un encadré « Comment trancher un report » le rappelle en haut de la liste. Un report tranché reste quelques secondes à sa place, bordé de vert (« ✔ Décision enregistrée »), puis passe dans les archives ou dans sa nouvelle partie, ou s'efface s'il ne correspond plus aux filtres (le bandeau dit où il va) : la carte suivante ne glisse pas sous le curseur. Même effet qu'une réponse dans le fil ; une décision prise sur Discord s'affiche signée « (Discord) ».
 - **Filtres** : verdict (dont Réparées, Faux positifs levés par une règle, Vérifiées OK), mode (Price check top ou homepage), décision, « Traité par » (un opérateur, ou personne : à traiter), recherche libre, « encore en tête seulement », « premiers prix seulement ».
-- **Compteurs** : sans décision, à discuter (encadré orange tant qu'il en reste), tops à trancher, homepage à trancher, premiers prix en erreur, réparées ; et le nombre de reports traités par chaque opérateur.
+- **Compteurs** : en haut de la liste, puis le nombre de reports traités par chaque opérateur ; le détail est juste dessous.
 - **Lancer un passage** : les boutons « Lancer le price check top » et « Lancer le price check homepage » recontrôlent tout de suite toutes les offres de leurs pages. Compter quelques minutes pour les tops, environ 2 h 30 pour la homepage.
+
+### Les compteurs
+
+Chaque report a **un seul état**, et les compteurs en sont la somme : rien n'est compté deux fois. Les quatre premiers et les deux suivants disent ce qui reste à faire (onglet « En cours ») ; les quatre derniers, ce qui est réglé (onglet « Archives »).
+
+| Compteur | Ce qu'il compte |
+| --- | --- |
+| à traiter | Reports sans décision, pas réparés : à trancher (Vrai positif, Faux positif ou À discuter) |
+| à discuter | Reports mis « À discuter », en attente de la décision finale ; encadré orange tant qu'il en reste |
+| à corriger | Vrais positifs dont l'offre n'a pas encore changé : l'erreur est confirmée, il faut la faire corriger sur AllKeyShop |
+| premiers prix en erreur | Parmi les reports en cours (à traiter, à discuter, à corriger), les SUSPECT sur l'un des 3 premiers prix de leur édition : ce que voient les visiteurs, la priorité. Même définition que le rappel du matin |
+| tops à trancher, homepage à trancher | Les reports « à traiter », partagés entre les tops et la homepage |
+| réparées | L'offre a changé (URL, région, plateforme, édition) ou a quitté sa page : le recontrôle l'a trouvée OK |
+| faux positifs levés | Rien n'a changé dans l'offre, mais une règle ajoutée depuis la blanchit : l'alerte était un faux positif |
+| vérifiées OK | L'offre n'avait pas pu être vérifiée (page illisible), un recontrôle l'a vérifiée OK |
+| faux positifs jugés | Reports tranchés « Faux positif » : l'offre est correcte, elle n'est plus recontrôlée |
+| reports | Le total : en cours + archives |
+
+En cours = à traiter + à discuter + à corriger ; archives = réparées + faux positifs levés + vérifiées OK + faux positifs jugés. Le 06/10/2026, par exemple : 69 reports = 7 en cours (0 à traiter, 0 à discuter, 7 à corriger, dont 4 premiers prix en erreur : The Witcher 3 chez Instant Gaming, Warhammer 40k Space Marine 2 et GTA 4 chez Steam, The Blood of Dawnwalker chez Eneba) + 62 en archives (27 réparées, 8 faux positifs levés, 6 vérifiées OK, 21 faux positifs jugés).
+
+Le verdict du moniteur (SUSPECT, À VÉRIFIER, NON VÉRIFIABLE) se lit sur chaque carte et se filtre (« Verdict ») ; il n'a plus son compteur, car il mélangeait les états : un SUSPECT jugé faux positif restait compté comme SUSPECT.
 
 ## Ce que le moniteur fait tout seul
 

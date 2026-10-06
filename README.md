@@ -98,6 +98,8 @@ Depuis le 02/10/2026, les reports se tranchent dans l'admin de l'executor, ongle
 - En automatique, les offres **signalées** sont recontrôlées une fois par heure ; le récapitulatif ne part que si quelque chose a changé.
 - Un **Faux positif** ou un **À discuter** avec sa note devient ensuite une règle, une config marchand ou un alias, avec son test, et une ligne dans le [registre des précédents](docs/precedents.md). Un **Vrai positif** confirme l'alerte.
 
+**Les compteurs de la page** (06/10/2026, Romain : « les stats semblent fausses ») : chaque report a un seul état, et les compteurs en sont la somme. **En cours** = à traiter (sans décision) + à discuter + à corriger (vrai positif dont l'offre n'a pas encore changé) ; **archives** = réparées + faux positifs levés par une règle + vérifiées OK + faux positifs jugés. « Premiers prix en erreur » compte les SUSPECT en cours sur l'un des 3 premiers prix de leur édition, tranchés vrai compris (même définition que le rappel du matin). Le 06/10 : 69 reports = 7 en cours (7 à corriger, dont 4 premiers prix en erreur) + 62 en archives (27 réparées, 8 faux positifs levés, 6 vérifiées OK, 21 faux positifs jugés). Détail pour l'équipe : [guide](docs/guide-equipe.md#les-compteurs) ; définitions exactes : [docs/exploitation.md](docs/exploitation.md#les-compteurs-de-ladmin).
+
 Format des fichiers : [docs/exploitation.md](docs/exploitation.md#reports-pour-ladmin).
 
 ## Couverture des marchands
