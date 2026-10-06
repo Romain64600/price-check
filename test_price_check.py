@@ -3082,6 +3082,29 @@ class TestCompetitors20261006(unittest.TestCase):
         self.assertEqual(state["competitors"][targets[0][3]]["dlcompare"]["url"], "https://dl/x", "the page found is not kept")
         self.assertEqual(payload["every"], 1800)
 
+    def test_a_console_page_is_not_compared_with_the_pc_price(self):
+        # 06/10/2026 : « EA SPORTS FC 27 PS5 » tombait sur « acheter-ea-sports-fc-27-pc-cd-key » (gocdkeys, 23,93 €, le prix
+        # de la page PC) et sur la fiche toutes plateformes de dlcompare : un prix PS5 face à un prix PC
+        targets = [("Popular", 3, "EA SPORTS FC 27 PS5", "https://www.allkeyshop.com/blog/buy-ea-sports-fc-27-ps5-key-compare-prices/"),
+                   ("Popular", 4, "EA SPORTS FC 27", "https://www.allkeyshop.com/blog/buy-ea-sports-fc-27-key-compare-prices/")]
+        trans = {"editions": {"1": {"name": "Standard"}}, "prices": [
+            {"id": 3, "price": 36.71, "dispo": 1, "edition": "1", "merchantName": "BuyGames", "account": True}]}
+        asked = []
+        def find(site, product, cached=None):
+            asked.append(product)
+            return {"url": "https://go/fc27-pc", "name": "EA Sports FC 27", "price": 23.93, "seller": "Gamivo"}
+        with mock.patch.object(pc, "http_get", return_value=(200, None, "<html>")), mock.patch.object(pc, "parse_game_page", return_value=trans), \
+             mock.patch.object(pc, "find_competitor", side_effect=find), mock.patch.object(pc, "PAGE_DELAY", 0):
+            payload = pc.check_competitors(targets, {"checked": {}}, now=1791300000)
+        for site in payload["sites"]:
+            if site["status"] != "ok":
+                continue
+            ps5, pc_page = site["rows"]
+            self.assertEqual((ps5["skipped"], ps5["competitor"], ps5["cheaper"]), ("console", None, None), site["id"])
+            self.assertEqual(ps5["aks"]["price"], 36.71, "AllKeyShop's first price is still shown")
+            self.assertEqual(pc_page["competitor"]["price"], 23.93)
+        self.assertNotIn("EA SPORTS FC 27 PS5", asked, "a console page was looked up at a competitor")
+
 
 class TestSecurityAudit20261002(unittest.TestCase):
     """Audit sécurité du 02/10/2026 : le moniteur tourne en root."""

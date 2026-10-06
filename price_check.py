@@ -3297,6 +3297,11 @@ def check_competitors(targets, state, now=None):
         out = []
         for row in rows:
             check_stop()
+            if page_console(row["product"]):
+                # 06/10/2026, EA SPORTS FC 27 PS5 : sans son suffixe, le nom tombait sur la fiche PC (gocdkeys ne vend que
+                # des clés PC, dlcompare n'affiche qu'un meilleur prix toutes plateformes) : un prix PS5 face à un prix PC
+                out.append(dict(row, competitor=None, cheaper=None, gap=None, skipped="console"))
+                continue
             cached = ((memo.get(row["page_url"]) or {}).get(site["id"]) or {}).get("url")
             found = find_competitor(site, row["product"], cached)
             memo.setdefault(row["page_url"], {})[site["id"]] = {"url": found["url"] if found else None,
