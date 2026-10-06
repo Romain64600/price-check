@@ -32,6 +32,7 @@ TABS = """    <nav class="tabs">
       <a href="sql" class="tab">Tri SQL</a>
       <a href="overview" class="tab">Vue d'ensemble</a>
       <a href="price-check" class="tab active" aria-current="page">Price check</a>
+      <a href="romain" class="tab">Romain</a>
     </nav>"""
 
 CYCLE = {  # le schéma du cycle d'un report, par langue : (titre, boîtes, libellés des flèches)
