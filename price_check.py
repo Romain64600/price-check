@@ -1201,9 +1201,15 @@ def page_edition_reason(offer, words, product=""):
     aks = offer.get("edition") or ""
     taken = set(norm(aks).split("-")) | name_words(name_variants(product)) if product else set(norm(aks).split("-"))
     tokens = {singular(t) for t in words.split("-") if t}
+    def named(edition):  # combien de mots de cette édition l'URL contient (mots d'édition connus compris)
+        return sum(1 for t in norm(edition).split("-")
+                   if t and not t.isdigit() and t not in GENERIC_EDITION_WORDS and singular(t) in tokens)
+    own_score = named(aks)
     found = []
     for other in offer.get("page_editions") or []:
-        if other == aks:
+        if other == aks or named(other) <= own_score:
+            # l'URL ne nomme pas mieux cette édition que celle de l'offre (GTA 5 : « premium online edition … great white
+            # shark card » rangée en « Premium + Great White Card », pas en « Enhanced + Great White Shark Card »)
             continue
         own = [t for t in norm(other).split("-") if t and len(t) >= 3 and not t.isdigit() and t not in GENERIC_EDITION_WORDS
                and t not in EDITION_WORDS and t not in taken and singular(t) not in {singular(x) for x in taken}]

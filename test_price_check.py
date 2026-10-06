@@ -2991,6 +2991,31 @@ class TestPriceGap20261006(unittest.TestCase):
                              "Age of Wonders 4 : the DLC at 44 % of the game")
 
 
+class TestPageEditions20261006(unittest.TestCase):
+    """Romain, 06/10/2026 : « erreur SUSPECT » quand l'URL nomme une autre édition de la page ; mais GTA 5 « Premium Online
+    Edition + Great White Shark Card » est bien rangée en « Premium + Great White Card », même si la page a aussi
+    « Enhanced + Great White Shark Card » (3 fausses urgences au passage complet du 06/10)."""
+
+    def reason(self, product, edition, url, editions):
+        return pc.page_edition_reason({"edition": edition, "page_editions": editions}, pc.norm(pc.url_text(url)), product)
+
+    def test_another_edition_named_by_the_url(self):
+        stellaris = ["Standard", "Deluxe", "Nova Edition", "Galaxy Edition", "Limited", "Explorer", "Bonus"]
+        self.assertEqual(self.reason("Stellaris", "Deluxe", "https://www.gamingdragons.com/en/game/buy-stellaris-nova-steam-key.html", stellaris),
+                         "édition : rangée en Deluxe, le marchand vend nova (la page a une édition Nova Edition)")
+        self.assertIsNotNone(self.reason("Stellaris", "Limited", "https://www.g2a.com/stellaris-galaxy-edition-steam-key-global-i1", stellaris))
+        self.assertIsNotNone(self.reason("F1 25", "Standard", "https://www.hrkgame.com/en/product/f1-25-iconic-edition-xbox-series-x-europe",
+                                         ["Standard", "Iconic Edition", "2026 Season Edition"]))
+        self.assertIsNone(self.reason("Stellaris", "Nova Edition", "https://x.com/stellaris-nova-edition-steam-key", stellaris))
+
+    def test_the_url_naming_its_own_edition_better_is_not_misfiled(self):
+        gta = ["Premium + Great White Card", "Enhanced + Great White Shark Card", "Standard + Great White Shark Card", "Premium"]
+        for url in ("https://www.g2a.com/grand-theft-auto-v-premium-online-edition-great-white-shark-card-bundle-rockstar-key-global-i1",
+                    "https://gameseal.com/grand-theft-auto-v-premium-online-edition-and-great-white-shark-card-bundle-pc-rockstar-games-launcher-key-global"):
+            with self.subTest(url=url):
+                self.assertIsNone(self.reason("GTA 5", "Premium + Great White Card", url, gta))
+
+
 class TestSecurityAudit20261002(unittest.TestCase):
     """Audit sécurité du 02/10/2026 : le moniteur tourne en root."""
 
