@@ -2802,9 +2802,14 @@ def report_mode(entry, page_url, page_modes):
     """Le mode d'un report (Romain, 03/10/2026 : « que le report des problèmes sur les tops soit identifié des problèmes
     home page ») : « top-games » si sa page est dans les tops en ce moment (5 premiers Popular, 4 premiers Coming soon
     PC), sinon « homepage » si elle est dans les listes de la home ; une page sortie des listes garde le mode qui l'a
-    contrôlée, ou, pour une entrée d'avant le 03/10, celui de sa liste (« Popular », « Coming soon PC » : les tops)."""
+    contrôlée, ou, pour une entrée d'avant le 03/10, celui de sa liste (« Popular », « Coming soon PC » : les tops).
+    Romain, 06/10/2026 (The Witcher 3, sortie du top 5 Popular à 12:03 avec deux premiers prix en erreur, qui
+    disparaissaient du filtre top) : un report trouvé sur une page des tops y reste tant qu'il n'est pas traité (sans
+    décision, ou à discuter), même quand sa page sort des tops."""
     current = page_modes.get(page_url) or []
     if "top-games" in current:
+        return "top-games", current
+    if (entry.get("in_tops") or entry.get("mode") == "top-games") and report_open(entry):
         return "top-games", current
     if current:
         return current[0], current
@@ -2812,6 +2817,11 @@ def report_mode(entry, page_url, page_modes):
         return entry["mode"], current
     label = entry.get("list") or ""
     return ("top-games" if label in TOP_GAMES_LABELS else "homepage" if label else None), current
+
+
+def report_open(entry):
+    """Un report pas encore traité : ni réparé, ni tranché vrai ou faux (un « à discuter » attend sa décision)."""
+    return not entry.get("fixed_at") and (entry.get("decision") or {}).get("decision") in (None, "", "a_discuter")
 
 
 def export_reports(state, directory, pages=None, page_modes=None):
@@ -2822,6 +2832,7 @@ def export_reports(state, directory, pages=None, page_modes=None):
     pages = pages or {}
     page_modes = page_modes or {}
     threads = read_threads(directory)
+    tops_known = any("top-games" in m for m in page_modes.values())  # les tops lus : sinon, rien ne « sort » des tops
     reports = []
     for key, e in state["checked"].items():
         if e.get("verdict") not in REPORTED and not e.get("decision") and not e.get("fixed_at"):
@@ -2830,7 +2841,13 @@ def export_reports(state, directory, pages=None, page_modes=None):
             continue  # marchand ignoré par sa config (Amazon depuis le 01/10/2026)
         label, rank, page = pages.get(e.get("product"), (None, None, None))
         mode, modes = report_mode(e, e.get("page") or page, page_modes)
+        if "top-games" in modes:  # vu dans les tops : le report y restera jusqu'à sa décision (06/10/2026)
+            e["in_tops"] = True
+            e.pop("left_tops_at", None)
+        elif mode == "top-games" and tops_known and not e.get("left_tops_at"):
+            e["left_tops_at"] = time.strftime("%Y-%m-%d %H:%M")
         reports.append({
+            "left_tops_at": e.get("left_tops_at") if mode == "top-games" and "top-games" not in modes else None,
             "mode": mode, "modes": modes, "mode_label": MODES[mode]["label"] if mode in MODES else None,
             "first_price": is_first_price(e),  # l'un des 3 prix de clé les moins chers de son édition (03/10/2026)
             "discord_thread": thread_url(threads.get(key)),  # le fil de feedback Discord de l'offre (03/10/2026)

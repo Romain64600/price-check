@@ -2726,6 +2726,45 @@ class TestReview20261006(unittest.TestCase):
         self.assertTrue(res["reasons"][0].startswith("en doute : région : AllKeyShop EUROPE, marchand ROW ; chez G2A"), res["reasons"])
         self.assertEqual(pc.unverifiable_verdict(offer(edition_rank=9), "TOP 50", "https://x", res["unverifiable"]), "À VÉRIFIER")
 
+    def test_a_top_report_stays_in_the_tops_until_it_is_handled(self):
+        """Romain, 06/10/2026 : The Witcher 3 sort du top 5 Popular à 12:03 avec deux premiers prix en erreur, qui
+        disparaissaient du filtre top ; un report trouvé sur une page des tops y reste tant qu'il n'est pas traité."""
+        import tempfile
+        witcher, galactic = ("https://www.allkeyshop.com/blog/%s/" % x for x in ("witcher", "galactic"))
+        flagged = lambda **kw: dict({"verdict": "SUSPECT", "product": "The Witcher 3", "merchant": "Loaded", "reasons": ["x"],
+                                     "at": "2026-10-06 08:52", "page": witcher}, **kw)
+        state = pc.load_state("/nonexistent")
+        state["checked"] = {
+            "1": flagged(mode="top-games"),  # trouvé par le top, pas encore traité
+            "2": flagged(mode="top-games", decision={"decision": "a_discuter", "by": "remy"}),  # à discuter : pas traité
+            "3": flagged(mode="top-games", decision={"decision": "vrai", "by": "remy"}),  # traité : sa page, maintenant
+            "4": flagged(mode="homepage"),  # trouvé par la homepage, jamais vu dans les tops
+            "5": flagged(mode="top-games", fixed_at="2026-10-06 12:10"),  # réparé
+        }
+        def export(page_modes):
+            with tempfile.TemporaryDirectory() as d:
+                pc.export_reports(state, d, {}, page_modes)
+                with open(os.path.join(d, "reports.json"), encoding="utf-8") as f:
+                    return {r["offer"]: (r["mode"], r["left_tops_at"]) for r in json.load(f)["reports"]}
+        in_tops = pc.page_modes_of({"top-games": [("Popular", 5, "The Witcher 3", witcher)],
+                                    "homepage": [("TOP 50 · All Popular", 5, "The Witcher 3", witcher)]})
+        self.assertEqual({k: m for k, (m, _) in export(in_tops).items()}, dict.fromkeys("12345", "top-games"))
+        out = pc.page_modes_of({"top-games": [("Popular", 1, "STAR WARS Galactic Racer", galactic)],
+                                "homepage": [("TOP 50 · All Popular", 6, "The Witcher 3", witcher)]})
+        with mock.patch.object(pc.time, "strftime", return_value="2026-10-06 12:03"):
+            after = export(out)
+        self.assertEqual(after["1"], ("top-games", "2026-10-06 12:03"))
+        self.assertEqual(after["2"], ("top-games", "2026-10-06 12:03"))
+        self.assertEqual((after["3"][0], after["5"][0]), ("homepage", "homepage"))
+        self.assertEqual(after["4"], ("top-games", "2026-10-06 12:03"), "seen in the tops while reported: it stays too")
+        self.assertEqual(export(in_tops)["1"], ("top-games", None), "back in the tops: no longer « sortie »")
+        # un report jamais vu dans les tops reste dans la homepage ; des tops non lus ne font rien « sortir »
+        state["checked"]["6"] = flagged(mode="homepage", page="https://www.allkeyshop.com/blog/home/")
+        self.assertEqual(export(pc.page_modes_of({"homepage": [("Home", 1, "Home", "https://www.allkeyshop.com/blog/home/")]}))["6"],
+                         ("homepage", None))
+        state["checked"]["1"].pop("left_tops_at", None)
+        self.assertEqual(export({})["1"], ("top-games", None))
+
 
 class TestSecurityAudit20261002(unittest.TestCase):
     """Audit sécurité du 02/10/2026 : le moniteur tourne en root."""
