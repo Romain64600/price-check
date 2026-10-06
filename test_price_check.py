@@ -3098,13 +3098,32 @@ class TestCompetitors20261006(unittest.TestCase):
           '{"name":"Instant Gaming"}},{"@type":"Offer","price":"22.67","seller":{"name":"Difmark"}}]}}</script>')
 
     def test_the_best_displayed_price_of_a_competitor_page(self):
-        self.assertEqual(pc.competitor_offer(self.DL), {"name": "STAR WARS: Galactic Racer", "price": 32.48, "seller": "GAMESEAL"})
-        self.assertEqual(pc.competitor_offer(self.GO), {"name": "STAR WARS Galactic Racer™", "price": 22.67, "seller": "Difmark"})
+        self.assertEqual(pc.competitor_offer(self.DL), {"name": "STAR WARS: Galactic Racer", "price": 32.48, "seller": "GAMESEAL",
+                                                        "account": None})
+        self.assertEqual(pc.competitor_offer(self.GO), {"name": "STAR WARS Galactic Racer™", "price": 22.67, "seller": "Difmark",
+                                                        "account": None})
         self.assertIsNone(pc.competitor_offer("<html>Access Denied</html>"))
         self.assertTrue(pc.same_product("STAR WARS Galactic Racer", "STAR WARS: Galactic Racer"))
         self.assertTrue(pc.same_product("STAR WARS Galactic Racer", "STAR WARS Galactic Racer™"))
         self.assertFalse(pc.same_product("STAR WARS Galactic Racer", "STAR WARS Zero Company"))
         self.assertEqual(pc.slug_core("star-wars-galactic-racer-steam-key"), "star-wars-galactic-racer")
+
+    def test_keys_against_keys_accounts_against_accounts(self):
+        # Romain, 06/10/2026 : « on compare clé avec clé et compte avec compte. On ne mélange pas. C'est une règle
+        # importante. » gocdkeys liste ses offres : l'adresse du marchand dit si c'est un compte (relevé du 06/10)
+        offers = [("https://www.driffle.com/star-wars-galactic-racer-global-pc-steam-account-p10002468?currency=EUR", "28.93", "Driffle"),
+                  ("https://difmark.com/en/buy-console-account-star-wars-galactic-racer-steam-account-177035?referal=Gocdkeys", "31.07", "Difmark"),
+                  ("https://www.instant-gaming.com/en/22527-/?igr=178567", "33.69", "Instant Gaming"),
+                  ("https://impact.gameseal.com/c/3311119/2121715/25825?prodsku=SW152836&u=https%3A%2F%2Fgameseal.com%2Fstar-wars-galactic-racer-pc-steam-account-global", "27.10", "GAMESEAL"),
+                  ("https://impact.gameseal.com/c/3311119/2121715/25825?prodsku=SW152835&u=https%3A%2F%2Fgameseal.com%2Fstar-wars-galactic-racer-pc-steam-gift-global", "36.51", "GAMESEAL")]
+        page = ('<script type="application/ld+json">' + json.dumps({"@type": "Product", "name": "STAR WARS Galactic Racer", "offers": {
+            "@type": "AggregateOffer", "priceCurrency": "EUR", "lowPrice": "27.10", "offers": [
+                {"@type": "Offer", "url": u, "price": p, "seller": {"name": s}} for u, p, s in offers]}}) + "</script>")
+        self.assertEqual(pc.competitor_offer(page), {"name": "STAR WARS Galactic Racer", "price": 33.69, "seller": "Instant Gaming",
+                                                     "account": {"price": 27.1, "seller": "GAMESEAL"}})
+        only_accounts = page.replace("https://www.instant-gaming.com/en/22527-/", "https://x.com/star-wars-galactic-racer-steam-account").replace(
+            "pc-steam-gift-global", "pc-steam-account-global")
+        self.assertIsNone(pc.competitor_offer(only_accounts)["price"], "an account became the key price")
 
     def test_dlcompare_search_picks_the_product_page_named_like_the_game(self):
         search = ('<a href="https://www.dlcompare.fr/actualites-gaming/star-wars-galactic-racer-mise-tout-sur-la-vitesse-85034">'
@@ -3122,7 +3141,9 @@ class TestCompetitors20261006(unittest.TestCase):
             {"id": 2, "price": 35.59, "priceCard": 39.95, "dispo": 1, "edition": "1", "merchantName": "Kinguin"},
             {"id": 3, "price": 30.87, "priceCard": 34.70, "dispo": 1, "edition": "1", "merchantName": "Kinguin", "account": True},
             {"id": 4, "price": 20.00, "priceCard": 20.00, "dispo": 0, "edition": "1", "merchantName": "Épuisé"}]}
-        self.assertEqual(pc.aks_best_price(trans), {"price": 30.87, "merchant": "Kinguin", "account": True, "edition": "Standard"})
+        # clé contre clé, compte contre compte (Romain, 06/10/2026)
+        self.assertEqual(pc.aks_best_price(trans), {"price": 35.59, "merchant": "Kinguin", "account": False, "edition": "Standard"})
+        self.assertEqual(pc.aks_best_price(trans, account=True), {"price": 30.87, "merchant": "Kinguin", "account": True, "edition": "Standard"})
         self.assertEqual(pc.compare_prices({"price": 30.87}, {"price": 32.48}), "aks")
         # Romain, 06/10/2026 : « couleur orange quand on est au même prix que le concurrent » (au centime près)
         self.assertEqual(pc.compare_prices({"price": 32.48}, {"price": 32.48}), "same")
@@ -3135,9 +3156,11 @@ class TestCompetitors20261006(unittest.TestCase):
     def test_the_check_covers_the_tops_and_says_gg_deals_is_blocked(self):
         targets = [("Popular", 1, "STAR WARS Galactic Racer", "https://www.allkeyshop.com/blog/buy-star-wars-galactic-racer-cd-key-compare-prices/")]
         trans = {"editions": {"1": {"name": "Standard"}}, "prices": [
-            {"id": 3, "price": 30.87, "dispo": 1, "edition": "1", "merchantName": "Kinguin", "account": True}]}
-        found = {"dlcompare": {"url": "https://dl/x", "name": "STAR WARS: Galactic Racer", "price": 32.48, "seller": "GAMESEAL"},
-                 "gocdkeys": {"url": "https://go/x", "name": "STAR WARS Galactic Racer™", "price": 22.67, "seller": "Difmark"}}
+            {"id": 2, "price": 30.87, "dispo": 1, "edition": "1", "merchantName": "Kinguin"},
+            {"id": 3, "price": 25.00, "dispo": 1, "edition": "1", "merchantName": "Kinguin", "account": True}]}
+        found = {"dlcompare": {"url": "https://dl/x", "name": "STAR WARS: Galactic Racer", "price": 32.48, "seller": "GAMESEAL", "account": None},
+                 "gocdkeys": {"url": "https://go/x", "name": "STAR WARS Galactic Racer™", "price": 22.67, "seller": "Difmark",
+                              "account": {"price": 20.0, "seller": "Driffle"}}}
         state = {"checked": {}}
         with mock.patch.object(pc, "http_get", return_value=(200, None, "<html>")), mock.patch.object(pc, "parse_game_page", return_value=trans), \
              mock.patch.object(pc, "find_competitor", side_effect=lambda site, product, cached=None: found.get(site["id"])), \
@@ -3149,6 +3172,11 @@ class TestCompetitors20261006(unittest.TestCase):
         dl, go = sites["dlcompare"]["rows"][0], sites["gocdkeys"]["rows"][0]
         self.assertEqual((dl["cheaper"], dl["gap"]), ("aks", 1.61))
         self.assertEqual((go["cheaper"], go["gap"]), ("competitor", -8.2))
+        # les comptes à part : le compte AllKeyShop face au compte du concurrent, jamais face à une clé
+        self.assertEqual(sites["dlcompare"]["accounts"], [])
+        account = sites["gocdkeys"]["accounts"][0]
+        self.assertEqual((account["aks"]["price"], account["competitor"]["price"], account["cheaper"], account["gap"]),
+                         (25.0, 20.0, "competitor", -5.0))
         self.assertEqual(state["competitors"][targets[0][3]]["dlcompare"]["url"], "https://dl/x", "the page found is not kept")
         self.assertEqual(payload["every"], 1800)
 
@@ -3158,7 +3186,7 @@ class TestCompetitors20261006(unittest.TestCase):
         targets = [("Popular", 3, "EA SPORTS FC 27 PS5", "https://www.allkeyshop.com/blog/buy-ea-sports-fc-27-ps5-key-compare-prices/"),
                    ("Popular", 4, "EA SPORTS FC 27", "https://www.allkeyshop.com/blog/buy-ea-sports-fc-27-key-compare-prices/")]
         trans = {"editions": {"1": {"name": "Standard"}}, "prices": [
-            {"id": 3, "price": 36.71, "dispo": 1, "edition": "1", "merchantName": "BuyGames", "account": True}]}
+            {"id": 3, "price": 36.71, "dispo": 1, "edition": "1", "merchantName": "BuyGames"}]}
         asked = []
         def find(site, product, cached=None):
             asked.append(product)

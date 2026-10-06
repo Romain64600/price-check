@@ -1,0 +1,15 @@
+[Unit]
+Description=price-check console - console de l'admin <-> Claude Code, questions pour Romain
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+WorkingDirectory=/root/price-checker/price-check/bot
+Environment=HOME=/root
+EnvironmentFile=/root/price-checker/price-check/.env
+ExecStart=/root/price-checker/price-check/bot/.venv/bin/python console.py
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

@@ -154,9 +154,9 @@ def find_claude():
     return None
 
 
-# Jamais transmis à `claude -p` : le jeton du bot, les webhooks (audit du 02/10/2026). Claude n'en a pas besoin, et une
-# commande qu'il lancerait ne doit pas les trouver dans son environnement.
-SECRET_ENV_RE = re.compile(r"TOKEN|WEBHOOK|SECRET|PASSWORD", re.IGNORECASE)
+# Jamais transmis à `claude -p` : le jeton du bot, les webhooks (audit du 02/10/2026), les clés d'API (GGDEALS_API_KEY,
+# 06/10/2026). Claude n'en a pas besoin, et une commande qu'il lancerait ne doit pas les trouver dans son environnement.
+SECRET_ENV_RE = re.compile(r"TOKEN|WEBHOOK|SECRET|PASSWORD|KEY", re.IGNORECASE)
 
 
 def claude_env(environ):

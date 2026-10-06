@@ -3203,26 +3203,46 @@ def json_ld(body):
     return out
 
 
+COMPETITOR_ACCOUNT_WORDS = ACCOUNT_WORDS + ("compte", "comptes")
+
+
+def is_account_url(url):
+    """L'offre d'un concurrent est-elle un compte ? L'adresse du marchand le dit (« …-pc-steam-account-p10002468 » chez
+    Driffle, « …-steam-account-global » chez Gameseal, derrière le lien affilié)."""
+    words = norm(url_text(unwrap_affiliate(str(url or ""))))
+    return any(re.search(r"(^|-)%s(-|$)" % re.escape(w), words) for w in COMPETITOR_ACCOUNT_WORDS)
+
+
 def competitor_offer(body):
-    """Le produit d'une fiche concurrente, d'après son JSON-LD : {"name", "price", "seller"}, le prix le plus bas qu'elle
-    affiche en euros (« lowPrice » de l'AggregateOffer : toutes plateformes et comptes compris), ou None."""
+    """Le produit d'une fiche concurrente, d'après son JSON-LD : {"name", "price", "seller", "account"}. Clé contre clé,
+    compte contre compte (Romain, 06/10/2026 : « on ne mélange pas, c'est une règle importante ») : « price » et
+    « seller » sont ceux de la clé la moins chère (None sans clé), « account » ({"price", "seller"}) le compte le moins
+    cher, ou None. gocdkeys liste ses offres, l'adresse du marchand dit si c'est un compte ; dlcompare ne donne que son
+    « lowPrice », et ne vend pas de comptes (aucun sur ses fiches, 06/10/2026). None sans prix en euros."""
     for item in json_ld(body):
         if item.get("@type") not in ("Product", "VideoGame"):
             continue
         offers = item.get("offers")
         if not isinstance(offers, dict) or (offers.get("priceCurrency") or "EUR") != "EUR":
             continue
-        try:
-            low = float(offers.get("lowPrice") if offers.get("lowPrice") is not None else offers.get("price"))
-        except (TypeError, ValueError):
+        name = html.unescape(item.get("name") or "")
+        subs = [o for o in offers.get("offers") or [] if isinstance(o, dict) and as_price(o.get("price")) is not None]
+        if subs:  # gocdkeys : chaque offre et l'adresse de son marchand
+            def best(group):
+                if not group:
+                    return None
+                o = min(group, key=lambda o: as_price(o["price"]))
+                seller = o.get("seller") if isinstance(o.get("seller"), dict) else {}
+                return {"price": round(as_price(o["price"]), 2), "seller": seller.get("name")}
+            key = best([o for o in subs if not is_account_url(o.get("url"))])
+            account = best([o for o in subs if is_account_url(o.get("url"))])
+            return {"name": name, "price": key["price"] if key else None, "seller": key["seller"] if key else None,
+                    "account": account}
+        low = as_price(offers.get("lowPrice") if offers.get("lowPrice") is not None else offers.get("price"))
+        if low is None:
             continue
         seller = offers.get("seller") if isinstance(offers.get("seller"), dict) else {}
-        name = seller.get("name")
-        subs = [o for o in offers.get("offers") or [] if isinstance(o, dict) and o.get("price") is not None]
-        if subs:  # gocdkeys : la liste des offres, le vendeur de la moins chère
-            best = min(subs, key=lambda o: float(o["price"]))
-            name = name or ((best.get("seller") or {}).get("name") if isinstance(best.get("seller"), dict) else None)
-        return {"name": html.unescape(item.get("name") or ""), "price": round(low, 2), "seller": name}
+        return {"name": name, "price": round(low, 2), "seller": seller.get("name"), "account": None}
     return None
 
 
@@ -3369,13 +3389,14 @@ def ggdeals_rows(rows, memo, now):
     return out
 
 
-def aks_best_price(trans):
-    """Le premier prix AllKeyShop de la page, comparé au « meilleur prix affiché » des concurrents (le plus bas, comptes
-    compris, sans frais de paiement) : l'offre en vente la moins chère, toutes éditions, comptes compris, au prix sans
-    frais (« price », pas « priceCard »). STAR WARS Galactic Racer, 06/10/2026 : clé Kinguin 35,59 € (39,95 € avec les
-    frais de carte), compte Kinguin 30,87 €, dlcompare 32,48 €."""
+def aks_best_price(trans, account=False):
+    """Le premier prix AllKeyShop de la page, comparé au « meilleur prix affiché » des concurrents : l'offre en vente la
+    moins chère, toutes éditions, au prix sans frais (« price », pas « priceCard »), parmi les clés, ou parmi les comptes
+    (account=True) : clé contre clé, compte contre compte (Romain, 06/10/2026 : « on ne mélange pas »). STAR WARS
+    Galactic Racer, 06/10/2026 : clé Kinguin 35,59 € (39,95 € avec les frais de carte), compte Kinguin 30,87 €."""
     editions = trans.get("editions") or {}
-    offers = [p for p in trans.get("prices") or [] if p.get("dispo") and p.get("price") not in (None, NO_PRICE)]
+    offers = [p for p in trans.get("prices") or [] if p.get("dispo") and p.get("price") not in (None, NO_PRICE)
+              and bool(p.get("account")) == account]
     if not offers:
         return None
     best = min(offers, key=lambda p: (p["price"], str(p.get("id"))))
@@ -3398,17 +3419,19 @@ def check_competitors(targets, state, now=None):
     refait que si la fiche ne répond plus. Renvoie la charge utile de competitors.json."""
     now = time.time() if now is None else now
     memo = state.setdefault("competitors", {})
-    rows = []
+    rows, accounts_aks = [], {}
     for label, rank, product, page_url in targets:
         check_stop()
         try:
             _, _, page_html = http_get(page_url, AKS_UA)
-            aks = aks_best_price(parse_game_page(page_html))
+            trans = parse_game_page(page_html)
+            aks, aks_account = aks_best_price(trans), aks_best_price(trans, account=True)
         except Exception as e:
             log.info("concurrents : page AllKeyShop %s illisible (%s)", page_url, e)
-            aks = None
+            aks = aks_account = None
         time.sleep(PAGE_DELAY)
         rows.append({"product": product, "page_url": page_url, "list": label, "rank": rank, "aks": aks})
+        accounts_aks[page_url] = aks_account
     sites = []
     for site in COMPETITORS:
         entry = {"id": site["id"], "label": site["label"], "home": site["home"]}
@@ -3421,7 +3444,7 @@ def check_competitors(targets, state, now=None):
             except CompetitorBlocked as e:
                 sites.append(dict(entry, status="blocked", message=str(e), rows=[]))
             continue
-        out = []
+        out, accounts = [], []
         for row in rows:
             check_stop()
             if page_console(row["product"]):
@@ -3433,11 +3456,22 @@ def check_competitors(targets, state, now=None):
             found = find_competitor(site, row["product"], cached)
             memo.setdefault(row["page_url"], {})[site["id"]] = {"url": found["url"] if found else None,
                                                                  "at": time.strftime("%Y-%m-%d %H:%M", time.localtime(now))}
-            out.append(dict(row, competitor=found, cheaper=compare_prices(row["aks"], found),
-                            gap=round(found["price"] - row["aks"]["price"], 2) if found and row["aks"] else None))
-        sites.append(dict(entry, status="ok", rows=out))
+            # clé contre clé ; compte contre compte, dans la table des comptes, quand le concurrent en vend
+            key = ({"url": found["url"], "name": found["name"], "price": found["price"], "seller": found["seller"]}
+                   if found and found.get("price") is not None else None)
+            out.append(comparison(row, row["aks"], key))
+            if found and found.get("account"):
+                accounts.append(comparison(row, accounts_aks.get(row["page_url"]),
+                                           dict(found["account"], url=found["url"], name=found["name"])))
+        sites.append(dict(entry, status="ok", rows=out, accounts=accounts))
     return {"generated_at": time.strftime("%Y-%m-%dT%H:%M:%S%z", time.localtime(now)), "every": COMPETITOR_EVERY,
             "scope": MODES["top-games"]["label"], "sites": sites}
+
+
+def comparison(row, aks, competitor):
+    """Une ligne d'un widget : le premier prix AllKeyShop face au concurrent, du même genre (clé ou compte)."""
+    return dict(row, aks=aks, competitor=competitor, cheaper=compare_prices(aks, competitor),
+                gap=round(competitor["price"] - aks["price"], 2) if competitor and aks else None)
 
 
 def unverified_table(state):
@@ -3745,8 +3779,9 @@ def main():
         found = sum(1 for site in payload["sites"] for r in site["rows"] if r.get("competitor"))
         red = sum(1 for site in payload["sites"] for r in site["rows"] if r.get("cheaper") == "competitor")
         same = sum(1 for site in payload["sites"] for r in site["rows"] if r.get("cheaper") == "same")
-        log.info("concurrents : %d page(s) des tops, %d prix trouvés, %d où le concurrent est moins cher, %d au même prix",
-                 len(targets["top-games"]), found, red, same)
+        accounts = sum(len(site.get("accounts") or []) for site in payload["sites"])
+        log.info("concurrents : %d page(s) des tops, %d prix de clé trouvés, %d où le concurrent est moins cher, %d au même "
+                 "prix ; %d prix de compte", len(targets["top-games"]), found, red, same, accounts)
         save_state(args.state, state)
 
     def run_urgent():

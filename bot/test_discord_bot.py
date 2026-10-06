@@ -71,8 +71,9 @@ class TestProgressLine(unittest.TestCase):
 class TestClaudeEnvironment(unittest.TestCase):
     def test_secrets_never_reach_claude(self):
         # audit du 02/10/2026 : le sous-processus `claude -p` héritait du jeton du bot et des webhooks
+        # 06/10/2026 : la clé de l'API gg.deals non plus
         env = db.claude_env({"DISCORD_BOT_TOKEN": "t", "DISCORD_WEBHOOK_URL": "w", "DISCORD_WEBHOOK_URL_HOMEPAGE": "h",
-                             "PATH": "/usr/bin", "LANG": "C.UTF-8", "DISCORD_CHANNEL_ID": "1", "HOME": "/root"})
+                             "GGDEALS_API_KEY": "k", "PATH": "/usr/bin", "LANG": "C.UTF-8", "DISCORD_CHANNEL_ID": "1", "HOME": "/root"})
         self.assertEqual(sorted(env), ["DISCORD_CHANNEL_ID", "HOME", "LANG", "PATH"])
         self.assertEqual(db.claude_env({})["HOME"], "/root")
 

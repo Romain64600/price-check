@@ -92,8 +92,19 @@ l'admin) :
 - Droits nécessaires dans les trois salons : « Créer des fils publics », « Envoyer des messages dans les fils », « Voir
   l'historique ». Le journal du bot le vérifie au démarrage (`feedback : #salon (mode) ; fils OK`).
 
+## Console de l'admin (service `price-check-console`)
+
+`console.py` relie la console de l'onglet Price check de l'admin à Claude Code (Romain, 06/10/2026) : Romain avec les
+droits de ce bot, Rémy, Garance et Lionel en questions-réponses, en lecture seule ; les questions qui demandent la
+décision de Romain vont dans l'onglet Romain de l'admin. Détail : [docs/exploitation.md](../docs/exploitation.md).
+
+```
+cp price-check-console.service /etc/systemd/system/ && systemctl daemon-reload && systemctl enable --now price-check-console
+journalctl -u price-check-console -f
+```
+
 ## Tests
 
 ```
-cd bot && .venv/bin/python -m unittest -v   # test_discord_bot, test_feedback
+cd bot && .venv/bin/python -m unittest -v   # test_discord_bot, test_feedback, test_console
 ```
