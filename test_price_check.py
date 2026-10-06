@@ -32,10 +32,12 @@ class TestAllKeyShopParsing(unittest.TestCase):
         targets = pc.parse_lists(json.loads(sample("api_topclick_all-popular_pc-soon.json")), pc.TOP_GAMES_LISTS)
         popular = [t[2] for t in targets if t[0] == "Popular"]
         soon = [t[2] for t in targets if t[0] == "Coming soon PC"]
+        # Romain, 06/10/2026 : top 10 Popular + top 5 Coming soon PC (avant : 5 et 4)
         self.assertEqual(popular, ["EA SPORTS FC 27", "The Witcher 3 Wild Hunt", "CONTROL Resonant",
-                                   "WARDOGS", "Valheim"])
+                                   "WARDOGS", "Valheim", "Bodycam", "The Blood Of Dawnwalker", "Onimusha Way of the Sword",
+                                   "GTA 6 PS5", "How to Fish"])
         self.assertEqual(soon, ["Dynasty Warriors 3 Complete Edition Remastered", "Ace Combat 8",
-                                "AION 2", "STAR WARS Galactic Racer"])
+                                "AION 2", "STAR WARS Galactic Racer", "Gears of War E-Day"])
 
     def test_lists_skip_non_games(self):
         data = json.loads(sample("api_topclick_sidebar.json"))
@@ -57,7 +59,7 @@ class TestAllKeyShopParsing(unittest.TestCase):
         data = json.loads(sample("api_topclick_all-popular_pc-soon.json"))
         with self.assertLogs(pc.log, level="WARNING"):
             targets = pc.parse_lists(data, [("sidebar.xbox.popular", "Xbox", 5)] + list(pc.TOP_GAMES_LISTS))
-        self.assertEqual(len(targets), 9)
+        self.assertEqual(len(targets), 15)
 
     def test_fetch_lists_in_batches_tolerates_a_failed_batch(self):
         full = json.loads(sample("api_topclick_home.json"))
@@ -2106,7 +2108,7 @@ class TestReportModes20261003(unittest.TestCase):
     def test_each_report_carries_its_mode(self):
         import tempfile
         top, home, gone = ("https://www.allkeyshop.com/blog/%s/" % x for x in ("top", "home", "gone"))
-        # une page des tops est aussi dans la homepage (le TOP 50 Popular contient les 5 premiers)
+        # une page des tops est aussi dans la homepage (le TOP 50 Popular contient les 10 premiers)
         page_modes = pc.page_modes_of({"top-games": [("Popular", 1, "Top", top)],
                                        "homepage": [("TOP 50 · All Popular", 1, "Top", top), ("Home · RPG", 3, "Home", home)]})
         self.assertEqual(page_modes, {top: ["top-games", "homepage"], home: ["homepage"]})
@@ -2287,7 +2289,7 @@ class TestLoopBanner20261003(unittest.TestCase):
         lines = banner.splitlines()
         self.assertEqual(lines[0], pc.BANNER_RULE)
         self.assertEqual(lines[1], "# 🔄 Nouvelle boucle · Price check top")  # un titre Discord : le plus visible
-        self.assertEqual(lines[2], "-# 03/10/2026 13:20 · les tops : 5 premiers Popular, 4 premiers Coming soon PC · "
+        self.assertEqual(lines[2], "-# 03/10/2026 13:20 · les tops : 10 premiers Popular, 5 premiers Coming soon PC · "
                                    "avec le recontrôle horaire des offres signalées")
         for legend in ("🔴 🟠 nouveau report", "📌 rappel d'un report existant", "🔁 bilan du recontrôle", "**vrai**"):
             self.assertIn(legend, banner)

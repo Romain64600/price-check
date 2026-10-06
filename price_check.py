@@ -1,7 +1,7 @@
 """Moniteur des premiers prix des pages produit des top clics AllKeyShop, avec alertes Discord.
 
 Boucle sans fin. Deux modes de pages (--mode) :
-- top-games : top 5 All Popular + top 4 Coming soon PC, un passage toutes les 2 min 30, qui passe
+- top-games : top 10 All Popular + top 5 Coming soon PC, un passage toutes les 2 min 30, qui passe
   aussi au milieu d'un long passage homepage ;
 - homepage : tous les jeux des top clics de la home (10 widgets + TOP 50 par plateforme,
   ~430 pages), un passage toutes les 15 min.
@@ -54,8 +54,8 @@ SITE_KEY = "allkeyshop.com.eur"
 
 # Listes top clics : (id de liste <widget>.<liste>, libellé, nombre de jeux suivis, None = toute la liste)
 TOP_GAMES_LISTS = (
-    ("sidebar.all.popular", "Popular", 5),
-    ("sidebar.pc.soon", "Coming soon PC", 4),
+    ("sidebar.all.popular", "Popular", 10),  # Romain, 06/10/2026 : top 10 Popular + top 5 Coming soon PC (avant : 5 et 4)
+    ("sidebar.pc.soon", "Coming soon PC", 5),
 )
 HOMEPAGE_LISTS = tuple(
     [(f"{widget}.default", f"Home · {label}", None) for widget, label in (
@@ -70,7 +70,7 @@ HOMEPAGE_LISTS = tuple(
 # Modes de pages : listes suivies, intervalle entre deux passages (s), variable du webhook Discord.
 # « urgent » : le mode passe aussi entre deux pages d'un passage plus long (les top games pendant la homepage).
 MODES = {
-    "top-games": {"lists": TOP_GAMES_LISTS, "interval": 150, "urgent": True,  # 9 pages ; cache des pages : 120 s
+    "top-games": {"lists": TOP_GAMES_LISTS, "interval": 150, "urgent": True,  # jusqu'à 15 pages ; cache des pages : 120 s
                   "webhook": "DISCORD_WEBHOOK_URL", "label": "Price check top"},
     "homepage": {"lists": HOMEPAGE_LISTS, "interval": 900,  # ~430 pages, un passage dure plusieurs minutes
                  "webhook": "DISCORD_WEBHOOK_URL_HOMEPAGE", "label": "Price check homepage"},  # son salon ; à défaut, celui des top games
@@ -1990,7 +1990,7 @@ def route_alert(msg, mode, send_mode, send_urgent=None):
 
 
 BANNER_RULE = "━" * 28
-LOOP_WHAT = {"top-games": "les tops : 5 premiers Popular, 4 premiers Coming soon PC",
+LOOP_WHAT = {"top-games": "les tops : 10 premiers Popular, 5 premiers Coming soon PC",
              "homepage": "toute la homepage : widgets de la home, TOP 50 de chaque plateforme"}
 LOOP_IDS = itertools.count(1)
 
@@ -3052,7 +3052,7 @@ TOP_GAMES_LABELS = {label for _, label, _ in TOP_GAMES_LISTS}
 
 def page_modes_of(targets_by_mode):
     """URL de page -> modes de pages dont les listes la suivent en ce moment (une page des tops est aussi dans la
-    homepage : le TOP 50 Popular contient les 5 premiers)."""
+    homepage : le TOP 50 Popular contient les 10 premiers)."""
     out = {}
     for mode, targets in targets_by_mode.items():
         for _, _, _, url in targets:
@@ -3063,7 +3063,7 @@ def page_modes_of(targets_by_mode):
 
 def report_mode(entry, page_url, page_modes):
     """Le mode d'un report (Romain, 03/10/2026 : « que le report des problèmes sur les tops soit identifié des problèmes
-    home page ») : « top-games » si sa page est dans les tops en ce moment (5 premiers Popular, 4 premiers Coming soon
+    home page ») : « top-games » si sa page est dans les tops en ce moment (10 premiers Popular, 5 premiers Coming soon
     PC), sinon « homepage » si elle est dans les listes de la home ; une page sortie des listes garde le mode qui l'a
     contrôlée, ou, pour une entrée d'avant le 03/10, celui de sa liste (« Popular », « Coming soon PC » : les tops).
     Romain, 06/10/2026 (The Witcher 3, sortie du top 5 Popular à 12:03 avec deux premiers prix en erreur, qui
@@ -3157,7 +3157,7 @@ def coverage_table(state):
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--mode", choices=("top-games", "homepage", "both"), default=os.environ.get("PRICE_CHECK_MODE", "both"),
-                    help="top-games : top 5 Popular + top 4 Coming soon PC ; homepage : tous les jeux des top clics "
+                    help="top-games : top 10 Popular + top 5 Coming soon PC ; homepage : tous les jeux des top clics "
                          "de la home ; both (défaut, ou variable PRICE_CHECK_MODE)")
     ap.add_argument("--offers", choices=tuple(OFFER_MODES), default=os.environ.get("PRICE_CHECK_OFFERS", "top-offers"),
                     help="top-offers (défaut, ou variable PRICE_CHECK_OFFERS) : les 3 premiers prix de chaque édition ; "

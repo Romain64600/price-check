@@ -9,7 +9,7 @@ Français and English tabs): <https://claude.ai/code/artifact/2c890bc0-9b6c-42e9
 
 Price check keeps checking that the first prices on AllKeyShop's most viewed product pages sell what the page shows, and alerts on Discord as soon as an offer does not match.
 
-- **Pages watched**: the tops (first 5 Popular, first 4 Coming soon PC), every 2 min 30; the whole homepage (about 430 pages: home widgets and the TOP 50 of each platform), every 15 min.
+- **Pages watched**: the tops (first 10 Popular, first 5 Coming soon PC), every 2 min 30; the whole homepage (about 430 pages: home widgets and the TOP 50 of each platform), every 15 min.
 - **Offers checked**: on each page, the 3 cheapest key offers of every edition. These are the "first prices".
 - **How**: the monitor follows each offer's link to the merchant, reads the URL (and the page when needed), then compares it with the product, edition, region and platform AllKeyShop shows.
 
