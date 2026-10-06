@@ -283,8 +283,9 @@ def request_headers(ua):
     return headers
 
 
-def http_get(url, ua, follow=True, timeout=30):
-    """Renvoie (statut HTTP, en-tête Location, corps). Un statut d'erreur ne lève pas ; une cible refusée (safe_target),
+def http_get(url, ua, follow=True, timeout=30, error_body=False):
+    """Renvoie (statut HTTP, en-tête Location, corps). Un statut d'erreur ne lève pas (corps vide, sauf error_body : une
+    API dit pourquoi elle refuse, gg.deals « You need to confirm your email address ») ; une cible refusée (safe_target),
     ou l'UA AKS/Staff hors d'AllKeyShop, lève OSError."""
     if not safe_target(url):
         raise OSError("cible refusée : %s" % (url or "")[:120])
@@ -300,7 +301,7 @@ def http_get(url, ua, follow=True, timeout=30):
         with opener.open(req, timeout=timeout) as resp:
             return resp.status, resp.headers.get("Location"), resp.read().decode("utf-8", "replace")
     except urllib.error.HTTPError as e:
-        return e.code, e.headers.get("Location"), ""
+        return e.code, e.headers.get("Location"), (e.read().decode("utf-8", "replace") if error_body else "")
     except (http.client.HTTPException, ValueError) as e:
         # IncompleteRead, BadStatusLine, LineTooLong, InvalidURL, UnicodeEncodeError : une erreur réseau comme une
         # autre (audit du 02/10/2026 : elles arrêtaient le passage entier, à chaque passage, au même endroit)
@@ -3332,7 +3333,7 @@ def ggdeals_prices(app_ids, key):
     journal. Lève CompetitorBlocked quand l'API refuse (clé, e-mail du compte non confirmé, quota)."""
     url = GGDEALS_API + "?" + urllib.parse.urlencode({"ids": ",".join(app_ids), "region": "fr", "key": key})
     try:
-        status, _, body = http_get(url, BROWSER_UA)
+        status, _, body = http_get(url, BROWSER_UA, error_body=True)
     except OSError as e:
         raise CompetitorBlocked("API gg.deals injoignable (%s)" % type(e).__name__)
     finally:
