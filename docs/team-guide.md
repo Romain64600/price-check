@@ -95,7 +95,7 @@ Each alert has its thread "Feedback · game · offre id": you decide there in on
 - **Discussing without deciding**: a message that does not start with one of these words decides nothing.
 - **What "faux" does**: the offer is no longer re-checked or alerted. The note is used to fix the monitor's rules, for every merchant. On an "en doute : mots en plus" alert, "faux" teaches those words for the game, on all its platforms (a subtitle, for example): the other offers with them pass.
 - **What "à discuter" does**: the offer waits for the discussion. It is not reported again: it moves to the top of the admin, in the "💬 À discuter" part (to discuss), with the note as its comment, and stays in the morning reminder until the final decision (vrai or faux). To close it, decide on the offer, not on the comment: `vrai` if the error is real, `faux` if the offer is correct. Agreeing with a comment that shows the offer is right means `faux`.
-- **What "vrai" does**: the offer is still re-checked every hour. Still wrong at least a quarter of an hour after the decision, it goes out once more, with "📌 Rappel · toujours en erreur après traitement par …": deciding is not enough, the offer has to be fixed. On an "en doute : mots en plus" alert, "vrai" makes it an error for every offer of the page with those words.
+- **What "vrai" does**: the offer is still re-checked every hour. Still wrong at least a quarter of an hour after the decision, it goes out again, then at every re-check that still sees it wrong (at most once an hour), with "📌 Rappel · toujours en erreur après traitement par …": deciding is not enough, the offer has to be fixed. Fixed but still reported? The offer's URL stays 24 h in AllKeyShop's cache: clear that cache. On an "en doute : mots en plus" alert, "vrai" makes it an error for every offer of the page with those words.
 - **What the thread gets next**: the offer's follow-ups (repaired, false positive cleared by a rule, wrong again) and the decisions taken in the admin.
 
 ## What to do with an alert
@@ -106,7 +106,7 @@ Check both pages, decide in the thread, then get the offer fixed if the error is
 2. **On the AllKeyShop page** ("Page" link): the edition the offer is filed under, the page's other editions, the region's filter name (STEAM EU, STEAM GLOBAL, XBOX X|S EUROPE…), the platform.
 3. **At the merchant** ("Marchand" link): the product, edition, region and platform actually sold.
 4. **Decide in the thread**: vrai, faux or à discuter. You agree with the error described: no note; otherwise, a note saying why.
-5. **If it is true**: get the offer fixed on AllKeyShop (edition, region, platform, page it is attached to) or removed; for an out-of-stock offer at Kinguin, the merchant has to take it out of its feed. At the next re-check (within the hour), the monitor marks the offer "repaired" and writes it in the thread. If it is still wrong, the alert comes back once, with "📌 Rappel · toujours en erreur après traitement par …": the fix did not take.
+5. **If it is true**: get the offer fixed on AllKeyShop (edition, region, platform, page it is attached to) or removed; for an out-of-stock offer at Kinguin, the merchant has to take it out of its feed. At the next re-check (within the hour), the monitor marks the offer "repaired" and writes it in the thread. If it is still wrong, the alert comes back at every re-check (at most once an hour), with "📌 Rappel · toujours en erreur après traitement par …": the fix did not take, or the old URL is still in AllKeyShop's cache (24 h): clear it.
 
 Not an error:
 
@@ -169,7 +169,7 @@ flowchart LR
 | False positive cleared by a rule | Nothing changed: a rule added since clears it |
 | Verified OK | It could not be verified before, now it is |
 | Still wrong | Nothing moved: re-checked the next hour |
-| Still wrong after a "vrai" decision | Reported again, once per decision and at least 15 min after it: "📌 Rappel · toujours en erreur après traitement par …" |
+| Still wrong after a "vrai" decision | Reported again, at least 15 min after the decision, then at every re-check while it is wrong (at most once an hour): "📌 Rappel · toujours en erreur après traitement par …" |
 | Wrong again | An OK offer became wrong: a new alert |
 
 An offer decided as a false positive is no longer re-checked. The admin's buttons start a full re-check without waiting for the hour.

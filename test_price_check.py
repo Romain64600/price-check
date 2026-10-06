@@ -2902,6 +2902,58 @@ class TestOrphanPages20261006(unittest.TestCase):
         self.assertNotIn("https://www.allkeyshop.com/blog/buy-suivi-cd-key-compare-prices/", fetched)
 
 
+class TestStillWrongAfterAFix20261006(unittest.TestCase):
+    """Romain, 06/10/2026 : « nous avons les URL en cache sur AllKeyShop pendant 24 heures. Donc c'est bien de reporter
+    quand on a encore le problème, car ça nous oblige à aller effacer ce cache » ; Warhammer 40k Space Marine 2, réparé par
+    Rémy, re-reporté à tort : Steam renvoyait « /sub/997629 » vers sa vérification d'âge, lue comme le produit « Agecheck »."""
+
+    def test_a_true_positive_still_wrong_is_reported_at_every_re_check_at_most_hourly(self):
+        decided = datetime.datetime(2026, 10, 6, 9, 0).astimezone()
+        entry = {"decision": {"decision": "vrai", "by": "remy", "at": decided.isoformat(timespec="seconds")}}
+        t = decided.timestamp()
+        self.assertFalse(pc.rereport_due(entry, now=t + 600), "before the grace time")
+        self.assertTrue(pc.rereport_due(entry, now=t + 1000))
+        entry["rereported_at"] = t + 1000
+        self.assertFalse(pc.rereport_due(entry, now=t + 1000 + 1800), "twice within the hour")
+        self.assertTrue(pc.rereport_due(entry, now=t + 1000 + 3600), "the next hourly re-check still sees it")
+        self.assertIn("vider le cache de son URL sur AllKeyShop (gardée 24 h)", pc.rereport_note(entry["decision"]))
+        entry["decision"]["decision"] = "a_discuter"
+        self.assertFalse(pc.rereport_due(entry, now=t + 99999))
+
+    def test_steam_gets_the_age_cookies_allkeyshop_never(self):
+        seen = []
+        class Opener:
+            def open(self, req, timeout=30):
+                seen.append((req.full_url, dict(req.header_items())))
+                raise urllib.error.HTTPError(req.full_url, 404, "x", {}, None)
+        with mock.patch.object(pc.urllib.request, "build_opener", return_value=Opener()):
+            pc.http_get("https://store.steampowered.com/sub/997629/", pc.BROWSER_UA)
+            pc.http_get("https://www.allkeyshop.com/blog/buy-x-cd-key-compare-prices/", pc.AKS_UA)
+        steam, aks = seen[0][1], seen[1][1]
+        self.assertIn("birthtime=", steam.get("Cookie", ""))
+        self.assertNotIn("Cookie", aks)
+
+    def test_an_age_gate_is_never_the_product(self):
+        self.assertTrue(pc.interstitial("https://store.steampowered.com/agecheck/sub/997629"))
+        self.assertFalse(pc.interstitial("https://store.steampowered.com/sub/997629/"))
+        steam = "https://store.steampowered.com/sub/997629/?cc=fr"
+        interstitial = TestConfirmOnMerchantPage.INTERSTITIAL.replace(TestRedirection.KINGUIN, steam).replace(
+            TestRedirection.KINGUIN.replace("/", "\\/"), steam.replace("/", "\\/"))
+        title = "<title>Warhammer 40,000: Space Marine 2 - Anniversary Edition on Steam</title>"
+        def get(url, ua, follow=True, timeout=30):
+            if "allkeyshop" in url:
+                return 200, None, interstitial
+            if not follow:
+                return 302, "https://store.steampowered.com/agecheck/sub/997629", ""
+            return 200, None, title
+        with mock.patch.object(pc, "http_get", side_effect=get), mock.patch.object(pc, "page_title", return_value=None), \
+             mock.patch.object(pc, "chromium_dom", return_value=None), mock.patch.object(pc, "REQUEST_DELAY", 0):
+            res = pc.check_offer("Warhammer 40k Space Marine 2", offer(merchantName="Steam", edition="1 Year Anniversary Edition",
+                                                                      region="GLOBAL", region_filter="STEAM GLOBAL"))
+        self.assertFalse(any("Agecheck" in r for r in res["reasons"]), res)
+        self.assertEqual(res["verdict"], "OK", res)  # le nom et l'édition lus sur la fiche Steam, pas sur la vérification d'âge
+
+
 class TestSecurityAudit20261002(unittest.TestCase):
     """Audit sécurité du 02/10/2026 : le moniteur tourne en root."""
 

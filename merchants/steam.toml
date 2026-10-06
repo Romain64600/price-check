@@ -1,0 +1,9 @@
+# Steam (store.steampowered.com) — Warhammer 40k Space Marine 2, offre 135864840 (06/10/2026) : Steam renvoie un lien
+# « /sub/997629/ » vers sa vérification d'âge (« /agecheck/sub/997629 ») ; le moniteur y lisait « Agecheck » comme nom de
+# produit, alors que Rémy avait réparé l'offre (rangée dans « 1 Year Anniversary Edition »), et la re-reportait. Avec les
+# cookies d'un navigateur qui a déjà confirmé son âge, Steam sert directement la fiche (200 au lieu de 302).
+name = "Steam"
+hosts = ["store.steampowered.com"]
+
+[http]
+cookie = "birthtime=470703601; lastagecheckage=1-0-1985; wants_mature_content=1; mature_content=1"

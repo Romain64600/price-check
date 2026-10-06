@@ -95,7 +95,7 @@ Chaque alerte a son fil « Feedback · jeu · offre id » : on y tranche en une 
 - **Discuter sans trancher** : un message qui ne commence pas par l'un de ces mots ne décide rien.
 - **Ce que fait un « faux »** : l'offre n'est plus recontrôlée ni alertée. La note sert à corriger les règles du moniteur, pour tous les marchands. Sur une alerte « en doute : mots en plus », un « faux » apprend ces mots pour le jeu, sur toutes ses plateformes (un sous-titre, par exemple) : les autres offres qui les ont passent.
 - **Ce que fait un « à discuter »** : l'offre attend la discussion. Elle n'est pas reportée de nouveau : elle passe en tête de l'admin, dans la partie « 💬 À discuter », avec la note comme commentaire, et reste dans le rappel du matin jusqu'à la décision finale (vrai ou faux). Pour clore, on tranche sur l'offre, pas sur le commentaire : `vrai` si l'erreur est réelle, `faux` si l'offre est correcte. D'accord avec un commentaire qui montre que l'offre est juste : c'est `faux`.
-- **Ce que fait un « vrai »** : l'offre reste recontrôlée toutes les heures. Toujours en erreur au moins un quart d'heure après la décision, elle repart une fois, avec « 📌 Rappel · toujours en erreur après traitement par … » : trancher ne suffit pas, il faut que l'offre soit corrigée. Sur une alerte « en doute : mots en plus », un « vrai » en fait une erreur pour toutes les offres de la page qui ont ces mots.
+- **Ce que fait un « vrai »** : l'offre reste recontrôlée toutes les heures. Toujours en erreur au moins un quart d'heure après la décision, elle repart, puis à chaque recontrôle qui la voit encore en erreur (au plus une fois par heure), avec « 📌 Rappel · toujours en erreur après traitement par … » : trancher ne suffit pas, il faut que l'offre soit corrigée. Corrigée mais encore signalée ? L'URL de l'offre reste 24 h en cache sur AllKeyShop : vider ce cache. Sur une alerte « en doute : mots en plus », un « vrai » en fait une erreur pour toutes les offres de la page qui ont ces mots.
 - **Ce que le fil reçoit ensuite** : les suites de l'offre (réparée, faux positif levé par une règle, de nouveau en erreur) et les décisions prises dans l'admin.
 
 ## Que faire face à une alerte
@@ -106,7 +106,7 @@ Vérifier sur les deux pages, trancher dans le fil, puis faire corriger l'offre 
 2. **Sur la page AllKeyShop** (lien « Page ») : l'édition où l'offre est rangée, les autres éditions de la page, le nom de filtre de la région (STEAM EU, STEAM GLOBAL, XBOX X|S EUROPE…), la plateforme.
 3. **Chez le marchand** (lien « Marchand ») : le produit, l'édition, la région et la plateforme réellement vendus.
 4. **Trancher dans le fil** : vrai, faux ou à discuter. D'accord avec l'erreur décrite : pas de note ; sinon, une note qui dit pourquoi.
-5. **Si c'est vrai** : faire corriger l'offre sur AllKeyShop (édition, région, plateforme, rattachement à la page) ou la faire retirer ; pour une rupture chez Kinguin, c'est au marchand de sortir l'offre de son feed. Au recontrôle suivant (moins d'une heure), le moniteur classe l'offre « réparée » et l'écrit dans le fil. Si elle est encore en erreur, l'alerte revient une fois, avec « 📌 Rappel · toujours en erreur après traitement par … » : la correction n'a pas pris.
+5. **Si c'est vrai** : faire corriger l'offre sur AllKeyShop (édition, région, plateforme, rattachement à la page) ou la faire retirer ; pour une rupture chez Kinguin, c'est au marchand de sortir l'offre de son feed. Au recontrôle suivant (moins d'une heure), le moniteur classe l'offre « réparée » et l'écrit dans le fil. Si elle est encore en erreur, l'alerte revient à chaque recontrôle (au plus une fois par heure), avec « 📌 Rappel · toujours en erreur après traitement par … » : la correction n'a pas pris, ou l'ancienne URL est encore dans le cache d'AllKeyShop (24 h) : le vider.
 
 Ce qui n'est pas une erreur :
 
@@ -169,7 +169,7 @@ flowchart LR
 | Faux positif levé par une règle | Rien n'a changé : une règle ajoutée depuis la blanchit |
 | Vérifiée OK | Elle n'avait pas pu être vérifiée, elle l'est maintenant |
 | Toujours en erreur | Rien n'a bougé : recontrôlée l'heure suivante |
-| Toujours en erreur après une décision « vrai » | Reportée de nouveau, une fois par décision et au moins 15 min après elle : « 📌 Rappel · toujours en erreur après traitement par … » |
+| Toujours en erreur après une décision « vrai » | Reportée de nouveau, au moins 15 min après la décision, puis à chaque recontrôle tant qu'elle est en erreur (au plus une fois par heure) : « 📌 Rappel · toujours en erreur après traitement par … » |
 | De nouveau en erreur | Une offre OK devenue fausse : nouvelle alerte |
 
 Une offre jugée faux positif n'est plus recontrôlée. Les boutons de l'admin lancent un recontrôle complet sans attendre l'heure.

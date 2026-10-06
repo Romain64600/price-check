@@ -291,8 +291,12 @@ def http_get(url, ua, follow=True, timeout=30):
     if ua == AKS_UA and not is_aks_host(url):
         raise OSError("UA AKS/Staff hors d'AllKeyShop refusé : %s" % url[:120])
     opener = urllib.request.build_opener(GuardedRedirect if follow else NoRedirect)
+    headers = request_headers(ua)
+    cookie = ((merchant_config(url, None).get("http") or {}).get("cookie") if ua != AKS_UA else None)
+    if cookie:  # Steam : la vérification d'âge déjà passée (merchants/steam.toml, 06/10/2026)
+        headers["Cookie"] = cookie
     try:
-        req = urllib.request.Request(quote_url(url), headers=request_headers(ua))
+        req = urllib.request.Request(quote_url(url), headers=headers)
         with opener.open(req, timeout=timeout) as resp:
             return resp.status, resp.headers.get("Location"), resp.read().decode("utf-8", "replace")
     except urllib.error.HTTPError as e:
@@ -1612,6 +1616,15 @@ def page_canonical(url, cfg):
     return canonical_url(chromium_dom(url)) if cfg.get("browser", True) else None
 
 
+INTERSTITIAL_RE = re.compile(r"/(agecheck|age-check|age-gate|age-verification|ageverify|login|signin|consent|captcha)(/|$)", re.I)
+
+
+def interstitial(url):
+    """Une page d'étape (vérification d'âge, connexion, consentement) : pas la fiche du produit. Steam renvoyait
+    « /sub/997629 » vers « /agecheck/sub/997629 », et « Agecheck » passait pour un autre produit (Warhammer 40k, 06/10/2026)."""
+    return bool(INTERSTITIAL_RE.search(urllib.parse.urlparse(url or "").path))
+
+
 def moved(url, served):
     """La fiche servie (redirection ou URL canonique) est-elle une autre que celle du lien ? Même chemin aux segments
     de langue près : Kinguin répond 301 de « /en/category/360568/… » vers « /category/360568/… », c'est la même fiche."""
@@ -1753,6 +1766,9 @@ def check_offer(product, offer):
                 raise CheckError("sonde de la fiche marchand : %s" % e)
             location = None
         time.sleep(REQUEST_DELAY)
+    if location and interstitial(unwrap_affiliate(urllib.parse.urljoin(url, location))):
+        result["notes"].append("redirection vers une page d'étape ignorée : %s" % urllib.parse.urljoin(url, location))
+        location = None
     if location:
         url2 = unwrap_affiliate(urllib.parse.urljoin(url, location))
         if redirect_untrusted(cfg):
@@ -2326,33 +2342,41 @@ def apply_recheck(entry, label, rank, product, page_url, offer, res, notify, sta
             return
         if rereport:
             entry["rereported_for"] = entry["decision"].get("at")
+            entry["rereported_at"] = time.time() if now is None else now
 
 
 REREPORT_GRACE = 900  # s : le temps de corriger l'offre après l'avoir tranchée, avant le rappel
+REREPORT_EVERY = 3600  # s : un rappel au plus par heure et par offre, tant que l'erreur se voit
 
 
 def rereport_due(entry, now=None):
     """Romain, 05/10/2026 : « même si un opérateur est passé et a traité l'offre, si, au prochain passage, l'offre est
     toujours en erreur, on doit encore la reporter ». Une offre tranchée « vrai », toujours en erreur au recontrôle, est
-    reportée de nouveau : une fois par décision, au moins REREPORT_GRACE après elle. Un « à discuter » attend la
+    reportée de nouveau, au moins REREPORT_GRACE après la décision, puis à chaque recontrôle qui la voit encore en erreur,
+    au plus une fois par REREPORT_EVERY (Romain, 06/10/2026 : « nous avons les URL en cache sur AllKeyShop pendant 24
+    heures. Donc c'est bien de reporter quand on a encore le problème, car ça nous oblige à aller effacer ce cache »). Un « à discuter » attend la
     discussion, pas une correction : il n'est pas reporté (Romain, 06/10/2026, Monster Hunter Wilds chez G2A, « à
     discuter » de Rémy renvoyé une heure plus tard : « pourquoi tu me renvoies le message alors que Rémy a répondu ») ;
     l'admin et le rappel du matin le montrent. Un « faux » arrête le suivi (l'offre n'est plus recontrôlée)."""
     d = entry.get("decision") or {}
-    if d.get("decision") != "vrai" or entry.get("rereported_for") == d.get("at"):
+    if d.get("decision") != "vrai":
+        return False
+    now = time.time() if now is None else now
+    if now - (entry.get("rereported_at") or 0) < REREPORT_EVERY - 60:  # une marge : le recontrôle horaire n'est pas à la seconde
         return False
     try:
         decided = datetime.datetime.fromisoformat(d.get("at") or "").timestamp()
     except ValueError:
         return False
-    return (time.time() if now is None else now) - decided >= REREPORT_GRACE
+    return now - decided >= REREPORT_GRACE
 
 
 def rereport_note(decision):
     at = decision.get("at") or ""
     when = "%s/%s %s" % (at[8:10], at[5:7], at[11:16]) if len(at) >= 16 else at
-    return "📌 **Rappel** · toujours en erreur après traitement par %s (%s le %s)" % (
-        decision.get("by") or "?", DECISION_LABELS.get(decision.get("decision"), decision.get("decision")), when)
+    return ("📌 **Rappel** · toujours en erreur après traitement par %s (%s le %s) : si l'offre est corrigée, vider le cache "
+            "de son URL sur AllKeyShop (gardée 24 h)" % (
+                decision.get("by") or "?", DECISION_LABELS.get(decision.get("decision"), decision.get("decision")), when))
 
 
 def with_note(msg, note):
