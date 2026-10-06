@@ -3140,6 +3140,172 @@ def export_reports(state, directory, pages=None, page_modes=None):
     return len(reports)
 
 
+# ---- Concurrents (Romain, 06/10/2026) ---------------------------------------
+# « Sur l'onglet Price check, un widget par concurrent : quand tu vérifies les prix sur nos pages, tu vérifies aussi le
+# prix des concurrents ; le meilleur prix en vert si AllKeyShop est moins cher, le meilleur prix du concurrent en rouge
+# si AllKeyShop est plus cher, le premier prix AKS à côté » ; « que pour les tops check dans un premier temps » ;
+# « meilleur prix affiché » (le plus bas que le concurrent affiche pour le jeu, toutes plateformes et comptes compris) ;
+# toutes les 30 min. UA navigateur, comme chez les marchands ; jamais d'outil qui masque le robot : gg.deals bloque le
+# serveur (403, Cloudflare), il attend son API officielle.
+COMPETITOR_EVERY = 1800
+COMPETITORS_FILE = "competitors.json"
+COMPETITORS = (
+    {"id": "gg-deals", "label": "gg.deals", "home": "https://gg.deals/",
+     "blocked": "gg.deals bloque le serveur (403, Cloudflare) : possible avec son API officielle (clé à créer sur un compte gg.deals)"},
+    {"id": "dlcompare", "label": "dlcompare.fr", "home": "https://www.dlcompare.fr/", "search": "https://www.dlcompare.fr/search?q=%s"},
+    {"id": "gocdkeys", "label": "gocdkeys.fr", "home": "https://www.gocdkeys.fr/", "guess": "https://www.gocdkeys.fr/acheter-%s-pc-cd-key"},
+)
+DLCOMPARE_LINK_RE = re.compile(r'href="(https://www\.dlcompare\.fr/jeux/\d+/acheter-([a-z0-9-]+))"')
+# fin d'un slug de fiche concurrente : la plateforme et la sorte de clé, pas le nom (« …-steam-key », « …-cle-cd-key »)
+SLUG_TAIL_WORDS = {"steam", "key", "keys", "cle", "cd", "pc", "xbox", "one", "series", "x", "s", "ps4", "ps5", "playstation",
+                   "switch", "nintendo", "epic", "games", "gog", "ea", "app", "origin", "ubisoft", "connect", "uplay", "battle",
+                   "net", "rockstar", "microsoft", "store", "code", "digital", "download", "global", "europe", "eu"}
+
+
+def json_ld(body):
+    """Les objets JSON-LD d'une page, à plat (listes et « @graph » compris)."""
+    out = []
+    for m in re.finditer(r'<script[^>]+application/ld\+json[^>]*>(.*?)</script>', body or "", re.S):
+        try:
+            data = json.loads(m.group(1))
+        except ValueError:
+            continue
+        for item in data if isinstance(data, list) else [data]:
+            if isinstance(item, dict):
+                out.append(item)
+                out.extend(i for i in item.get("@graph") or [] if isinstance(i, dict))
+    return out
+
+
+def competitor_offer(body):
+    """Le produit d'une fiche concurrente, d'après son JSON-LD : {"name", "price", "seller"}, le prix le plus bas qu'elle
+    affiche en euros (« lowPrice » de l'AggregateOffer : toutes plateformes et comptes compris), ou None."""
+    for item in json_ld(body):
+        if item.get("@type") not in ("Product", "VideoGame"):
+            continue
+        offers = item.get("offers")
+        if not isinstance(offers, dict) or (offers.get("priceCurrency") or "EUR") != "EUR":
+            continue
+        try:
+            low = float(offers.get("lowPrice") if offers.get("lowPrice") is not None else offers.get("price"))
+        except (TypeError, ValueError):
+            continue
+        seller = offers.get("seller") if isinstance(offers.get("seller"), dict) else {}
+        name = seller.get("name")
+        subs = [o for o in offers.get("offers") or [] if isinstance(o, dict) and o.get("price") is not None]
+        if subs:  # gocdkeys : la liste des offres, le vendeur de la moins chère
+            best = min(subs, key=lambda o: float(o["price"]))
+            name = name or ((best.get("seller") or {}).get("name") if isinstance(best.get("seller"), dict) else None)
+        return {"name": html.unescape(item.get("name") or ""), "price": round(low, 2), "seller": name}
+    return None
+
+
+def same_product(product, name):
+    """Le nom d'une fiche concurrente est-il celui du produit AllKeyShop (« STAR WARS: Galactic Racer™ ») ?"""
+    target = norm(name or "")
+    return bool(target) and any(norm(v) == target for v in name_variants(product))
+
+
+def slug_core(slug):
+    words = [w for w in slug.split("-") if w]
+    while words and words[-1] in SLUG_TAIL_WORDS:
+        words.pop()
+    return "-".join(words)
+
+
+def competitor_get(url):
+    """Une page concurrente (UA navigateur), ou None."""
+    try:
+        status, _, body = http_get(url, BROWSER_UA)
+    except OSError as e:
+        log.info("concurrent %s : %s", url[:80], e)
+        return None
+    finally:
+        time.sleep(REQUEST_DELAY)
+    return body if status == 200 else None
+
+
+def find_competitor(site, product, cached=None):
+    """La fiche du produit chez ce concurrent et son meilleur prix affiché : {"url", "name", "price", "seller"}, ou None.
+    dlcompare : sa recherche, la fiche dont le slug est le nom ; gocdkeys : l'adresse « acheter-<nom>-pc-cd-key ». Le nom
+    de la fiche (JSON-LD) doit être celui du produit."""
+    candidates = [cached] if cached else []
+    base = name_variants(product)
+    if site.get("search"):
+        body = competitor_get(site["search"] % urllib.parse.quote(product))
+        wanted = {norm(v) for v in base}
+        candidates += [url for url, slug in DLCOMPARE_LINK_RE.findall(body or "") if slug_core(slug) in wanted]
+    if site.get("guess"):
+        candidates += [site["guess"] % norm(v) for v in base]
+    seen = set()
+    for url in candidates:
+        if not url or url in seen:
+            continue
+        seen.add(url)
+        offer = competitor_offer(competitor_get(url))
+        if offer and same_product(product, offer["name"]):
+            return dict(offer, url=url)
+    return None
+
+
+def aks_best_price(trans):
+    """Le premier prix AllKeyShop de la page, comparé au « meilleur prix affiché » des concurrents (le plus bas, comptes
+    compris, sans frais de paiement) : l'offre en vente la moins chère, toutes éditions, comptes compris, au prix sans
+    frais (« price », pas « priceCard »). STAR WARS Galactic Racer, 06/10/2026 : clé Kinguin 35,59 € (39,95 € avec les
+    frais de carte), compte Kinguin 30,87 €, dlcompare 32,48 €."""
+    editions = trans.get("editions") or {}
+    offers = [p for p in trans.get("prices") or [] if p.get("dispo") and p.get("price") not in (None, NO_PRICE)]
+    if not offers:
+        return None
+    best = min(offers, key=lambda p: (p["price"], str(p.get("id"))))
+    return {"price": round(best["price"], 2), "merchant": best.get("merchantName"), "account": bool(best.get("account")),
+            "edition": (editions.get(str(best.get("edition"))) or {}).get("name", str(best.get("edition")))}
+
+
+def compare_prices(aks, competitor):
+    """« aks » (AllKeyShop moins cher ou au même prix : vert), « competitor » (le concurrent moins cher : rouge), ou None."""
+    if not aks or not competitor:
+        return None
+    return "aks" if aks["price"] <= competitor["price"] else "competitor"
+
+
+def check_competitors(targets, state, now=None):
+    """Le relevé des concurrents sur les pages des tops : le premier prix AllKeyShop de chaque page et le meilleur prix
+    affiché par chaque concurrent. L'adresse de la fiche trouvée est gardée (state["competitors"]) : la recherche ne se
+    refait que si la fiche ne répond plus. Renvoie la charge utile de competitors.json."""
+    now = time.time() if now is None else now
+    memo = state.setdefault("competitors", {})
+    rows = []
+    for label, rank, product, page_url in targets:
+        check_stop()
+        try:
+            _, _, page_html = http_get(page_url, AKS_UA)
+            aks = aks_best_price(parse_game_page(page_html))
+        except Exception as e:
+            log.info("concurrents : page AllKeyShop %s illisible (%s)", page_url, e)
+            aks = None
+        time.sleep(PAGE_DELAY)
+        rows.append({"product": product, "page_url": page_url, "list": label, "rank": rank, "aks": aks})
+    sites = []
+    for site in COMPETITORS:
+        entry = {"id": site["id"], "label": site["label"], "home": site["home"]}
+        if site.get("blocked"):
+            sites.append(dict(entry, status="blocked", message=site["blocked"], rows=[]))
+            continue
+        out = []
+        for row in rows:
+            check_stop()
+            cached = ((memo.get(row["page_url"]) or {}).get(site["id"]) or {}).get("url")
+            found = find_competitor(site, row["product"], cached)
+            memo.setdefault(row["page_url"], {})[site["id"]] = {"url": found["url"] if found else None,
+                                                                 "at": time.strftime("%Y-%m-%d %H:%M", time.localtime(now))}
+            out.append(dict(row, competitor=found, cheaper=compare_prices(row["aks"], found),
+                            gap=round(found["price"] - row["aks"]["price"], 2) if found and row["aks"] else None))
+        sites.append(dict(entry, status="ok", rows=out))
+    return {"generated_at": time.strftime("%Y-%m-%dT%H:%M:%S%z", time.localtime(now)), "every": COMPETITOR_EVERY,
+            "scope": MODES["top-games"]["label"], "sites": sites}
+
+
 def unverified_table(state):
     """Table Markdown des offres en tête qu'on n'a pas pu vérifier (NON VÉRIFIABLE), pour la doc."""
     rows = ["| Jeu | Édition | Marchand | Prix | Pourquoi | URL marchand | Vu le |", "|---|---|---|---|---|---|---|"]
@@ -3426,6 +3592,28 @@ def main():
             export_reports(state, REPORTS_DIR, pages, page_modes_of({m: targets[m] for m in modes}))
         save_state(args.state, state)
 
+    competitors_due = [time.monotonic() + 60]
+
+    def competitors():
+        """Le relevé des concurrents pour les pages des tops, toutes les 30 min (Romain, 06/10/2026)."""
+        if (args.dry_run or not REPORTS_DIR or "top-games" not in modes or not targets["top-games"]
+                or time.monotonic() < competitors_due[0]):
+            return
+        competitors_due[0] = time.monotonic() + COMPETITOR_EVERY
+        try:
+            payload = check_competitors(targets["top-games"], state)
+        except Stop:
+            raise
+        except Exception:
+            log.exception("relevé des concurrents en échec")
+            return
+        write_shared(os.path.join(REPORTS_DIR, COMPETITORS_FILE), payload)
+        found = sum(1 for site in payload["sites"] for r in site["rows"] if r.get("competitor"))
+        red = sum(1 for site in payload["sites"] for r in site["rows"] if r.get("cheaper") == "competitor")
+        log.info("concurrents : %d page(s) des tops, %d prix trouvés, %d où le concurrent est moins cher",
+                 len(targets["top-games"]), found, red)
+        save_state(args.state, state)
+
     def run_urgent():
         """Entre deux pages d'un long passage : les demandes de l'admin, les alertes en file, puis les modes urgents
         (top games) dont l'heure est venue."""
@@ -3434,6 +3622,7 @@ def main():
         flush_alerts(every=60)
         daily_reminder()
         orphans()
+        competitors()
         for m in modes:
             if MODES[m].get("urgent") and time.monotonic() >= due[m]:
                 run_mode(m)
@@ -3450,6 +3639,7 @@ def main():
             flush_alerts()
             daily_reminder()
             orphans()
+            competitors()
             honor_requests()
             for mode in modes:
                 if time.monotonic() >= due[mode]:

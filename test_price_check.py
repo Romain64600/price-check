@@ -3016,6 +3016,69 @@ class TestPageEditions20261006(unittest.TestCase):
                 self.assertIsNone(self.reason("GTA 5", "Premium + Great White Card", url, gta))
 
 
+class TestCompetitors20261006(unittest.TestCase):
+    """Romain, 06/10/2026 : un widget par concurrent sur l'onglet Price check, pour les tops ; le meilleur prix affiché par
+    le concurrent en vert si AllKeyShop est moins cher, en rouge sinon, le premier prix AKS à côté ; toutes les 30 min."""
+
+    DL = ('<script type="application/ld+json">{"@context":"https://schema.org","@type":"Product","name":"STAR WARS: Galactic '
+          'Racer","offers":{"@type":"AggregateOffer","offerCount":73,"lowPrice":"32.48","highPrice":"159.99",'
+          '"priceCurrency":"EUR","seller":{"@type":"Organization","name":"GAMESEAL"}}}</script>')
+    GO = ('<script type="application/ld+json">{"@type":"Product","name":"STAR WARS Galactic Racer\u2122","offers":{"@type":'
+          '"AggregateOffer","priceCurrency":"EUR","lowPrice":"22.67","offers":[{"@type":"Offer","price":"33.69","seller":'
+          '{"name":"Instant Gaming"}},{"@type":"Offer","price":"22.67","seller":{"name":"Difmark"}}]}}</script>')
+
+    def test_the_best_displayed_price_of_a_competitor_page(self):
+        self.assertEqual(pc.competitor_offer(self.DL), {"name": "STAR WARS: Galactic Racer", "price": 32.48, "seller": "GAMESEAL"})
+        self.assertEqual(pc.competitor_offer(self.GO), {"name": "STAR WARS Galactic Racer™", "price": 22.67, "seller": "Difmark"})
+        self.assertIsNone(pc.competitor_offer("<html>Access Denied</html>"))
+        self.assertTrue(pc.same_product("STAR WARS Galactic Racer", "STAR WARS: Galactic Racer"))
+        self.assertTrue(pc.same_product("STAR WARS Galactic Racer", "STAR WARS Galactic Racer™"))
+        self.assertFalse(pc.same_product("STAR WARS Galactic Racer", "STAR WARS Zero Company"))
+        self.assertEqual(pc.slug_core("star-wars-galactic-racer-steam-key"), "star-wars-galactic-racer")
+
+    def test_dlcompare_search_picks_the_product_page_named_like_the_game(self):
+        search = ('<a href="https://www.dlcompare.fr/actualites-gaming/star-wars-galactic-racer-mise-tout-sur-la-vitesse-85034">'
+                  '<a href="https://www.dlcompare.fr/jeux/100035197/acheter-star-wars-zero-company-steam-key">'
+                  '<a href="https://www.dlcompare.fr/jeux/100037294/acheter-star-wars-galactic-racer-steam-key">')
+        pages = {"https://www.dlcompare.fr/search?q=STAR%20WARS%20Galactic%20Racer": search,
+                 "https://www.dlcompare.fr/jeux/100037294/acheter-star-wars-galactic-racer-steam-key": self.DL}
+        with mock.patch.object(pc, "competitor_get", side_effect=pages.get):
+            found = pc.find_competitor(pc.COMPETITORS[1], "STAR WARS Galactic Racer")
+        self.assertEqual((found["url"], found["price"]), ("https://www.dlcompare.fr/jeux/100037294/acheter-star-wars-galactic-racer-steam-key", 32.48))
+
+    def test_allkeyshop_side_is_the_best_displayed_price_too(self):
+        trans = {"editions": {"1": {"name": "Standard"}}, "prices": [
+            {"id": 1, "price": 0.02, "priceCard": 0.02, "dispo": 1, "edition": "1", "merchantName": "Loaded"},  # sans prix
+            {"id": 2, "price": 35.59, "priceCard": 39.95, "dispo": 1, "edition": "1", "merchantName": "Kinguin"},
+            {"id": 3, "price": 30.87, "priceCard": 34.70, "dispo": 1, "edition": "1", "merchantName": "Kinguin", "account": True},
+            {"id": 4, "price": 20.00, "priceCard": 20.00, "dispo": 0, "edition": "1", "merchantName": "Épuisé"}]}
+        self.assertEqual(pc.aks_best_price(trans), {"price": 30.87, "merchant": "Kinguin", "account": True, "edition": "Standard"})
+        self.assertEqual(pc.compare_prices({"price": 30.87}, {"price": 32.48}), "aks")
+        self.assertEqual(pc.compare_prices({"price": 32.48}, {"price": 32.48}), "aks", "the same price is not lost")
+        self.assertEqual(pc.compare_prices({"price": 30.87}, {"price": 22.67}), "competitor")
+        self.assertIsNone(pc.compare_prices({"price": 30.87}, None))
+
+    def test_the_check_covers_the_tops_and_says_gg_deals_is_blocked(self):
+        targets = [("Popular", 1, "STAR WARS Galactic Racer", "https://www.allkeyshop.com/blog/buy-star-wars-galactic-racer-cd-key-compare-prices/")]
+        trans = {"editions": {"1": {"name": "Standard"}}, "prices": [
+            {"id": 3, "price": 30.87, "dispo": 1, "edition": "1", "merchantName": "Kinguin", "account": True}]}
+        found = {"dlcompare": {"url": "https://dl/x", "name": "STAR WARS: Galactic Racer", "price": 32.48, "seller": "GAMESEAL"},
+                 "gocdkeys": {"url": "https://go/x", "name": "STAR WARS Galactic Racer™", "price": 22.67, "seller": "Difmark"}}
+        state = {"checked": {}}
+        with mock.patch.object(pc, "http_get", return_value=(200, None, "<html>")), mock.patch.object(pc, "parse_game_page", return_value=trans), \
+             mock.patch.object(pc, "find_competitor", side_effect=lambda site, product, cached=None: found.get(site["id"])), \
+             mock.patch.object(pc, "PAGE_DELAY", 0):
+            payload = pc.check_competitors(targets, state, now=1791300000)
+        sites = {x["id"]: x for x in payload["sites"]}
+        self.assertEqual(sites["gg-deals"]["status"], "blocked")
+        self.assertIn("API officielle", sites["gg-deals"]["message"])
+        dl, go = sites["dlcompare"]["rows"][0], sites["gocdkeys"]["rows"][0]
+        self.assertEqual((dl["cheaper"], dl["gap"]), ("aks", 1.61))
+        self.assertEqual((go["cheaper"], go["gap"]), ("competitor", -8.2))
+        self.assertEqual(state["competitors"][targets[0][3]]["dlcompare"]["url"], "https://dl/x", "the page found is not kept")
+        self.assertEqual(payload["every"], 1800)
+
+
 class TestSecurityAudit20261002(unittest.TestCase):
     """Audit sécurité du 02/10/2026 : le moniteur tourne en root."""
 
