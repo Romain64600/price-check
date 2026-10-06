@@ -41,7 +41,7 @@ Chaque boucle commence, dans chaque salon où elle poste, par un bandeau très v
 | ↪️ Suite de la boucle | La même boucle reprend après les messages d'une autre |
 | 🚨 URGENCE PREMIER PRIX, 🔴 SUSPECT, 🟠 À VÉRIFIER | Un nouveau report |
 | 📌 Rappel · report existant | Un ancien report renvoyé dans son bon salon : pas une nouvelle détection |
-| 📌 Rappel · toujours en erreur après traitement | Une offre déjà tranchée « vrai » ou « à discuter », toujours en erreur au recontrôle : la correction n'a pas pris |
+| 📌 Rappel · toujours en erreur après traitement | Une offre déjà tranchée « vrai », toujours en erreur au recontrôle : la correction n'a pas pris |
 | 🔁 Recontrôle | Le bilan du recontrôle : réparées, toujours en erreur, nouvelles erreurs |
 | 📋 Rappel du matin | Chaque jour à 9 h, aux urgences : les premiers prix encore en erreur et le bilan des dernières 24 h |
 
@@ -93,7 +93,8 @@ Chaque alerte a son fil « Feedback · jeu · offre id » : on y tranche en une 
 - **Qui peut trancher** : les personnes autorisées sur le bot. Romain les ajoute avec `!allow @nom` dans #aks_price_checker. Les autres reçoivent un rappel, et leur message reste dans le fil.
 - **Discuter sans trancher** : un message qui ne commence pas par l'un de ces mots ne décide rien.
 - **Ce que fait un « faux »** : l'offre n'est plus recontrôlée ni alertée. La note sert à corriger les règles du moniteur, pour tous les marchands. Sur une alerte « en doute : mots en plus », un « faux » apprend ces mots pour la page (un sous-titre, par exemple) : les autres offres de la page qui les ont passent.
-- **Ce que fait un « vrai » (ou « à discuter »)** : l'offre reste recontrôlée toutes les heures. Toujours en erreur au moins un quart d'heure après la décision, elle repart une fois, avec « 📌 Rappel · toujours en erreur après traitement par … » : trancher ne suffit pas, il faut que l'offre soit corrigée. Sur une alerte « en doute : mots en plus », un « vrai » en fait une erreur pour toutes les offres de la page qui ont ces mots.
+- **Ce que fait un « à discuter »** : l'offre attend la discussion. Elle n'est pas reportée de nouveau : elle reste dans l'admin (« À discuter ») et dans le rappel du matin jusqu'à la décision finale.
+- **Ce que fait un « vrai »** : l'offre reste recontrôlée toutes les heures. Toujours en erreur au moins un quart d'heure après la décision, elle repart une fois, avec « 📌 Rappel · toujours en erreur après traitement par … » : trancher ne suffit pas, il faut que l'offre soit corrigée. Sur une alerte « en doute : mots en plus », un « vrai » en fait une erreur pour toutes les offres de la page qui ont ces mots.
 - **Ce que le fil reçoit ensuite** : les suites de l'offre (réparée, faux positif levé par une règle, de nouveau en erreur) et les décisions prises dans l'admin.
 
 ## Que faire face à une alerte
@@ -145,7 +146,7 @@ flowchart LR
 | Faux positif levé par une règle | Rien n'a changé : une règle ajoutée depuis la blanchit |
 | Vérifiée OK | Elle n'avait pas pu être vérifiée, elle l'est maintenant |
 | Toujours en erreur | Rien n'a bougé : recontrôlée l'heure suivante |
-| Toujours en erreur après une décision « vrai » ou « à discuter » | Reportée de nouveau, une fois par décision et au moins 15 min après elle : « 📌 Rappel · toujours en erreur après traitement par … » |
+| Toujours en erreur après une décision « vrai » | Reportée de nouveau, une fois par décision et au moins 15 min après elle : « 📌 Rappel · toujours en erreur après traitement par … » |
 | De nouveau en erreur | Une offre OK devenue fausse : nouvelle alerte |
 
 Une offre jugée faux positif n'est plus recontrôlée. Les boutons de l'admin lancent un recontrôle complet sans attendre l'heure.

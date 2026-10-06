@@ -41,7 +41,7 @@ Each loop starts, in every channel it posts to, with a very visible banner: "�
 | ↪️ Suite de la boucle | The same loop resumes after another loop's messages |
 | 🚨 URGENCE PREMIER PRIX, 🔴 SUSPECT, 🟠 À VÉRIFIER | A new report |
 | 📌 Rappel · report existant | An older report sent again to its right channel (reminder): not a new detection |
-| 📌 Rappel · toujours en erreur après traitement | An offer already decided "vrai" or "à discuter", still wrong at the re-check (still wrong after being handled): the fix did not take |
+| 📌 Rappel · toujours en erreur après traitement | An offer already decided "vrai", still wrong at the re-check (still wrong after being handled): the fix did not take |
 | 🔁 Recontrôle | The re-check recap: repaired, still wrong, new errors |
 | 📋 Rappel du matin | Every day at 9 am, in emergencies (morning reminder): the first prices still wrong and the last 24 hours' summary |
 
@@ -93,7 +93,8 @@ Each alert has its thread "Feedback · game · offre id": you decide there in on
 - **Who can decide**: the people authorised on the bot. Romain adds them with `!allow @name` in #aks_price_checker. Others get a reminder, and their message stays in the thread.
 - **Discussing without deciding**: a message that does not start with one of these words decides nothing.
 - **What "faux" does**: the offer is no longer re-checked or alerted. The note is used to fix the monitor's rules, for every merchant. On an "en doute : mots en plus" alert, "faux" teaches those words for the page (a subtitle, for example): the page's other offers with them pass.
-- **What "vrai" (or "à discuter") does**: the offer is still re-checked every hour. Still wrong at least a quarter of an hour after the decision, it goes out once more, with "📌 Rappel · toujours en erreur après traitement par …": deciding is not enough, the offer has to be fixed. On an "en doute : mots en plus" alert, "vrai" makes it an error for every offer of the page with those words.
+- **What "à discuter" does**: the offer waits for the discussion. It is not reported again: it stays in the admin ("À discuter") and in the morning reminder until the final decision.
+- **What "vrai" does**: the offer is still re-checked every hour. Still wrong at least a quarter of an hour after the decision, it goes out once more, with "📌 Rappel · toujours en erreur après traitement par …": deciding is not enough, the offer has to be fixed. On an "en doute : mots en plus" alert, "vrai" makes it an error for every offer of the page with those words.
 - **What the thread gets next**: the offer's follow-ups (repaired, false positive cleared by a rule, wrong again) and the decisions taken in the admin.
 
 ## What to do with an alert
@@ -145,7 +146,7 @@ flowchart LR
 | False positive cleared by a rule | Nothing changed: a rule added since clears it |
 | Verified OK | It could not be verified before, now it is |
 | Still wrong | Nothing moved: re-checked the next hour |
-| Still wrong after a "vrai" or "à discuter" decision | Reported again, once per decision and at least 15 min after it: "📌 Rappel · toujours en erreur après traitement par …" |
+| Still wrong after a "vrai" decision | Reported again, once per decision and at least 15 min after it: "📌 Rappel · toujours en erreur après traitement par …" |
 | Wrong again | An OK offer became wrong: a new alert |
 
 An offer decided as a false positive is no longer re-checked. The admin's buttons start a full re-check without waiting for the hour.

@@ -2191,16 +2191,17 @@ def apply_recheck(entry, label, rank, product, page_url, offer, res, notify, sta
 
 
 REREPORT_GRACE = 900  # s : le temps de corriger l'offre après l'avoir tranchée, avant le rappel
-DECISION_LABELS = {"vrai": "Vrai positif", "faux": "Faux positif", "a_discuter": "À discuter"}
 
 
 def rereport_due(entry, now=None):
     """Romain, 05/10/2026 : « même si un opérateur est passé et a traité l'offre, si, au prochain passage, l'offre est
-    toujours en erreur, on doit encore la reporter ». Une offre tranchée « vrai » ou « à discuter », toujours en erreur
-    au recontrôle, est reportée de nouveau : une fois par décision, au moins REREPORT_GRACE après elle. Un « faux »
-    arrête le suivi (l'offre n'est plus recontrôlée)."""
+    toujours en erreur, on doit encore la reporter ». Une offre tranchée « vrai », toujours en erreur au recontrôle, est
+    reportée de nouveau : une fois par décision, au moins REREPORT_GRACE après elle. Un « à discuter » attend la
+    discussion, pas une correction : il n'est pas reporté (Romain, 06/10/2026, Monster Hunter Wilds chez G2A, « à
+    discuter » de Rémy renvoyé une heure plus tard : « pourquoi tu me renvoies le message alors que Rémy a répondu ») ;
+    l'admin et le rappel du matin le montrent. Un « faux » arrête le suivi (l'offre n'est plus recontrôlée)."""
     d = entry.get("decision") or {}
-    if d.get("decision") not in ("vrai", "a_discuter") or entry.get("rereported_for") == d.get("at"):
+    if d.get("decision") != "vrai" or entry.get("rereported_for") == d.get("at"):
         return False
     try:
         decided = datetime.datetime.fromisoformat(d.get("at") or "").timestamp()

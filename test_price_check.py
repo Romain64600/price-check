@@ -2593,8 +2593,18 @@ class TestReview20261005(unittest.TestCase):
         self.assertEqual(len(sent), 1)
         self.assertTrue(sent[0].startswith("📌 **Rappel** · toujours en erreur après traitement par remy (Vrai positif le "), sent[0])
         self.assertEqual(self.recheck(e), [], "the reminder comes back at every re-check")
-        e["decision"] = dict(e["decision"], at=datetime.datetime.now().astimezone().isoformat(timespec="seconds"), decision="a_discuter")
+        e["decision"] = dict(e["decision"], at=datetime.datetime.now().astimezone().isoformat(timespec="seconds"), by="garance")
         self.assertEqual(self.recheck(e), [], "no time to fix the offer after the decision")
+
+    def test_an_offer_to_discuss_is_not_reported_again(self):
+        """Romain, 06/10/2026 : « pourquoi tu me renvoies le message alors que Rémy a répondu » (Monster Hunter Wilds chez
+        G2A, offre 136209040 : « à discuter » de Rémy à 05:03, renvoyée à 05:57). Un « à discuter » attend la discussion,
+        pas une correction ; l'offre reste dans l'admin et dans le rappel du matin."""
+        e = self.entry(decided_ago=3600, decision="a_discuter")
+        self.assertEqual(self.recheck(e), [])
+        self.assertFalse(pc.rereport_due(e))
+        reminder = pc.format_daily_reminder({"checked": {"3001": dict(e, edition_rank=1)}}, {})[0]
+        self.assertIn("· À discuter (remy) ·", reminder)
 
     def test_a_handled_offer_gets_time_to_be_fixed(self):
         self.assertEqual(self.recheck(self.entry(decided_ago=300)), [])  # moins de 15 min après la décision
