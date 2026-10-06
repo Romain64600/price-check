@@ -444,6 +444,12 @@ def page_offers(trans, per_edition=1):
     cheapest = min((g[0] for (_, account), g in groups.items() if not account),
                    key=lambda p: (p["priceCard"], str(p["id"])), default=None)
     page_editions = [e.get("name", "") for e in editions.values()]
+    # l'édition principale de la page, celle qui a le plus d'offres en vente (Minecraft : « Java & Bedrock Edition », 44 sur 93)
+    on_sale = {}
+    for p in trans.get("prices") or []:
+        if p.get("price") != NO_PRICE and p.get("dispo"):
+            on_sale[str(p["edition"])] = on_sale.get(str(p["edition"]), 0) + 1
+    main_edition = (editions.get(max(on_sale, key=lambda k: (on_sale[k], k))) or {}).get("name") if on_sale else None
     offers = []
     # les éditions dans l'ordre de leur premier prix, les clés avant les comptes
     for edition, account in sorted(groups, key=lambda k: (k[1], groups[k][0]["priceCard"], k[0])):
@@ -458,7 +464,7 @@ def page_offers(trans, per_edition=1):
                 "region_desc": region.get("region_short_description") or "",
                 "platform": p.get("activationPlatform") or "",
                 "price": p["priceCard"], "account": account,
-                "page_editions": page_editions,
+                "page_editions": page_editions, "page_main_edition": main_edition,
                 "edition_rank": rank, "page_first": p is cheapest,
             })
     return offers
@@ -545,6 +551,12 @@ def merchant_config(url, merchant_name):
                 or (name and any(name.startswith(norm(prefix)) for prefix in cfg.get("name_prefixes", [])))):
             return cfg
     return {}
+
+
+def sells_only(cfg, product):
+    """Le marchand ne vend que ce produit (« only_products » de sa config : la boutique d'un éditeur, Battlestate Games)."""
+    names = {norm(v) for v in name_variants(product)}
+    return any(norm(p) in names for p in cfg.get("only_products") or [])
 
 
 STOCK_REASON_START = "offre en rupture chez le marchand"
@@ -1219,6 +1231,15 @@ def page_edition_reason(offer, words, product=""):
         return None
     most = max(n for n, _, _ in found)
     best = [(other, own) for n, other, own in found if n == most]  # à égalité, toutes nommées
+    # Minecraft, 06/10/2026 (G2A, Eneba, Driffle : « minecraft-java-bedrock-edition-deluxe-collection » rangée en « Deluxe
+    # Collection Edition ») : l'URL nomme en entier l'édition supérieure de l'offre ; l'édition principale de la page, une
+    # édition de base nommée aussi (« Java & Bedrock Edition »), n'est que le nom complet du produit (« Minecraft: Java &
+    # Bedrock Edition Deluxe Collection »). Pas pour une édition à part : The Blood of Dawnwalker « eclipse-edition-deluxe »
+    # rangée en Deluxe (seule offre) alors que l'Eclipse Edition en a 77, sur une page dont l'édition principale est Standard
+    mine = [t for t in norm(aks).split("-") if t and t not in ("edition", "and")]
+    if (not is_base_edition(aks) and mine and all(singular(t) in tokens for t in mine)
+            and all(other == offer.get("page_main_edition") and is_base_edition(other) for other, _ in best)):
+        return None
     return "édition : rangée en %s, le marchand vend %s (la page a une édition %s)" % (
         aks, " ".join(best[0][1]), " ou ".join(other for other, _ in best))
 
@@ -1765,6 +1786,11 @@ def check_offer(product, offer):
         raise CheckError("URL marchand refusée : %s" % url[:120])
     cfg = merchant_config(url, offer["merchantName"])
     result, method = analyze(product, offer, shop_url_text(url, cfg), "URL", region=region_text(url, cfg)), "URL"
+    if result["match"] is None and sells_only(cfg, product):
+        # Escape from Tarkov, 06/10/2026 (Romain : « cas spécial pour escapefromtarkov.com, ils vendent que ce jeu ») : la
+        # boutique de l'éditeur ne vend qu'un produit, son URL ne le nomme pas (« /preorder-page#preorder_unheard_edition »)
+        result = analyze(product, offer, "%s-%s" % (norm(product), shop_url_text(url, cfg)), "URL", region=region_text(url, cfg))
+        result["notes"].append("boutique qui ne vend que %s (config marchand)" % product)
     if (cfg.get("region") or {}).get("from") == "query":
         result["notes"].append("région lue dans le paramètre %s de l'URL" % (cfg["region"].get("param", "region")))
 
@@ -3150,8 +3176,8 @@ def export_reports(state, directory, pages=None, page_modes=None):
 COMPETITOR_EVERY = 1800
 COMPETITORS_FILE = "competitors.json"
 COMPETITORS = (
-    {"id": "gg-deals", "label": "gg.deals", "home": "https://gg.deals/",
-     "blocked": "gg.deals bloque le serveur (403, Cloudflare) : possible avec son API officielle (clé à créer sur un compte gg.deals)"},
+    # gg.deals bloque le serveur (403, Cloudflare) : son API officielle, avec la clé du compte de Romain (GGDEALS_API_KEY, .env)
+    {"id": "gg-deals", "label": "gg.deals", "home": "https://gg.deals/", "api": "ggdeals"},
     {"id": "dlcompare", "label": "dlcompare.fr", "home": "https://www.dlcompare.fr/", "search": "https://www.dlcompare.fr/search?q=%s"},
     {"id": "gocdkeys", "label": "gocdkeys.fr", "home": "https://www.gocdkeys.fr/", "guess": "https://www.gocdkeys.fr/acheter-%s-pc-cd-key"},
 )
@@ -3248,6 +3274,101 @@ def find_competitor(site, product, cached=None):
     return None
 
 
+GGDEALS_API = "https://api.gg.deals/v1/prices/by-steam-app-id/"
+STEAM_SEARCH = "https://store.steampowered.com/api/storesearch/?term=%s&l=english&cc=FR"
+STEAM_RETRY = 86400  # un jeu introuvable sur Steam est recherché de nouveau au plus une fois par jour
+GGDEALS_MESSAGES = {"You need to confirm your email address.":
+                    "clé de l'API gg.deals pas encore active : confirmer l'adresse e-mail du compte gg.deals"}
+
+
+class CompetitorBlocked(Exception):
+    """Le concurrent refuse le relevé (clé d'API absente ou refusée) : son widget le dit."""
+
+
+def as_price(value):
+    try:
+        return float(value) if value not in (None, "") else None
+    except (TypeError, ValueError):
+        return None
+
+
+def steam_app_id(product):
+    """L'identifiant Steam du jeu (recherche du Steam Store, nom identique), ou None : l'API de gg.deals se consulte par
+    identifiant Steam, les pages AllKeyShop n'en donnent pas."""
+    body = competitor_get(STEAM_SEARCH % urllib.parse.quote(product))
+    try:
+        items = json.loads(body.decode("utf-8") if isinstance(body, bytes) else (body or "{}")).get("items") or []
+    except (ValueError, AttributeError):
+        return None
+    for item in items:
+        if isinstance(item, dict) and item.get("type") == "app" and same_product(product, item.get("name")):
+            return str(item.get("id"))
+    return None
+
+
+def ggdeals_prices(app_ids, key):
+    """Les prix de gg.deals pour ces jeux (API officielle, région France, en euros) : {identifiant Steam : {"url", "name",
+    "price", "seller"}}, le meilleur prix affiché, boutiques officielles ou keyshops. La clé ne paraît jamais dans le
+    journal. Lève CompetitorBlocked quand l'API refuse (clé, e-mail du compte non confirmé, quota)."""
+    url = GGDEALS_API + "?" + urllib.parse.urlencode({"ids": ",".join(app_ids), "region": "fr", "key": key})
+    try:
+        status, _, body = http_get(url, BROWSER_UA)
+    except OSError as e:
+        raise CompetitorBlocked("API gg.deals injoignable (%s)" % type(e).__name__)
+    finally:
+        time.sleep(REQUEST_DELAY)
+    try:
+        data = json.loads(body.decode("utf-8") if isinstance(body, bytes) else body)
+    except (ValueError, AttributeError):
+        raise CompetitorBlocked("réponse de l'API gg.deals illisible (HTTP %s)" % status)
+    if not isinstance(data, dict) or not data.get("success"):
+        message = str(((data.get("data") if isinstance(data, dict) else None) or {}).get("message") or "HTTP %s" % status)
+        raise CompetitorBlocked(GGDEALS_MESSAGES.get(message, "API gg.deals : %s" % message[:200]))
+    out = {}
+    for app_id, game in (data.get("data") or {}).items():
+        prices = (game or {}).get("prices") if isinstance(game, dict) else None
+        if not isinstance(prices, dict) or (prices.get("currency") or "EUR") != "EUR":
+            continue
+        found = [(p, seller) for p, seller in ((as_price(prices.get("currentKeyshops")), "keyshops"),
+                                               (as_price(prices.get("currentRetail")), "boutiques officielles")) if p is not None]
+        if found:
+            price, seller = min(found)
+            link = game.get("url") if re.match(r"https://gg\.deals/", str(game.get("url") or "")) else "https://gg.deals/"
+            out[str(app_id)] = {"url": link, "name": html.unescape(str(game.get("title") or "")), "price": round(price, 2), "seller": seller}
+    return out
+
+
+def ggdeals_rows(rows, memo, now):
+    """Les lignes du widget gg.deals : l'identifiant Steam de chaque page (gardé dans state["competitors"]), puis un seul
+    appel à l'API pour toutes les pages."""
+    key = os.environ.get("GGDEALS_API_KEY", "").strip()
+    if not key:
+        raise CompetitorBlocked("clé de l'API gg.deals absente (GGDEALS_API_KEY dans .env)")
+    ids = {}
+    for row in rows:
+        if page_console(row["product"]):
+            continue
+        check_stop()
+        steam = memo.setdefault(row["page_url"], {}).get("steam") or {}
+        if not steam.get("id") and now - steam.get("at", 0) > STEAM_RETRY:
+            steam = {"id": steam_app_id(row["product"]), "at": now}
+            memo[row["page_url"]]["steam"] = steam
+        if steam.get("id"):
+            ids[row["page_url"]] = steam["id"]
+    prices = ggdeals_prices(sorted(set(ids.values())), key) if ids else {}
+    out = []
+    for row in rows:
+        if page_console(row["product"]):
+            out.append(dict(row, competitor=None, cheaper=None, gap=None, skipped="console"))
+            continue
+        found = prices.get(ids.get(row["page_url"], ""))
+        if found and found["name"] and not same_product(row["product"], found["name"]):
+            found = None  # l'identifiant Steam d'un autre jeu
+        out.append(dict(row, competitor=found, cheaper=compare_prices(row["aks"], found),
+                        gap=round(found["price"] - row["aks"]["price"], 2) if found and row["aks"] else None))
+    return out
+
+
 def aks_best_price(trans):
     """Le premier prix AllKeyShop de la page, comparé au « meilleur prix affiché » des concurrents (le plus bas, comptes
     compris, sans frais de paiement) : l'offre en vente la moins chère, toutes éditions, comptes compris, au prix sans
@@ -3293,6 +3414,12 @@ def check_competitors(targets, state, now=None):
         entry = {"id": site["id"], "label": site["label"], "home": site["home"]}
         if site.get("blocked"):
             sites.append(dict(entry, status="blocked", message=site["blocked"], rows=[]))
+            continue
+        if site.get("api") == "ggdeals":
+            try:
+                sites.append(dict(entry, status="ok", rows=ggdeals_rows(rows, memo, now)))
+            except CompetitorBlocked as e:
+                sites.append(dict(entry, status="blocked", message=str(e), rows=[]))
             continue
         out = []
         for row in rows:

@@ -1,0 +1,8 @@
+# Battlestate Games — la boutique de l'éditeur (escapefromtarkov.com). Formation du 06/10/2026 (Romain, offre 135633063,
+# Escape from Tarkov Unheard Edition, lien « /preorder-page#preorder_unheard_edition », NON VÉRIFIABLE) : « cas spécial
+# pour https://www.escapefromtarkov.com, ils vendent que ce jeu ». L'URL ne nomme pas le produit et la page n'est pas
+# lisible depuis le serveur : pour ce seul produit, le nom est tenu pour vérifié ; les autres contrôles (région,
+# plateforme, édition) se font sur l'URL comme ailleurs.
+name = "BattlestateGames"
+hosts = ["escapefromtarkov.com"]
+only_products = ["Escape from Tarkov"]

@@ -2996,8 +2996,9 @@ class TestPageEditions20261006(unittest.TestCase):
     Edition + Great White Shark Card » est bien rangée en « Premium + Great White Card », même si la page a aussi
     « Enhanced + Great White Shark Card » (3 fausses urgences au passage complet du 06/10)."""
 
-    def reason(self, product, edition, url, editions):
-        return pc.page_edition_reason({"edition": edition, "page_editions": editions}, pc.norm(pc.url_text(url)), product)
+    def reason(self, product, edition, url, editions, main=None):
+        return pc.page_edition_reason({"edition": edition, "page_editions": editions, "page_main_edition": main},
+                                      pc.norm(pc.url_text(url)), product)
 
     def test_another_edition_named_by_the_url(self):
         stellaris = ["Standard", "Deluxe", "Nova Edition", "Galaxy Edition", "Limited", "Explorer", "Bonus"]
@@ -3008,12 +3009,81 @@ class TestPageEditions20261006(unittest.TestCase):
                                          ["Standard", "Iconic Edition", "2026 Season Edition"]))
         self.assertIsNone(self.reason("Stellaris", "Nova Edition", "https://x.com/stellaris-nova-edition-steam-key", stellaris))
 
+    def test_a_higher_edition_named_in_full_keeps_the_base_edition_in_the_product_name(self):
+        # Minecraft, 06/10/2026 (Romain : « corriger et marquer faux ») : « Minecraft: Java & Bedrock Edition Deluxe
+        # Collection » rangée en « Deluxe Collection Edition », trois urgences à tort (G2A 135537501, Eneba 134838435,
+        # Driffle 135665249) : l'URL nomme en entier l'édition de l'offre, l'édition de base fait partie du nom du produit
+        mc = ["Java & Bedrock Edition", "Windows 10 Edition", "Java Edition", "Bedrock Edition", "Standard", "Bundle",
+              "Deluxe Collection Edition", "Deluxe", "Triple Bundle", "Triple Pack Edition"]
+        for url in ("https://www.g2a.com/en/minecraft-java-bedrock-edition-deluxe-collection-pc-microsoft-store-key-europe-i10000326476010",
+                    "https://www.eneba.com/other-minecraft-java-bedrock-edition-deluxe-collection-pc-windows-store-key-europe",
+                    "https://www.driffle.com/minecraft-java-and-bedrock-edition-deluxe-collection-eu-pc-microsoft-store-digital-code-p9905694"):
+            with self.subTest(url=url):
+                self.assertIsNone(self.reason("Minecraft", "Deluxe Collection Edition", url, mc, main="Java & Bedrock Edition"))
+        # sans l'édition principale de la page (ancienne offre en mémoire), l'alerte reste
+        self.assertIsNotNone(self.reason("Minecraft", "Deluxe Collection Edition",
+                                         "https://www.g2a.com/en/minecraft-java-bedrock-edition-deluxe-collection-pc-microsoft-store-key-europe-i1", mc))
+        # les vraies erreurs de la même page restent signalées
+        for edition, url in (("Bedrock Edition", "https://www.driffle.com/minecraft-windows-10-edition-pc-cd-key-p952490"),
+                             ("Standard", "https://kinguin.net/category/121279/minecraft-windows-10-edition-eu-pc-cd-key"),
+                             ("Bundle", "http://www.gamingdragons.com/en/game/buy-minecraft-java-n-bedrock-bundle-download.html")):
+            with self.subTest(edition=edition):
+                self.assertIsNotNone(self.reason("Minecraft", edition, url, mc, main="Java & Bedrock Edition"))
+        # l'édition de l'offre pas nommée en entier (sans « collection ») : l'alerte reste
+        self.assertIsNotNone(self.reason("Minecraft", "Deluxe Collection Edition", "https://x.com/minecraft-java-bedrock-edition-deluxe-key",
+                                         mc, main="Java & Bedrock Edition"))
+        # une édition à part, pas l'édition principale de la page, nommée avec l'édition de l'offre : l'alerte reste (inspiré
+        # de The Blood of Dawnwalker chez Eneba, 140458058 : « Eclipse Edition (Deluxe) » seule en Deluxe, 77 offres en
+        # Eclipse Edition, Standard 95 ; le vrai cas est une égalité, « eclipse » contre « deluxe », à trancher avec Romain)
+        self.assertIsNotNone(self.reason("Game", "Deluxe", "https://x.com/game-eclipse-moon-edition-deluxe-steam-key",
+                                         ["Standard", "Eclipse Moon Edition", "Deluxe"], main="Standard"))
+        # une autre édition supérieure nommée reste une erreur (cas inventé : « Nova Deluxe Edition » rangée en Deluxe)
+        self.assertIsNotNone(self.reason("Stellaris", "Deluxe", "https://x.com/stellaris-nova-deluxe-edition-key",
+                                         ["Standard", "Deluxe", "Nova Edition", "Nova Deluxe Edition"], main="Nova Edition"))
+
+    def test_the_main_edition_is_the_one_with_the_most_offers_on_sale(self):
+        trans = {"editions": {"2063": {"name": "Java & Bedrock Edition"}, "2497": {"name": "Deluxe Collection Edition"}},
+                 "regions": {}, "prices": [
+                     {"id": i, "price": 20 + i, "priceCard": 20 + i, "dispo": 1, "edition": "2063", "region": 1, "merchant": 1, "merchantName": "M"}
+                     for i in range(3)] + [
+                     {"id": 9, "price": 25, "priceCard": 25, "dispo": 1, "edition": "2497", "region": 1, "merchant": 1, "merchantName": "M"},
+                     {"id": 10, "price": 0.02, "priceCard": 0.02, "dispo": 1, "edition": "2497", "region": 1, "merchant": 1, "merchantName": "M"}]}
+        trans["prices"][-1]["price"] = pc.NO_PRICE
+        offers = pc.page_offers(trans, 3)
+        self.assertEqual({o["page_main_edition"] for o in offers}, {"Java & Bedrock Edition"})
+
     def test_the_url_naming_its_own_edition_better_is_not_misfiled(self):
         gta = ["Premium + Great White Card", "Enhanced + Great White Shark Card", "Standard + Great White Shark Card", "Premium"]
         for url in ("https://www.g2a.com/grand-theft-auto-v-premium-online-edition-great-white-shark-card-bundle-rockstar-key-global-i1",
                     "https://gameseal.com/grand-theft-auto-v-premium-online-edition-and-great-white-shark-card-bundle-pc-rockstar-games-launcher-key-global"):
             with self.subTest(url=url):
                 self.assertIsNone(self.reason("GTA 5", "Premium + Great White Card", url, gta))
+
+
+class TestSingleProductShop20261006(unittest.TestCase):
+    """Romain, 06/10/2026, offre 135633063 (Escape from Tarkov, Unheard Edition, NON VÉRIFIABLE) : « cas spécial pour
+    https://www.escapefromtarkov.com, ils vendent que ce jeu » (merchants/battlestategames.toml, « only_products »)."""
+
+    TARKOV = "https://www.escapefromtarkov.com/preorder-page#preorder_unheard_edition"
+
+    def check(self, product, url):
+        page = TestCheckOffer.INTERSTITIAL.replace(TestRedirection.KINGUIN, url).replace(
+            TestRedirection.KINGUIN.replace("/", "\\/"), url.replace("/", "\\/"))
+        with mock.patch.object(pc, "http_get", side_effect=[(200, None, page)]) as get, mock.patch.object(pc, "REQUEST_DELAY", 0):
+            res = pc.check_offer(product, offer(merchantName="BattlestateGames", edition="Unheard Edition", region="GLOBAL",
+                                                region_filter="PUBLISHER GLOBAL", platform="game-code"))
+        return res, get.call_count
+
+    def test_the_publisher_shop_sells_only_its_game(self):
+        res, calls = self.check("Escape from Tarkov", self.TARKOV)
+        self.assertEqual(res["verdict"], "OK", res)
+        self.assertIn("boutique qui ne vend que Escape from Tarkov (config marchand)", res["notes"])
+        self.assertEqual(calls, 1, "the merchant page is not needed")
+
+    def test_only_for_that_product(self):
+        self.assertTrue(pc.sells_only(pc.merchant_config(self.TARKOV, "BattlestateGames"), "Escape from Tarkov"))
+        self.assertFalse(pc.sells_only(pc.merchant_config(self.TARKOV, "BattlestateGames"), "Escape from Tarkov Arena"))
+        self.assertFalse(pc.sells_only(pc.merchant_config("https://www.kinguin.net/category/1/x", "Kinguin"), "Escape from Tarkov"))
 
 
 class TestCompetitors20261006(unittest.TestCase):
@@ -3071,11 +3141,11 @@ class TestCompetitors20261006(unittest.TestCase):
         state = {"checked": {}}
         with mock.patch.object(pc, "http_get", return_value=(200, None, "<html>")), mock.patch.object(pc, "parse_game_page", return_value=trans), \
              mock.patch.object(pc, "find_competitor", side_effect=lambda site, product, cached=None: found.get(site["id"])), \
-             mock.patch.object(pc, "PAGE_DELAY", 0):
+             mock.patch.object(pc, "PAGE_DELAY", 0), mock.patch.dict(os.environ, {"GGDEALS_API_KEY": ""}):
             payload = pc.check_competitors(targets, state, now=1791300000)
         sites = {x["id"]: x for x in payload["sites"]}
         self.assertEqual(sites["gg-deals"]["status"], "blocked")
-        self.assertIn("API officielle", sites["gg-deals"]["message"])
+        self.assertIn("GGDEALS_API_KEY", sites["gg-deals"]["message"], "without its key, gg.deals says why")
         dl, go = sites["dlcompare"]["rows"][0], sites["gocdkeys"]["rows"][0]
         self.assertEqual((dl["cheaper"], dl["gap"]), ("aks", 1.61))
         self.assertEqual((go["cheaper"], go["gap"]), ("competitor", -8.2))
@@ -3104,6 +3174,69 @@ class TestCompetitors20261006(unittest.TestCase):
             self.assertEqual(ps5["aks"]["price"], 36.71, "AllKeyShop's first price is still shown")
             self.assertEqual(pc_page["competitor"]["price"], 23.93)
         self.assertNotIn("EA SPORTS FC 27 PS5", asked, "a console page was looked up at a competitor")
+
+
+class TestGgDealsApi20261006(unittest.TestCase):
+    """Romain, 06/10/2026 : la clé de l'API gg.deals (gg.deals bloque le serveur, 403 Cloudflare). L'API se consulte par
+    identifiant Steam (by-steam-app-id), région France ; le meilleur prix affiché : boutiques officielles ou keyshops."""
+
+    OK = json.dumps({"success": True, "data": {
+        "2001": {"title": "STAR WARS Galactic Racer", "url": "https://gg.deals/game/star-wars-galactic-racer/",
+                 "prices": {"currentRetail": "39.99", "currentKeyshops": "29.10", "currency": "EUR"}},
+        "2002": {"title": "WARDOGS", "url": "javascript:alert(1)", "prices": {"currentRetail": "12.49", "currentKeyshops": None, "currency": "EUR"}},
+        "2003": {"title": "Dollars", "url": "https://gg.deals/game/x/", "prices": {"currentRetail": "9.99", "currency": "USD"}},
+        "2004": None}})
+
+    def test_the_best_displayed_price_official_stores_or_keyshops(self):
+        with mock.patch.object(pc, "http_get", return_value=(200, None, self.OK.encode())) as get, mock.patch.object(pc, "REQUEST_DELAY", 0):
+            prices = pc.ggdeals_prices(["2001", "2002", "2003", "2004"], "secret-key")
+        self.assertEqual(prices["2001"], {"url": "https://gg.deals/game/star-wars-galactic-racer/", "name": "STAR WARS Galactic Racer",
+                                          "price": 29.1, "seller": "keyshops"})
+        self.assertEqual((prices["2002"]["price"], prices["2002"]["seller"], prices["2002"]["url"]), (12.49, "boutiques officielles", "https://gg.deals/"))
+        self.assertNotIn("2003", prices, "a price in dollars is not compared")
+        self.assertNotIn("2004", prices)
+        url = get.call_args[0][0]
+        self.assertTrue(url.startswith("https://api.gg.deals/v1/prices/by-steam-app-id/?ids=2001%2C2002%2C2003%2C2004&region=fr&key="), url)
+
+    def test_a_refusal_says_why_and_never_shows_the_key(self):
+        refused = json.dumps({"success": False, "data": {"name": "Bad Request", "message": "You need to confirm your email address.",
+                                                          "code": 400, "status": 400}}).encode()
+        with mock.patch.object(pc, "http_get", return_value=(400, None, refused)), mock.patch.object(pc, "REQUEST_DELAY", 0):
+            with self.assertRaises(pc.CompetitorBlocked) as e:
+                pc.ggdeals_prices(["2001"], "secret-key")
+        self.assertEqual(str(e.exception), "clé de l'API gg.deals pas encore active : confirmer l'adresse e-mail du compte gg.deals")
+        with mock.patch.object(pc, "http_get", side_effect=OSError("timed out https://api.gg.deals/?key=secret-key")), \
+             mock.patch.object(pc, "REQUEST_DELAY", 0):
+            with self.assertRaises(pc.CompetitorBlocked) as e:
+                pc.ggdeals_prices(["2001"], "secret-key")
+        self.assertNotIn("secret-key", str(e.exception))
+
+    def test_the_rows_one_api_call_steam_ids_kept_console_pages_skipped(self):
+        rows = [{"product": "STAR WARS Galactic Racer", "page_url": "https://aks/sw", "list": "Popular", "rank": 1, "aks": {"price": 30.87}},
+                {"product": "EA SPORTS FC 27 PS5", "page_url": "https://aks/fc-ps5", "list": "Popular", "rank": 2, "aks": {"price": 36.71}},
+                {"product": "Gears of War E-Day", "page_url": "https://aks/gears", "list": "Popular", "rank": 3, "aks": {"price": 46.78}}]
+        steam = {"STAR WARS Galactic Racer": "2001", "Gears of War E-Day": None}
+        memo = {}
+        with mock.patch.dict(os.environ, {"GGDEALS_API_KEY": "secret-key"}), \
+             mock.patch.object(pc, "steam_app_id", side_effect=lambda product: steam[product]) as search, \
+             mock.patch.object(pc, "http_get", return_value=(200, None, self.OK.encode())) as get, mock.patch.object(pc, "REQUEST_DELAY", 0):
+            out = pc.ggdeals_rows(rows, memo, 1791300000)
+            again = pc.ggdeals_rows(rows, memo, 1791300000 + 1800)
+        self.assertEqual(get.call_count, 2, "one API call per check, for every page")
+        self.assertEqual(search.call_count, 2, "the Steam ids are kept: a game not found is searched again a day later")
+        sw, fc, gears = out
+        self.assertEqual((sw["competitor"]["price"], sw["cheaper"], sw["gap"]), (29.1, "competitor", -1.77))
+        self.assertEqual((fc["skipped"], fc["competitor"]), ("console", None))
+        self.assertIsNone(gears["competitor"])
+        self.assertEqual(again[0]["competitor"]["price"], 29.1)
+
+    def test_the_steam_id_is_the_game_with_the_same_name(self):
+        found = json.dumps({"total": 2, "items": [{"type": "app", "name": "STAR WARS Outlaws", "id": 1},
+                                                  {"type": "app", "name": "STAR WARS™ Galactic Racer", "id": 2001}]}).encode()
+        with mock.patch.object(pc, "competitor_get", return_value=found):
+            self.assertEqual(pc.steam_app_id("STAR WARS Galactic Racer"), "2001")
+        with mock.patch.object(pc, "competitor_get", return_value=None):
+            self.assertIsNone(pc.steam_app_id("STAR WARS Galactic Racer"))
 
 
 class TestSecurityAudit20261002(unittest.TestCase):
