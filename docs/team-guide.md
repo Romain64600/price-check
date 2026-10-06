@@ -74,7 +74,7 @@ The verdicts:
 - **SUSPECT**: a problem was found, the alert goes out.
 - **À VÉRIFIER** (to check): no conclusion possible (merchant page unreadable), on the first price of a top or coming-soon page. A person checks.
 - **À VÉRIFIER, "en doute : région …"** (in doubt: region): at G2A, a ROW key shown EUROPE. G2A's "row" does not say which countries the key covers: read the activation countries on the G2A page; Europe is covered: Faux positif.
-- **À VÉRIFIER, "en doute : mots en plus après le nom"** (in doubt: extra words after the name): the offer's URL adds words after the game's name that the monitor does not know (Minecraft ← "minecraft-dungeons-2", Control ← "control-resonant"): another game, or just a subtitle? Whatever the offer's rank, a single alert per page and per words; the decision applies to every offer of the page with those words.
+- **À VÉRIFIER, "en doute : mots en plus après le nom"** (in doubt: extra words after the name): the offer's URL adds words after the game's name that the monitor does not know (Minecraft ← "minecraft-dungeons-2", Control ← "control-resonant"): another game, or just a subtitle? Whatever the offer's rank, a single alert per page and per words; the decision applies to every offer of the page with those words, and "faux" to every page of the game (PC, Xbox, PS5).
 - **NON VÉRIFIABLE** (not verifiable): the same case elsewhere. Noted in the admin, no alert.
 
 "Recontrôle …" messages are re-check recaps: offers still wrong, repaired, false positives cleared by a rule.
@@ -93,7 +93,7 @@ Each alert has its thread "Feedback · game · offre id": you decide there in on
 
 - **Who can decide**: the people authorised on the bot. Romain adds them with `!allow @name` in #aks_price_checker. Others get a reminder, and their message stays in the thread.
 - **Discussing without deciding**: a message that does not start with one of these words decides nothing.
-- **What "faux" does**: the offer is no longer re-checked or alerted. The note is used to fix the monitor's rules, for every merchant. On an "en doute : mots en plus" alert, "faux" teaches those words for the page (a subtitle, for example): the page's other offers with them pass.
+- **What "faux" does**: the offer is no longer re-checked or alerted. The note is used to fix the monitor's rules, for every merchant. On an "en doute : mots en plus" alert, "faux" teaches those words for the game, on all its platforms (a subtitle, for example): the other offers with them pass.
 - **What "à discuter" does**: the offer waits for the discussion. It is not reported again: it moves to the top of the admin, in the "💬 À discuter" part (to discuss), with the note as its comment, and stays in the morning reminder until the final decision (vrai or faux). To close it, decide on the offer, not on the comment: `vrai` if the error is real, `faux` if the offer is correct. Agreeing with a comment that shows the offer is right means `faux`.
 - **What "vrai" does**: the offer is still re-checked every hour. Still wrong at least a quarter of an hour after the decision, it goes out once more, with "📌 Rappel · toujours en erreur après traitement par …": deciding is not enough, the offer has to be fixed. On an "en doute : mots en plus" alert, "vrai" makes it an error for every offer of the page with those words.
 - **What the thread gets next**: the offer's follow-ups (repaired, false positive cleared by a rule, wrong again) and the decisions taken in the admin.

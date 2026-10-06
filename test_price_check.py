@@ -2766,6 +2766,89 @@ class TestReview20261006(unittest.TestCase):
         self.assertEqual(export({})["1"], ("top-games", None))
 
 
+class TestTailWordsReview20261006(unittest.TestCase):
+    """Revue des commentaires du 06/10/2026 : les 15 doutes « mots en plus après le nom » jugés par Rémy et Romain étaient
+    tous des faux positifs. Chaque cas devient une règle générale (jamais un alias par produit) ; les vrais doutes restent."""
+
+    def tail(self, product, edition, url, page="", merchant="X"):
+        o = offer(merchantName=merchant, edition=edition, url=url)
+        res = {"verdict": "OK", "method": "URL", "url": url, "notes": [], "reasons": []}
+        state = {"checked": {}}
+        out = pc.apply_tail_words(res, state, page or "https://www.allkeyshop.com/blog/buy-x-cd-key-compare-prices/", "1",
+                                  "2026-10-06 15:00", product, o)
+        return out.get("tail") or []
+
+    def test_the_fifteen_judged_doubts_are_gone(self):
+        aks = "https://www.allkeyshop.com/blog/%s/"
+        cases = [  # (produit, édition, URL du marchand, page AllKeyShop), le motif du faux positif en commentaire
+            ("Forza Horizon 5 PS5", "Standard", "https://www.vidaplayer.com/en/product/game-playstation-5-spain/forza-horizon-5-standard-edition", ""),  # le nom plus loin que le « 5 »
+            ("GTA 5", "Premium + Megalodon Card", "https://www.g2a.com/grand-theft-auto-v-premium-online-edition-megalodon-shark-card-bundle-rockstar-key-global-i10000171269001", ""),
+            ("GTA 5", "Premium + Megalodon Card", "https://www.eneba.com/steam-grand-theft-auto-v-premium-online-edition-megalodon-shark-card-bundle-rockstar-social-club-key-global", ""),
+            ("Civilization 7", "Settler Edition", "https://www.gamersgate.com/product/sid-meiers-civilization-vii-settlers-edition/", ""),  # pluriel
+            ("Civilization 7", "Settler's Edition", "https://www.kinguin.net/en/category/383041/sid-meier-s-civilization-vii-settler-s-edition-eu-pc-steam-cd-key", ""),  # apostrophe
+            ("Castlevania Belmont's Curse", "Standard", "https://www.kinguin.net/en/category/563743/castlevania-belmont-s-curse-pre-order-pc-steam-cd-key", ""),
+            ("Castlevania Belmont's Curse", "Preorder bonus", "https://de.gamesplanet.com/game/castlevania-belmont-s-curse-steam-key--8223-1", ""),
+            ("Resident Evil 4 Xbox Series", "Deluxe", "https://www.cjs-cdkeys.com/products/Resident-Evil-4-Remake-Deluxe-Edition-Key-%28Xbox-Series-X%7CS%29.html",
+             aks % "buy-resident-evil-4-remake-xbox-series-compare-prices"),  # le mot est dans le nom de la page AllKeyShop
+            ("Stellaris", "Starter Pack", "https://www.kinguin.net/category/84491/stellaris-starter-pack-steam-cd-key&roff=1", ""),  # paramètre collé
+            ("Assetto Corsa EVO", "Bundle", "https://store.steampowered.com/bundle/61303/Assetto_Corsa_EVO__Rally_Bundle/", ""),
+            ("GTA 5", "GTA 5 + Criminal", "https://www.gamebillet.com/grand-theft-auto-v-and-criminal-enterprise-starter-pack-bundle", ""),
+            ("Black Myth Wu Kong Xbox Series", "Standard", "https://www.loaded.com/black-myth-wukong-xbox-series-x-s-eu", ""),  # mots collés
+            ("Black Myth Wu Kong PS5", "Standard", "https://www.vidaplayer.com/product/game-playstation-5-spain/black-myth-wukong-standard-edition", ""),
+            ("F1 25", "Iconic Edition", "https://muve.games/p/f1-25-iconic-edition-time-limited-pre-purchase-xbox-series-x-s-europe-2356297", ""),
+            ("Euro Truck Simulator 2", "Bundle", "https://www.eneba.com/steam-euro-truck-simulator-2-scania-truck-driving-simulator-bundle-steam-pc-key-global", ""),
+        ]
+        for product, edition, url, page in cases:
+            with self.subTest(product=product, url=url):
+                self.assertEqual(self.tail(product, edition, url, page), [])
+
+    def test_the_remaining_noise_too(self):
+        for product, edition, url in [
+            ("S.T.A.L.K.E.R. 2 Heart of Chornobyl", "Deluxe", "https://www.g2a.com/en/stalker-2-heart-of-chernobyl-deluxe-edition-pc-steam-key-global-i1000025"),  # une lettre
+            ("EA SPORTS FC 26 Xbox Series", "The World's Game Edition", "https://www.eneba.com/xbox-ea-sports-fctm-26-the-worlds-game-edition-xbox-live-key-europe"),  # ™
+            ("Subnautica 2 Xbox Series", "Standard", "https://gameboost.com/subnautica-2-xbox-seriesxbox-pc-global-00-72566"),  # mots connus collés
+            ("GTA 5 Xbox Series", "Enhanced", "https://www.gamingdragons.com/en/game/buy-grand-theft-auto-v-xbox-digital-code-enh.html"),  # abréviation
+            ("The Witcher 3 Wild Hunt", "GOTY", "https://muve.games/p/the-witcher-3-wild-hunt-game-of-the-year-edition-592ab2"),
+            ("Dead by Daylight", "Stranger Edition", "https://www.eneba.com/steam-dead-by-daylight-stranger-things-edition-steam-key-global"),
+            ("Football Manager 26", "Standard", "https://www.driffle.com/football-manager-26-europe-pc-mac-official-webiste-digital-key-p99"),  # faute de frappe
+            ("Kingdom Come Deliverance 2", "Royal", "https://k4g.com/product/kingdom-come-deliverance-ii-steam-europe-instant-cd-key-royal-edition-cd-key-SCZXUHNQ"),
+            ("Red Dead Redemption", "Standard + DLC", "https://kinguin.net/en/category/281410/red-dead-redemption-undead-nightmare-pc-epic-games-green-gift-redemption-code"),
+            ("Dragon Shelter", "Bundle 2", "https://store.steampowered.com/bundle/86153/Dragon_Shelter_x_Amber_Isle/"),
+        ]:
+            with self.subTest(product=product):
+                self.assertEqual(self.tail(product, edition, url), [])
+
+    def test_real_doubts_stay(self):
+        for product, edition, url, words in [
+            ("Minecraft", "Standard", "https://www.example.com/minecraft-dungeons-2-pc-key", ["dungeons"]),
+            ("Control", "Standard", "https://www.example.com/control-resonant-steam-key", ["resonant"]),
+            ("Transport Fever 3", "Standard", "https://www.kinguin.net/category/942442/transport-fever-3-or-mystery-steam-cd-key-by-global", ["by", "mystery", "or"]),
+            ("Elden Ring", "Standard", "https://gameseal.com/elden-sword-pc-steam-key-global", ["sword"]),
+            ("F1 25", "Standard", "https://www.hrkgame.com/en/product/f1-25-iconic-edition-xbox-series-x-europe", ["iconic"]),
+            ("Hearts of Iron 4", "Standard", "https://k4g.com/product/hearts-of-iron-iv-steam-ukraine-cd-key-standard-edition-cd-key-066ABC12", ["ukraine"]),
+        ]:
+            with self.subTest(product=product):
+                self.assertEqual(self.tail(product, edition, url), words)
+
+    def test_localized_stores_have_no_extra_words_doubt(self):
+        url = "https://www.nintendo.com/fr-fr/Jeux/Jeux-Nintendo-Switch/Sesame-Street-Amis-et-Fun-3147246.html"
+        self.assertEqual(self.tail("Sesame Street Friends & Fun Nintendo Switch", "Standard", url, merchant="Nintendo eShop FR"), [])
+
+    def test_a_faux_teaches_the_words_for_every_platform_of_the_game(self):
+        """Ace Combat 8 « Wings of Theve » : 45 offres sur les pages PC, Xbox et PS5 ; un « faux » suffit pour les trois."""
+        pc_page, xbox_page = ("https://www.allkeyshop.com/blog/buy-ace-combat-8-%scompare-prices/" % x for x in ("cd-key-", "xbox-series-"))
+        state = {"checked": {"1": {"product": "Ace Combat 8"}},
+                 "tail_words": {pc_page: {"theve wings": {"offer": "1", "at": "2026-10-06 10:00", "decision": "faux"}}}}
+        url = "https://www.eneba.com/xbox-ace-combat-8-wings-of-theve-deluxe-edition-xbox-series-x-s-xbox-live-key-europe"
+        res = {"verdict": "OK", "method": "URL", "url": url, "notes": [], "reasons": []}
+        out = pc.apply_tail_words(res, state, xbox_page, "2", "2026-10-06 15:00", "Ace Combat 8 Xbox Series", offer(edition="Deluxe", url=url))
+        self.assertEqual(out["verdict"], "OK", out)
+        self.assertIn("mots en plus acceptés pour ce jeu : « theve wings » (offre 1 jugée faux positif)", out["notes"])
+        other = pc.apply_tail_words(dict(res), state, "https://www.allkeyshop.com/blog/buy-ace-combat-7-cd-key-compare-prices/", "3",
+                                    "2026-10-06 15:00", "Ace Combat 7", offer(edition="Deluxe", url=url.replace("8", "7")))
+        self.assertEqual(other["verdict"], "À VÉRIFIER", "another game learns nothing")
+
+
 class TestSecurityAudit20261002(unittest.TestCase):
     """Audit sécurité du 02/10/2026 : le moniteur tourne en root."""
 

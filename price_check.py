@@ -869,7 +869,16 @@ LABEL_NOISE = {"buy", "cheap", "acheter", "kaufen", "comprar", "key", "keys", "c
 TAIL_SERVICE_WORDS = {"xs", "xboxseries", "xboxoneseries", "xboxone", "xboxwindows", "onexbox", "pcxbox", "steamgift",
                       "steamkey", "com", "net", "checkout", "launcher", "linux", "mac", "macos", "os", "online", "ms", "java",
                       "bedrock", "gogcom", "drm", "eur", "usd", "gbp", "cdkey", "pcsteam", "alter", "play", "anywhere",
-                      "website", "multi", "multilanguage", "languages", "lang", "vr", "ps"}
+                      "website", "multi", "multilanguage", "languages", "lang", "vr", "ps",
+                      "limited", "time",  # « iconic-edition-time-limited-pre-purchase » (Muve, F1 25, 06/10/2026)
+                      # revue des doutes du 06/10/2026 : zones collées (« euus », « euna »), mentions de clé, lanceur GIANTS
+                      # (Farming Simulator), « green gift » (Rockstar), Xbox One (« xone »), codes de langue
+                      "euus", "euna", "useu", "naeu", "restricted", "uncut", "advanced", "access", "early", "giants",
+                      "software", "green", "xone", "eng", "mx",
+                      # éditeurs (« mojang », « ubi »), cartes de GTA Online, pièces G2A, délai de livraison (« up to 12
+                      # hours »), versions coupées (« cut »), « european union », abréviations (« pcw », « sx »), « numérique »
+                      "mojang", "ubi", "shark", "cash", "coins", "hours", "up", "to", "delivery", "instant", "cut", "union",
+                      "pcw", "sx", "numerique"}
 KNOWN_TAIL_WORDS = (LABEL_NOISE | FILLER_WORDS | set(EDITION_WORDS) | GENERIC_EDITION_WORDS | set(GIFT_WORDS)
                     | set(ACCOUNT_WORDS) | {w for d in DLC_WORDS for w in d.split("-")} | set(FORBIDDEN_REGION_WORDS)
                     | TAIL_SERVICE_WORDS | {w for ws in MERCHANT_ZONE_WORDS.values() for x in ws for w in x.split("-")}
@@ -877,21 +886,110 @@ KNOWN_TAIL_WORDS = (LABEL_NOISE | FILLER_WORDS | set(EDITION_WORDS) | GENERIC_ED
 DOUBT_PREFIX = "en doute : mots en plus après le nom"
 
 
-def tail_words(product, offer, normed):
+def name_words(names):
+    """Les mots d'un nom, tels que les marchands les écrivent : avec et sans l'apostrophe (« Belmont's » : « belmonts » ou
+    « belmont-s »), et deux mots voisins collés (« Wu Kong » : « wukong ») (revue des doutes du 06/10/2026)."""
+    out = set()
+    for name in names:
+        for variant in (name, re.sub(r"['’]", " ", name)):
+            words = [w for w in norm(variant).split("-") if w]
+            out |= set(words) | {a + b for a, b in zip(words, words[1:])}
+    return out
+
+
+def singular(word):
+    return word[:-1] if len(word) > 3 and word.endswith("s") and not word.endswith("ss") else word
+
+
+def one_letter_apart(a, b):
+    """Deux orthographes d'un même mot, une lettre de différence (« chernobyl » / « chornobyl », « resynched » / « resynced »)
+    ou deux lettres voisines inversées (« webiste » / « website »)."""
+    if a == b or abs(len(a) - len(b)) > 1:
+        return False
+    if len(a) == len(b):
+        diff = [i for i, (x, y) in enumerate(zip(a, b)) if x != y]
+        return len(diff) == 1 or (len(diff) == 2 and diff[1] == diff[0] + 1 and a[diff[0]] == b[diff[1]] and a[diff[1]] == b[diff[0]])
+    short, long_ = (a, b) if len(a) < len(b) else (b, a)
+    return any(long_[:i] + long_[i + 1:] == short for i in range(len(long_)))
+
+
+def familiar(word, known, names):
+    """Un mot inconnu qui n'en est pas un (revue des doutes du 06/10/2026) : « ™ » collé (« fctm » : « fc »), deux mots
+    connus collés (« seriesxbox »), une lettre de différence avec un mot du nom ou de l'édition (`names`), abréviation
+    d'un mot de l'édition (« enh » : enhanced)."""
+    if word.endswith("tm") and word[:-2] in known:
+        return True
+    if any(word[:i] in known and word[i:] in known and max(i, len(word) - i) >= 4 for i in range(2, len(word) - 1)):
+        return True  # « seriesxbox », « xboxpc »
+    if len(word) >= 6 and any(len(w) >= 6 and one_letter_apart(word, w) for w in names):
+        return True
+    if len(word) >= 5 and any(len(w) >= 5 and one_letter_apart(word, w) for w in KNOWN_TAIL_WORDS):
+        return True  # fautes de frappe du marchand : « webiste », « digtal », « steamm », « globa »
+    return len(word) >= 3 and any(len(w) > len(word) and w.startswith(word) for w in names if w.isalpha())
+
+
+def tail_words(product, offer, normed, page_words=()):
     """Les mots qui suivent le nom du produit dans l'URL et ne disent rien de connu (service, plateforme, zone, édition,
     langue, identifiant) : ils nomment souvent un autre jeu ou un DLC (« minecraft-dungeons-2 » pour Minecraft,
     « control-resonant » pour Control, « elden-ring-shadow-of-the-erdtree » pour Elden Ring). Romain, 05/10/2026 :
-    « alerter tous ces cas », une alerte par page et par mots (apply_tail_words). Triés, sans doublons : la clé."""
+    « alerter tous ces cas », une alerte par page et par mots (apply_tail_words). Triés, sans doublons : la clé.
+
+    Revue des doutes du 06/10/2026 (les 15 jugés étaient des faux positifs) : le nom est la plus longue suite de mots du
+    produit (pas le « 5 » de « game-playstation-5-spain ») ; les mots du nom et de l'édition comptent avec et sans
+    apostrophe, au pluriel comme au singulier, collés (name_words) ; les mots du nom de la page AllKeyShop sont connus
+    (`page_words` : « resident-evil-4-remake ») ; un mot entre deux mots de l'édition en fait partie (« megalodon shark
+    card ») ; pour un bundle ou une édition « X + Y », les mots avant le mot bundle/pack sont le nom du bundle (« rally
+    bundle », « criminal enterprise starter pack »)."""
     tokens = [t for t in normed.split("-") if t]
-    product_words = {w for n in name_variants(product) for w in norm(n).split("-") if w}
-    i = next((k for k, t in enumerate(tokens) if t in product_words), None)
-    if i is None:
+    product_words = name_words(name_variants(product))
+    end, best, i = None, 0, 0
+    while i < len(tokens):
+        j = i
+        while j < len(tokens) and tokens[j] in product_words:
+            j += 1
+        if j - i > best:
+            best, end = j - i, j
+        i = max(j, i + 1)
+    if end is None:
         return []
-    while i < len(tokens) and tokens[i] in product_words:
-        i += 1
-    edition_words = set(norm(offer.get("edition") or "").split("-"))
-    return sorted({t for t in drop_language_lists(tokens[i:]) if len(t) > 1 and not any(c.isdigit() for c in t)
-                   and t not in KNOWN_TAIL_WORDS and t not in product_words and t not in edition_words})
+    tail = drop_language_lists(tokens[end:])
+    edition = offer.get("edition") or ""
+    if is_bundle(edition):
+        return []  # un bundle contient d'autres jeux (« le bundle inclus bien le jeu », Minecraft Dungeons, Rémy, 05/10/2026)
+    edition_words = name_words([edition])
+    if "goty" in edition_words:  # « GOTY » s'écrit « game of the year »
+        edition_words |= {"game", "of", "the", "year"}
+    known = KNOWN_TAIL_WORDS | product_words | edition_words | set(page_words)
+    known_singular = {singular(w) for w in known}
+    unknown = {k for k, t in enumerate(tail) if len(t) > 1 and not any(c.isdigit() for c in t)
+               and t not in known and singular(t) not in known_singular
+               and not familiar(t, known, product_words | (edition_words - GENERIC_EDITION_WORDS))}
+    def side(k, step):  # le premier mot connu de ce côté-là
+        k += step
+        while 0 <= k < len(tail) and k in unknown:
+            k += step
+        return tail[k] if 0 <= k < len(tail) else None
+    proper = edition_words - GENERIC_EDITION_WORDS - set(EDITION_WORDS)  # « megalodon », « card », pas « edition »
+    added = edition.split("+", 1)[1] if "+" in edition else ""
+    if added and set(norm(added).split("-")) <= GENERIC_EDITION_WORDS | {"content", "contents"}:
+        return []  # « Standard + DLC » : AllKeyShop ne nomme pas le contenu, le marchand le nomme (« undead nightmare »)
+    bundle_like = is_bundle(edition) or "+" in edition
+    if bundle_like and any(t in BUNDLE_WORDS for t in tokens[:end]):
+        return []  # une page de bundle (Steam : « bundle/86153/Dragon_Shelter_x_Amber_Isle ») : les autres jeux du bundle
+    bundle_at = max((k for k, t in enumerate(tail) if t in BUNDLE_WORDS), default=-1) if bundle_like else -1
+    # « megalodon shark card » : entre deux mots de l'édition ; « stranger things edition » : d'un mot de l'édition au mot
+    # « edition »
+    return sorted({tail[k] for k in unknown
+                   if not (side(k, -1) in proper and (side(k, 1) in proper or side(k, 1) == "edition")) and not k < bundle_at})
+
+
+def product_family(product):
+    """Le jeu sans sa plateforme : « Ace Combat 8 Xbox Series », « Ace Combat 8 PS5 » -> « ace-combat-8 »."""
+    base = norm(product or "")
+    for suffix in PLATFORM_SUFFIXES:
+        if base.endswith("-" + norm(suffix)) and base != norm(suffix):
+            return base[:-len(norm(suffix)) - 1]
+    return base
 
 
 def merchant_label(text, source):
@@ -2104,6 +2202,12 @@ def reroute_existing(entry, label, rank, product, page_url, offer, notify, mode)
     entry["sent_to"] = target
 
 
+def page_slug_words(page_url):
+    """Les mots du nom de la page AllKeyShop (« buy-resident-evil-4-remake-xbox-series-compare-prices »)."""
+    slug = urllib.parse.urlparse(page_url or "").path.rstrip("/").rsplit("/", 1)[-1]
+    return {w for w in norm(slug).split("-") if w} - {"buy", "compare", "prices", "cd", "key", "keys"}
+
+
 def apply_tail_words(res, state, page_url, key, stamp, product, offer):
     """Les mots en plus après le nom (Romain, 05/10/2026 : « alerter tous ces cas », « une alerte par page et par
     mots ») : une offre jugée OK sur son URL, mais dont l'URL ajoute après le nom des mots inconnus (tail_words), part en
@@ -2113,17 +2217,29 @@ def apply_tail_words(res, state, page_url, key, stamp, product, offer):
     if res.get("verdict") != "OK" or not str(res.get("method") or "").startswith("URL") or not res.get("url"):
         return res
     cfg = merchant_config(res["url"], offer.get("merchantName"))
-    tail = tail_words(product, offer, norm(shop_url_text(res["url"], cfg)))
+    if (cfg.get("product_name") or {}).get("hreflang"):  # boutique localisée : l'URL traduit le nom (Nintendo eShop FR, IT)
+        return res
+    url = re.sub(r"&[\w-]+=[^/&?#]*", "", res["url"])  # « …-cd-key&roff=1 » (Kinguin) : un paramètre, pas un mot
+    url = re.sub(r"-[A-Z0-9]{6,}(?=$|[/?#])", "", url)  # « …-cd-key-SCZXUHNQ » (K4G) : l'identifiant de la fiche
+    tail = tail_words(product, offer, norm(shop_url_text(url, cfg)), page_slug_words(page_url))
     if not tail:
         return res
     words = " ".join(tail)
     reg = state.setdefault("tail_words", {}).setdefault(page_url, {})
     seen = reg.get(words)
+    family = product_family(product)
     if seen is None:
-        reg[words] = seen = {"offer": key, "at": stamp, "decision": None}
+        reg[words] = seen = {"offer": key, "at": stamp, "decision": None, "family": family}
     decision = seen.get("decision") if seen.get("offer") != key else None
+    if decision is None:  # un « faux » sur ces mots vaut pour toutes les pages du jeu (Ace Combat 8 PC, Xbox, PS5 : 06/10/2026)
+        for other_page, other in (state.get("tail_words") or {}).items():
+            info = other.get(words)
+            if other_page != page_url and info and info.get("decision") == "faux" and (info.get("family") or product_family(
+                    (state["checked"].get(info.get("offer")) or {}).get("product"))) == family:
+                decision, seen = "faux", info
+                break
     if decision == "faux":
-        return dict(res, notes=res["notes"] + ["mots en plus acceptés pour cette page : « %s » (offre %s jugée faux positif)" % (
+        return dict(res, notes=res["notes"] + ["mots en plus acceptés pour ce jeu : « %s » (offre %s jugée faux positif)" % (
             words, seen["offer"])])
     if decision == "vrai":
         return dict(res, verdict="SUSPECT", reasons=["mots en plus déjà jugés comme une erreur sur cette page : « %s » (offre %s)" % (
