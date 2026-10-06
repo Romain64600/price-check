@@ -556,7 +556,7 @@ def out_of_stock_reason(served):
 
 
 def unsure_zone(result, offer, cfg):
-    """Romain, 06/10/2026 (Monster Hunter Wilds chez G2A, offre 136209040 : clé « ROW » affichée EUROPE, jugée vraie
+    """Romain, 06/10/2026 (Monster Hunter Wilds chez G2A : clé « ROW » affichée EUROPE, jugée vraie
     erreur le 01/10 ; Rémy : « l'offre n'est pas activable aux États-Unis, mais fonctionne en Europe ») : chez certains
     marchands, le mot de région de l'URL ne dit pas quels pays la clé couvre, et leur page est illisible depuis le
     serveur. `[region.unsure]` de leur config : zone du marchand -> zones AllKeyShop pour lesquelles la contradiction
@@ -1646,13 +1646,13 @@ INTERSTITIAL_RE = re.compile(r"/(agecheck|age-check|age-gate|age-verification|ag
 
 def interstitial(url):
     """Une page d'étape (vérification d'âge, connexion, consentement) : pas la fiche du produit. Steam renvoyait
-    « /sub/997629 » vers « /agecheck/sub/997629 », et « Agecheck » passait pour un autre produit (Warhammer 40k, 06/10/2026)."""
+    « /sub/<id> » vers « /agecheck/sub/<id> », et « Agecheck » passait pour un autre produit (Warhammer 40k, 06/10/2026)."""
     return bool(INTERSTITIAL_RE.search(urllib.parse.urlparse(url or "").path))
 
 
 def moved(url, served):
     """La fiche servie (redirection ou URL canonique) est-elle une autre que celle du lien ? Même chemin aux segments
-    de langue près : Kinguin répond 301 de « /en/category/360568/… » vers « /category/360568/… », c'est la même fiche."""
+    de langue près : Kinguin répond 301 de « /en/category/<id>/… » vers « /category/<id>/… », c'est la même fiche."""
     if not served:
         return False
     return norm(url_text(url)) != norm(url_text(urllib.parse.urljoin(url, served)))
