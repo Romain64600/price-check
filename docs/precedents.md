@@ -41,7 +41,7 @@ Chaque cas réel jugé, avec sa décision, sa preuve et la règle qui en découl
 | 30/09 | GTA 4 · Standard | Steam | **Complete Edition** rangée en Standard, la page a une édition Complete | titre Steam « Grand Theft Auto IV: The Complete Edition » | étude ; **arbitrage du 01/10** : vrai positif (« vraiment rangé en Standard alors qu'il devrait être en Complete ») |
 | 30/09 | STAR WARS Zero Company Xbox Series · Standard + DLC | GAMIVO | **Deluxe + bonus** rangée en « Standard + DLC », la page a « Deluxe + Bonus » | URL `…-global-deluxe-pre-order-bonus` | étude ; **arbitrage du 01/10** : vrai positif (« mauvaise édition = erreur, même si l'acheteur reçoit plus ») |
 | 01/10 | Call of Duty Modern Warfare 4 · Vault (3e prix) | Instant Gaming | Clé **Microsoft Store** (PC/Xbox) affichée Steam | URL après 301 `…-xbox-series-x-s-pc-microsoft-store`, page « PC & XBOX Series X\|S (Microsoft Store) » | Top Offers, premier jour |
-| 01/10 | Monster Hunter Wilds · Deluxe (2e prix) | G2A | Clé **ROW** affichée EUROPE (`STEAM EU`) | URL `…-steam-key-row-…` | Top Offers |
+| 01/10 | Monster Hunter Wilds · Deluxe (2e prix, offre 136209040) | G2A | Clé **ROW** affichée EUROPE (`STEAM EU`) | URL `…-steam-key-row-…` (page G2A illisible depuis le serveur : « Access Denied », 06/10) | Top Offers ; revu le 06/10 : « à discuter » de Rémy (« l'offre n'est pas activable aux États-Unis, mais fonctionne en Europe ») ; **confirmé « Vrai positif » par Romain le 06/10 à 08:19**, offre retirée de la page à 08:16 |
 | 01/10 | Forza Horizon 5 PS5 · Deluxe (2e prix) | Vidaplayer | **Standard** rangée en Deluxe (l'acheteur reçoit moins) | URL `…/forza-horizon-5-standard-edition` | Top Offers |
 | 01/10 | Crusader Kings 3 · Starter Edition (2e prix) | Eneba | Clé **EU** affichée `IN ENGLISH ONLY` (clé mondiale selon AllKeyShop : « Global Key with english language available ») | URL `…-steam-key-europe`, page « Steam Key EUROPE » | Top Offers |
 | 01/10 | TCG Card Shop Simulator Switch 2 · Standard (2e, 3e prix) | Nintendo eShop IT, ES | **Mauvais produit** : la fiche est *Horse Spirit Valley 2* (3173803) | version en-GB de la fiche | Top Offers |
@@ -169,7 +169,7 @@ Amazon : jusqu'au 01/10/2026, jamais d'alerte pour une offre invérifiable (« n
 
 | Cas | Question |
 |---|---|
-| Monster Hunter Wilds · Deluxe (2e prix, offre 136209040) · G2A, clé « ROW » affichée EUROPE (`STEAM EU`) | Jugée vraie erreur le 01/10 (« ROW ne couvre pas l'Europe »). Rémy, « à discuter » le 06/10 : « l'offre n'est pas activable aux États-Unis, mais fonctionne en Europe, dans ce cas-là le « row » sera en région « EU » ». Si la page G2A le dit, l'affichage EUROPE est juste (le marchand vend plus large) : faux positif, et le « row » d'une URL G2A ne prouverait plus rien. La page G2A est illisible depuis le serveur (« Access Denied », 06/10) : à trancher par Romain. |
+| — | Aucun cas en suspens au 06/10/2026. |
 
 ## Ce que l'étude a appris sur AllKeyShop
 
