@@ -16,7 +16,7 @@ import re
 import stat
 import time
 
-DECISIONS = {"vrai": "Vrai positif", "faux": "Faux positif", "a_discuter": "À discuter"}  # mêmes clés que l'admin
+DECISIONS = {"vrai": "True positive", "faux": "False positive", "a_discuter": "To discuss"}  # mêmes clés que l'admin
 NOTE_MAX = 1000
 THREAD_PREFIX = "Feedback · "
 THREADS_FILE = "threads.json"  # offre -> dernier fil ouvert (pour les suites que poste le moniteur), dossier partagé
@@ -24,15 +24,17 @@ DECISIONS_FILE = "decisions.jsonl"
 
 # une alerte du moniteur : l'en-tête d'urgence, un verdict, ou un report existant renvoyé ; jamais un récapitulatif (🔁)
 ALERT_STARTS = ("🚨", "🔴", "🟠", "⚪", "🟢", "📌")
-OFFER_RE = re.compile(r"· offre (\d{3,12}) ·")
-PRODUCT_RE = re.compile(r"\*\*(?:SUSPECT|À VÉRIFIER|NON VÉRIFIABLE|OK)\*\* · \*\*(.+?)\*\*")
-THREAD_OFFER_RE = re.compile(r"· offre (\d{3,12})$")
+# 07/10/2026 : the alerts and the threads are in English (« offer », « TO CHECK »), the older ones in French
+OFFER_RE = re.compile(r"· (?:offer|offre) (\d{3,12}) ·")
+PRODUCT_RE = re.compile(r"\*\*(?:SUSPECT|TO CHECK|UNVERIFIABLE|À VÉRIFIER|NON VÉRIFIABLE|OK)\*\* · \*\*(.+?)\*\*")
+THREAD_OFFER_RE = re.compile(r"· (?:offer|offre) (\d{3,12})$")
 
-# une réponse qui tranche : le mot-clé en tête, la note ensuite
+# une réponse qui tranche : le mot-clé en tête, la note ensuite. En anglais depuis le 07/10/2026 (« true », « false »,
+# « discuss »), et les mots français restent compris (« vrai », « faux », « à discuter ») : personne n'est bloqué
 DECISION_RES = (
-    ("vrai", re.compile(r"^(?:vrai(?:\s+positif)?|vp|✅)(?=$|[\s:,.;!—–-])", re.IGNORECASE)),
-    ("faux", re.compile(r"^(?:faux(?:\s+positif)?|fp|❌)(?=$|[\s:,.;!—–-])", re.IGNORECASE)),
-    ("a_discuter", re.compile(r"^(?:[àa]\s+discuter|discuter|💬)(?=$|[\s:,.;!—–-])", re.IGNORECASE)),
+    ("vrai", re.compile(r"^(?:true(?:\s+positive)?|tp|vrai(?:\s+positif)?|vp|✅)(?=$|[\s:,.;!—–-])", re.IGNORECASE)),
+    ("faux", re.compile(r"^(?:false(?:\s+positive)?|fp|faux(?:\s+positif)?|❌)(?=$|[\s:,.;!—–-])", re.IGNORECASE)),
+    ("a_discuter", re.compile(r"^(?:to\s+discuss|discuss|[àa]\s+discuter|discuter|💬)(?=$|[\s:,.;!—–-])", re.IGNORECASE)),
 )
 
 
@@ -51,9 +53,9 @@ def alert_product(content):
 
 
 def thread_name(offer, product):
-    """« Feedback · Minecraft Dungeons · offre 140513764 » : le nom se coupe dans le jeu, jamais dans l'offre (100
+    """« Feedback · Minecraft Dungeons · offer 140513764 » : le nom se coupe dans le jeu, jamais dans l'offre (100
     caractères au plus pour Discord)."""
-    tail = " · offre %s" % offer
+    tail = " · offer %s" % offer
     room = 100 - len(THREAD_PREFIX) - len(tail)
     product = (product or "report").strip()
     if len(product) > room:
@@ -83,15 +85,15 @@ def parse_decision(text):
 
 
 # La note est facultative (Romain, 05/10/2026 : « si on est d'accord avec l'erreur décrite sur le report, il n'y a pas de raison de commenter »).
-INSTRUCTIONS = ("Feedback sur ce report : réponds **vrai** (vrai positif), **faux** (faux positif) ou **à discuter**. "
-                "D'accord avec l'erreur décrite : **vrai** suffit, sans note. Sinon, ajoute une note après le mot "
-                "(« faux : la page AllKeyShop est bien un DLC »). Seules les personnes autorisées sur le "
-                "bot peuvent trancher. La décision s'enregistre dans l'admin Price check ; le moniteur la prend en compte "
-                "à son prochain passage, et poste ici les suites (réparée, toujours en erreur…).")
+INSTRUCTIONS = ("Feedback on this report: answer **true** (true positive), **false** (false positive) or **discuss**. "
+                "Agree with the error described: **true** is enough, no note. Otherwise, add a note after the word "
+                "(« false: the AllKeyShop page is a DLC »). The French words (vrai, faux, à discuter) work too. Only the "
+                "people allowed on the bot can decide. The decision is saved in the Price check admin; the monitor takes "
+                "it into account at its next pass, and posts the follow-ups here (repaired, still wrong…).")
 
 
 def confirmation(key, note, by):
-    return "✅ Décision enregistrée : **%s**%s — par %s. Visible dans l'admin, prise en compte au prochain passage." % (
+    return "✅ Decision saved: **%s**%s — by %s. Visible in the admin, taken into account at the next pass." % (
         DECISIONS[key], (" — « %s »" % note) if note else "", by)
 
 
@@ -102,7 +104,7 @@ def append_decision(directory, offer, key, note, by, at=None):
     """Ajoute une décision à decisions.jsonl (une ligne JSON, le format de l'admin). Créé ici, le fichier reste
     inscriptible par le groupe (l'admin, sous debian, y écrit aussi)."""
     if not str(offer).isdigit() or key not in DECISIONS:
-        raise ValueError("décision invalide")
+        raise ValueError("invalid decision")
     line = json.dumps({"offer": str(offer), "decision": key, "note": (note or "")[:NOTE_MAX], "by": by,
                        "at": at or time.strftime("%Y-%m-%dT%H:%M:%S%z")}, ensure_ascii=False) + "\n"
     path = os.path.join(directory, DECISIONS_FILE)

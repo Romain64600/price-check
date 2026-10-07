@@ -84,7 +84,7 @@ OFFER_MODES = {"top-offers": 3, "full-page": None}
 # reste sur le salon de son mode. Sans ce webhook, l'alerte part sur le salon du mode, avec son en-tête.
 FIRST_PRICES = 3
 URGENT_WEBHOOK = "DISCORD_WEBHOOK_URL_URGENT"
-URGENT_PREFIX = "🚨 **URGENCE PREMIER PRIX**"
+URGENT_PREFIX = "🚨 **FIRST PRICE EMERGENCY**"
 # Le bandeau de boucle (Romain, 03/10/2026 : « il faut qu'on sache qu'une nouvelle boucle a commencé, et tu mets un
 # petit message pour expliquer et un lien vers la doc … très visible, qui fasse bien la séparation entre les
 # boucles », dans chaque salon de check) : avant le premier message d'une boucle dans un salon (loop_banner).
@@ -288,9 +288,9 @@ def http_get(url, ua, follow=True, timeout=30, error_body=False):
     API dit pourquoi elle refuse, gg.deals « You need to confirm your email address ») ; une cible refusée (safe_target),
     ou l'UA AKS/Staff hors d'AllKeyShop, lève OSError."""
     if not safe_target(url):
-        raise OSError("cible refusée : %s" % (url or "")[:120])
+        raise OSError("target refused: %s" % (url or "")[:120])
     if ua == AKS_UA and not is_aks_host(url):
-        raise OSError("UA AKS/Staff hors d'AllKeyShop refusé : %s" % url[:120])
+        raise OSError("AKS/Staff UA refused outside AllKeyShop: %s" % url[:120])
     opener = urllib.request.build_opener(GuardedRedirect if follow else NoRedirect)
     headers = request_headers(ua)
     cookie = ((merchant_config(url, None).get("http") or {}).get("cookie") if ua != AKS_UA else None)
@@ -560,12 +560,13 @@ def sells_only(cfg, product):
     return any(norm(p) in names for p in cfg.get("only_products") or [])
 
 
-STOCK_REASON_START = "offre en rupture chez le marchand"
+STOCK_REASON_START = "offer out of stock at the merchant"
+STOCK_REASON_STARTS = (STOCK_REASON_START, "offre en rupture chez le marchand")  # an entry written before 07/10/2026
 
 
 def out_of_stock_reason(served):
     """Groupe Kinguin : la fiche du lien est en rupture, le marchand sert une autre offre, le prix reste dans le feed."""
-    return STOCK_REASON_START + " : le lien redirige vers une autre fiche (%s), mais le prix reste dans le feed" % served
+    return STOCK_REASON_START + ": the link redirects to another page (%s), but the price stays in the feed" % served
 
 
 def unsure_zone(result, offer, cfg):
@@ -578,13 +579,13 @@ def unsure_zone(result, offer, cfg):
     unsure = (cfg.get("region") or {}).get("unsure") or {}
     found = result.get("zones") or []
     if (not unsure or not found or set(result["kinds"]) != {"zone"}
-            or not all(r.startswith("région : AllKeyShop ") for r in result["reasons"])):
+            or not all(r.startswith("region: AllKeyShop ") for r in result["reasons"])):
         return None
     zone = aks_zone(offer)
     if not all(zone in unsure.get(z, ()) for z in found):
         return None
-    return ["en doute : %s ; chez %s, une clé %s peut s'activer en %s : vérifier les pays d'activation sur la page du marchand"
-            % (r, cfg.get("name", "ce marchand"), "/".join(found), offer["region"]) for r in result["reasons"]]
+    return ["in doubt: %s; at %s, a %s key can activate in %s: check the activation countries on the merchant's page"
+            % (r, cfg.get("name", "this merchant"), "/".join(found), offer["region"]) for r in result["reasons"]]
 
 
 def redirect_untrusted(cfg):
@@ -900,7 +901,7 @@ KNOWN_TAIL_WORDS = (LABEL_NOISE | FILLER_WORDS | set(EDITION_WORDS) | GENERIC_ED
                     | set(ACCOUNT_WORDS) | {w for d in DLC_WORDS for w in d.split("-")} | set(FORBIDDEN_REGION_WORDS)
                     | TAIL_SERVICE_WORDS | {w for ws in MERCHANT_ZONE_WORDS.values() for x in ws for w in x.split("-")}
                     | {w for ws in PLATFORM_FAMILIES.values() for x in ws for w in x.split("-")} | set(ARABIC))
-DOUBT_PREFIX = "en doute : mots en plus après le nom"
+DOUBT_PREFIX = "in doubt: extra words after the name"
 
 
 def name_words(names):
@@ -1016,7 +1017,7 @@ def merchant_label(text, source):
     Titre : sa première partie (« Sonic the Hedgehog - Epic Games Store » -> « Sonic the Hedgehog »)."""
     if not text:
         return None
-    if source.startswith("titre"):
+    if source.startswith(("titre", "page title")):
         first = re.split(r"\s+\|\s+|\s+[-\u2013\u2014]\s+", text.strip())[0].strip()
         return first[:80] or None
     for segment in reversed(text.split(" ")):
@@ -1241,8 +1242,8 @@ def page_edition_reason(offer, words, product=""):
     if (not is_base_edition(aks) and mine and all(singular(t) in tokens for t in mine)
             and all(other == offer.get("page_main_edition") and is_base_edition(other) for other, _ in best)):
         return None
-    return "édition : rangée en %s, le marchand vend %s (la page a une édition %s)" % (
-        aks, " ".join(best[0][1]), " ou ".join(other for other, _ in best))
+    return "edition: filed under %s, the merchant sells %s (the page has the edition %s)" % (
+        aks, " ".join(best[0][1]), " or ".join(other for other, _ in best))
 
 
 def edition_reason(offer, merchant_editions, words):
@@ -1267,10 +1268,10 @@ def edition_reason(offer, merchant_editions, words):
     # rangée en Standard alors que la page a une édition Complete)
     others = [e for e in offer.get("page_editions") or [] if e != aks and edition_matches(e, merchant_editions)]
     if others:
-        return "édition : rangée en %s, le marchand vend %s (la page a une édition %s)" % (
+        return "edition: filed under %s, the merchant sells %s (the page has the edition %s)" % (
             aks, ", ".join(merchant_editions), others[0])
     if not is_base_edition(aks):
-        return "édition : AllKeyShop %s, marchand %s" % (aks, ", ".join(merchant_editions))
+        return "edition: AllKeyShop %s, merchant %s" % (aks, ", ".join(merchant_editions))
     return None  # édition de base affichée, la page n'a pas l'édition vendue : rien de mieux où la ranger
 
 
@@ -1297,7 +1298,7 @@ def currency_reason(offer, words, normed):
     counted = any(re.search(r"(^|-)\d{3,}-%s(-|$)" % w, words) for w in CURRENCY_WORDS)
     if counted or any(n >= 100 and not 1980 <= n <= 2035 for n in numbers):
         found += [w for w in CURRENCY_WORDS if re.search(r"(^|-)%s(-|$)" % w, words) and not any(w in p for p in found)]
-    return "monnaie de jeu chez le marchand : " + ", ".join(found) if found else None
+    return "in-game currency at the merchant: " + ", ".join(found) if found else None
 
 
 def announces_extra_content(edition_name):
@@ -1335,45 +1336,45 @@ def analyze(product, offer, text, source, region=None):
         reasons.append(message)
         kinds.append(kind)
 
-    if match is None and source == "titre de la page":
+    if match is None and source == "page title":
         match = title_match(names, text)
         if match:
-            notes.append("titre court contenu dans le nom")
+            notes.append("short title contained in the name")
     if match is None and is_bundle(offer["edition"]) and bundle_names_product(names, normed):
         # un bundle porte un autre nom (« The Witcher Trilogy Pack ») ; mais un mot distinctif du nom y est
         # (audit du 02/10/2026 : sans ce mot, une URL Sonic passait sur la page de The Witcher 3 en « Starter Pack »)
-        notes.append("édition %s : nom non contrôlé en entier (un mot du nom présent)" % offer["edition"])
+        notes.append("edition %s: name not fully checked (one word of the name present)" % offer["edition"])
     elif match is None:
         label = merchant_label(text, source)
         result_label = label
         if label:  # le marchand nomme un produit, mais pas celui-là (TORO 2 -> « Metal Garden »)
-            reason("name", "autre produit chez le marchand : « %s » au lieu de « %s » (%s)" % (label, product, source))
+            reason("name", "another product at the merchant: « %s » instead of « %s » (%s)" % (label, product, source))
         else:
-            reason("name", "nom du produit introuvable (%s)" % source)
+            reason("name", "product name not found (%s)" % source)
     elif match == "partial":
-        notes.append("nom partiel")
+        notes.append("partial name")
     if not offer["account"] and any(has(w) for w in ACCOUNT_WORDS):
-        reason("account", "compte chez le marchand, saisi en clé")
+        reason("account", "account at the merchant, entered as a key")
     forbidden = [w for w in FORBIDDEN_REGION_WORDS if has(w, region_words)]
     if forbidden:
-        reason("zone", "région interdite : " + ", ".join(forbidden))
+        reason("zone", "forbidden region: " + ", ".join(forbidden))
     zone = aks_zone(offer)
     found = merchant_zones(region_words)
     if zone and found and not ZONE_COVERAGE[zone] <= zone_coverage(found):
-        reason("zone", "région : AllKeyShop %s, marchand %s" % (offer["region"], "/".join(sorted(found))))
+        reason("zone", "region: AllKeyShop %s, merchant %s" % (offer["region"], "/".join(sorted(found))))
     if any(has(w) for w in GIFT_WORDS) and not is_gift_region(offer):
-        reason("gift", "gift chez le marchand, affiché en clé %s" % offer["region"])
+        reason("gift", "gift at the merchant, shown as a key %s" % offer["region"])
     # plateforme : sur tous les mots, car « Xbox Series » fait partie du nom AllKeyShop et de l'URL
     aks_groups = aks_platform_groups(offer)
     url_groups = text_platform_groups(normed)
     if aks_groups and url_groups and not aks_groups & url_groups:
-        reason("platform", "plateforme : AllKeyShop %s, marchand %s" % (
+        reason("platform", "platform: AllKeyShop %s, merchant %s" % (
             offer["platform"] or "/".join(sorted(aks_groups)), "/".join(sorted(url_groups))))
     else:
         console = page_console(product)
         url_consoles = url_groups & set(CONSOLE_GROUPS)
         if console and url_consoles and console not in url_consoles:
-            reason("console", "plateforme : page AllKeyShop %s, marchand %s" % (
+            reason("console", "platform: AllKeyShop page %s, merchant %s" % (
                 CONSOLE_LABELS[console], "/".join(CONSOLE_LABELS[c] for c in sorted(url_consoles))))
     merchant_editions = [w for w in EDITION_WORDS if has(w)]
     er = edition_reason(offer, merchant_editions, words) or page_edition_reason(offer, words, product)
@@ -1386,7 +1387,7 @@ def analyze(product, offer, text, source, region=None):
     # sur la page d'un DLC (édition « DLC » présente), le mot est attendu
     if (dlc and not has("bonus") and not announces_extra_content(offer["edition"]) and not offer.get("page_dlc")
             and not year_pass_edition(offer["edition"], words)):
-        reason("dlc", "contenu additionnel : " + ", ".join(dlc))
+        reason("dlc", "additional content: " + ", ".join(dlc))
     cr = currency_reason(offer, words, normed)
     if cr:
         reason("currency", cr)
@@ -1712,15 +1713,15 @@ def flag_out_of_stock(result, product, offer, served, url=None, cfg=None):
     fiche en rupture : alerte « en rupture, le prix reste dans le feed » (Romain, 02/10/2026 ; Stellaris : la clé EU
     du lien remplacée par la globale, Rust : « eu » -> « de »). La région n'est plus reprochée quand la fiche servie,
     ce que l'acheteur obtient, correspond à l'affichage (Stellaris, 01/10/2026)."""
-    again = analyze(product, offer, url_text(served), "URL de la fiche servie")
+    again = analyze(product, offer, url_text(served), "URL of the page served")
     if offer_signature(again) == offer_signature(result) and not other_listing(url, served, cfg):
-        result["notes"].append("fiche renommée chez le marchand : %s" % served)
+        result["notes"].append("page renamed at the merchant: %s" % served)
         return
     if "zone" in result["kinds"]:
         if again["match"] and "zone" not in again["kinds"]:
             kept = [(r, k) for r, k in zip(result["reasons"], result["kinds"]) if k != "zone"]
             result["reasons"], result["kinds"] = [r for r, _ in kept], [k for _, k in kept]
-            result["notes"].append("région lue sur la fiche servie, qui correspond à l'affichage")
+            result["notes"].append("region read on the page served, which matches the display")
     result["reasons"].append(out_of_stock_reason(served))
     result["kinds"].append("stock")
 
@@ -1733,10 +1734,10 @@ def unverified_reason(offer, url):
     Forever chez Driffle, dont l'URL « warcraft-forever-… » n'était pas contrôlée, édition « Heroic Pack »)."""
     label = merchant_label(url_text(url), "URL")
     if is_bundle(offer["edition"]):
-        why = "édition %s : nom non contrôlé dans l'URL" % offer["edition"]
+        why = "edition %s: name not checked in the URL" % offer["edition"]
     else:
-        why = "nom du produit introuvable dans l'URL"
-    return why + (" (elle nomme « %s »)" % label if label else "") + ", page marchand illisible"
+        why = "product name not found in the URL"
+    return why + (" (it names « %s »)" % label if label else "") + ", merchant page unreadable"
 
 
 class CheckError(Exception):
@@ -1781,19 +1782,19 @@ def check_offer(product, offer):
     else:
         url = merchant_url(body)
     if not url:
-        raise CheckError("URL marchand introuvable dans la page de redirection")
+        raise CheckError("merchant URL not found in the redirect page")
     url = unwrap_affiliate(url)
     if not safe_target(url):
-        raise CheckError("URL marchand refusée : %s" % url[:120])
+        raise CheckError("merchant URL refused: %s" % url[:120])
     cfg = merchant_config(url, offer["merchantName"])
     result, method = analyze(product, offer, shop_url_text(url, cfg), "URL", region=region_text(url, cfg)), "URL"
     if result["match"] is None and sells_only(cfg, product):
         # Escape from Tarkov, 06/10/2026 (Romain : « cas spécial pour escapefromtarkov.com, ils vendent que ce jeu ») : la
         # boutique de l'éditeur ne vend qu'un produit, son URL ne le nomme pas (« /preorder-page#preorder_unheard_edition »)
         result = analyze(product, offer, "%s-%s" % (norm(product), shop_url_text(url, cfg)), "URL", region=region_text(url, cfg))
-        result["notes"].append("boutique qui ne vend que %s (config marchand)" % product)
+        result["notes"].append("shop that sells only %s (merchant config)" % product)
     if (cfg.get("region") or {}).get("from") == "query":
-        result["notes"].append("région lue dans le paramètre %s de l'URL" % (cfg["region"].get("param", "region")))
+        result["notes"].append("region read from the URL parameter %s" % (cfg["region"].get("param", "region")))
 
     hreflang = (cfg.get("product_name") or {}).get("hreflang")
     if result["match"] is None and hreflang:
@@ -1805,10 +1806,10 @@ def check_offer(product, offer):
         time.sleep(REQUEST_DELAY)
         alt = alternate_url(page, hreflang)
         if alt:
-            result = analyze(product, offer, url_text(alt), "URL de la version %s" % hreflang, region=region_text(alt, cfg))
-            result["notes"].append("nom contrôlé sur %s" % alt)
+            result = analyze(product, offer, url_text(alt), "URL of the %s version" % hreflang, region=region_text(alt, cfg))
+            result["notes"].append("name checked on %s" % alt)
             served = alt
-            return done("SUSPECT" if result["reasons"] else "OK", "URL de la version %s" % hreflang, result["reasons"], result["notes"])
+            return done("SUSPECT" if result["reasons"] else "OK", "URL of the %s version" % hreflang, result["reasons"], result["notes"])
 
     location = None
     if redirect_untrusted(cfg) or result["match"] is None:
@@ -1821,11 +1822,11 @@ def check_offer(product, offer):
             _, location, _ = http_get(url, BROWSER_UA, follow=False)
         except OSError as e:
             if redirect_untrusted(cfg):  # sans la sonde, une rupture passerait pour une offre OK : contrôle raté, retenté
-                raise CheckError("sonde de la fiche marchand : %s" % e)
+                raise CheckError("probe of the merchant page: %s" % e)
             location = None
         time.sleep(REQUEST_DELAY)
     if location and interstitial(unwrap_affiliate(urllib.parse.urljoin(url, location))):
-        result["notes"].append("redirection vers une page d'étape ignorée : %s" % urllib.parse.urljoin(url, location))
+        result["notes"].append("redirect to an intermediate page ignored: %s" % urllib.parse.urljoin(url, location))
         location = None
     if location:
         url2 = unwrap_affiliate(urllib.parse.urljoin(url, location))
@@ -1834,9 +1835,9 @@ def check_offer(product, offer):
                 flag_out_of_stock(result, product, offer, url2, url, cfg)
                 served = url2
         elif result["match"] is None:
-            result2 = analyze(product, offer, shop_url_text(url2, cfg), "URL après redirection du marchand", region=region_text(url2, cfg))
+            result2 = analyze(product, offer, shop_url_text(url2, cfg), "URL after the merchant's redirect", region=region_text(url2, cfg))
             if result2["match"] or result2.get("label"):  # la fiche finale nomme le produit, ou un autre
-                result, method, url = result2, "URL après 301 marchand", url2
+                result, method, url = result2, "URL after the merchant's 301", url2
 
     if (result["match"] is None and result.get("label") and not (cfg.get("page") or {}).get("parser")
             and not cfg.get("localized") and not (cfg.get("product_name") or {}).get("hreflang")):
@@ -1857,10 +1858,10 @@ def check_offer(product, offer):
         if chosen:
             page_text, page_via = variation_text, variation_via
             result = analyze(product, offer, shop_url_text(url, cfg), "URL", region=chosen[0])
-            result["notes"].append("région lue sur la variante choisie par le lien : %s" % chosen[0])
-            method = "URL et variante de la page (%s)" % (variation_via or "page")
+            result["notes"].append("region read on the variant chosen by the link: %s" % chosen[0])
+            method = "URL and the page's variant (%s)" % (variation_via or "page")
         else:
-            result["notes"].append("variante choisie par le lien non lue (page illisible) : région de l'URL seule")
+            result["notes"].append("variant chosen by the link not read (page unreadable): the URL's region alone")
 
     region_from_page = False
     if (cfg.get("region") or {}).get("from") == "page" and result["match"] is not None and "zone" in result["kinds"]:
@@ -1872,10 +1873,10 @@ def check_offer(product, offer):
         if chosen:
             page_text, page_via, region_from_page = countries_text, countries_via, True
             result = analyze(product, offer, shop_url_text(url, cfg), "URL", region=chosen[0])
-            result["notes"].append("région lue sur la page, d'après les pays d'activation de la clé : %s" % chosen[0])
-            method = "URL et pays d'activation de la page (%s)" % (countries_via or "page")
+            result["notes"].append("region read on the page, from the key's activation countries: %s" % chosen[0])
+            method = "URL and the page's activation countries (%s)" % (countries_via or "page")
         else:
-            result["notes"].append("pays d'activation non lus (page illisible) : région de l'URL seule")
+            result["notes"].append("activation countries not read (page unreadable): the URL's region alone")
 
     if result["match"] is None:
         # 2e repli : lire la page marchand (HTTP simple, puis Chromium si la config le permet)
@@ -1884,14 +1885,14 @@ def check_offer(product, offer):
         if page_text is None:
             others = [r for r, k in zip(result["reasons"], result["kinds"]) if k != "name"]
             if others:  # le nom ne se vérifie pas, mais l'URL montre déjà un autre problème (Elden Ring : « PlayStation »)
-                return done("SUSPECT", method, others, result["notes"] + ["nom du produit non vérifiable (page marchand illisible)"])
-            return done("À VÉRIFIER", "aucune", [unverified_reason(offer, url)], [],
+                return done("SUSPECT", method, others, result["notes"] + ["product name not verifiable (merchant page unreadable)"])
+            return done("À VÉRIFIER", "none", [unverified_reason(offer, url)], [],
                         unverifiable=cfg.get("unverifiable", "first-price"))
-        result, method = analyze(product, offer, page_text, "titre de la page"), page_method
+        result, method = analyze(product, offer, page_text, "page title"), page_method
         if cfg.get("localized") and result["kinds"] == ["name"]:
             # boutique au titre traduit (Amazon.fr : « Kirby et le monde oublié ») : un nom introuvable
             # n'est pas une preuve, un humain vérifie ; la réponse enrichit aliases.toml
-            return done("À VÉRIFIER", method, ["titre du marchand dans une autre langue, nom non reconnu : %s" % page_text[:120]],
+            return done("À VÉRIFIER", method, ["merchant title in another language, name not recognized: %s" % page_text[:120]],
                         result["notes"], unverifiable=cfg.get("unverifiable", "first-price"))
 
     # le DLC aussi, sur une édition « X + Y » : le « + » du titre (le jeu plus le contenu) disparaît dans l'URL
@@ -1904,11 +1905,11 @@ def check_offer(product, offer):
             kept = [(r, k) for r, k in zip(result["reasons"], result["kinds"])
                     if not (k in confirmable and contradicted(k, product, offer, page_text))]
             if len(kept) < len(result["reasons"]):
-                result["notes"].append("URL contredite par la page : %s" % page_text[:120])
+                result["notes"].append("URL contradicted by the page: %s" % page_text[:120])
             elif any(k in confirmable and confirmed(k, product, offer, page_text) for _, k in kept):
-                result["notes"].append("confirmé par la page : %s" % page_text[:120])
+                result["notes"].append("confirmed by the page: %s" % page_text[:120])
             elif kept:
-                result["notes"].append("la page ne dit rien sur ce point : %s" % page_text[:120])
+                result["notes"].append("the page says nothing on this point: %s" % page_text[:120])
             result["reasons"] = [r for r, _ in kept]
             result["kinds"] = [k for _, k in kept]
         if "zone" in result["kinds"] and redirect_untrusted(cfg) and "stock" not in result["kinds"]:
@@ -1928,15 +1929,21 @@ def check_offer(product, offer):
 # ---- Alertes, état, boucle ---------------------------------------------------
 
 ICONS = {"OK": "🟢", "SUSPECT": "🔴", "À VÉRIFIER": "🟠", "NON VÉRIFIABLE": "⚪"}
+# the verdicts as the alerts show them (the codes stay: state.json, decisions.jsonl, the admin)
+VERDICT_LABELS = {"OK": "OK", "SUSPECT": "SUSPECT", "À VÉRIFIER": "TO CHECK", "NON VÉRIFIABLE": "UNVERIFIABLE"}
 NOT_SENT = ("OK", "NON VÉRIFIABLE")  # verdicts gardés dans le journal et l'état, sans alerte (OK : sauf NOTIFY_OK)
 
 
+def ordinal(n):
+    return "%d%s" % (n, "th" if 10 <= n % 100 <= 20 else {1: "st", 2: "nd", 3: "rd"}.get(n % 10, "th"))
+
+
 def rank_label(offer):
-    """« 1er prix de l'édition », « 2e prix de l'édition (compte) », ou « » sans rang connu."""
+    """« 1st price of the edition », « 2nd price of the edition (account) », or « » without a known rank."""
     r = offer.get("edition_rank")
     if not r:
         return ""
-    return "%s prix de l'édition%s" % ("1er" if r == 1 else "%de" % r, " (compte)" if offer.get("account") else "")
+    return "%s price of the edition%s" % (ordinal(r), " (account)" if offer.get("account") else "")
 
 
 def is_first_price(offer):
@@ -1957,19 +1964,19 @@ def format_alert(label, rank, product, page_url, offer, res):
     where = rank_label(offer)
     lines = [
         (URGENT_PREFIX + "\n" if is_urgent(offer, res) else "")
-        + f"{ICONS[res['verdict']]} **{res['verdict']}** · **{product}** ({label} #{rank}) · {offer['edition']}"
+        + f"{ICONS[res['verdict']]} **{VERDICT_LABELS.get(res['verdict'], res['verdict'])}** · **{product}** ({label} #{rank}) · {offer['edition']}"
         + (f" · {where}" if where else ""),
         f"{offer['merchantName']} · {offer['region']}"
         + (f" ({offer['region_filter']})" if offer.get("region_filter") and offer["region_filter"] != offer["region"] else "")
-        + f" · {offer['platform'] or 'plateforme ?'} · "
-        f"**{offer['price']:.2f} €** · offre {offer['id']} · contrôle : {res['method']}",
+        + f" · {offer['platform'] or 'platform ?'} · "
+        f"**{offer['price']:.2f} €** · offer {offer['id']} · check: {res['method']}",
     ]
-    lines += ["Raison : " + r for r in res["reasons"]]
+    lines += ["Reason: " + r for r in res["reasons"]]
     if res["notes"]:
-        lines.append("Note : " + ", ".join(res["notes"]))
+        lines.append("Note: " + ", ".join(res["notes"]))
     if res.get("url"):
-        lines.append(f"Marchand : <{res['url']}>")
-    lines.append(f"Page : <{page_url}>")
+        lines.append(f"Merchant: <{res['url']}>")
+    lines.append(f"Page: <{page_url}>")
     return "\n".join(lines)
 
 
@@ -2023,8 +2030,8 @@ def route_alert(msg, mode, send_mode, send_urgent=None):
 
 
 BANNER_RULE = "━" * 28
-LOOP_WHAT = {"top-games": "les tops : 10 premiers Popular, 5 premiers Coming soon PC",
-             "homepage": "toute la homepage : widgets de la home, TOP 50 de chaque plateforme"}
+LOOP_WHAT = {"top-games": "the tops: first 10 Popular, first 5 Coming soon PC",
+             "homepage": "the whole homepage: home widgets, TOP 50 of every platform"}
 LOOP_IDS = itertools.count(1)
 
 
@@ -2041,26 +2048,26 @@ def loop_banner(loop, channel, resumed=False):
     a posté entre-temps (une boucle des tops tourne entre deux pages de la homepage) : un bandeau « suite », court."""
     label = MODES.get(loop["mode"], {}).get("label", loop["mode"])
     if resumed:
-        return "%s\n### ↪️ Suite de la boucle · %s, commencée le %s" % (BANNER_RULE, label, loop["start"])
+        return "%s\n### ↪️ Loop continued · %s, started %s" % (BANNER_RULE, label, loop["start"])
     if loop.get("requested"):
-        kind = " · passage demandé depuis l'admin par %s : toutes les offres recontrôlées" % loop["requested"]
+        kind = " · pass requested from the admin by %s: every offer re-checked" % loop["requested"]
     elif loop.get("recheck") == "flagged":
-        kind = " · avec le recontrôle horaire des offres signalées"
+        kind = " · with the hourly re-check of the flagged offers"
     else:
         kind = ""
-    lines = [BANNER_RULE, "# %s Nouvelle boucle · %s" % ("🚨" if channel == "urgent" else "🔄", label),
+    lines = [BANNER_RULE, "# %s New loop · %s" % ("🚨" if channel == "urgent" else "🔄", label),
              "-# %s · %s%s" % (loop["start"], LOOP_WHAT.get(loop["mode"], label), kind)]
     if channel == "urgent":
-        lines += ["Urgences premiers prix : un problème avéré (SUSPECT) sur l'une des 3 offres les moins chères d'une "
-                  "édition. À traiter en premier.",
-                  "Ce qui suit vient de cette boucle : 🚨 nouveau report · 📌 rappel d'un report existant."]
+        lines += ["First price emergencies: a proven problem (SUSPECT) on one of the 3 cheapest offers of an "
+                  "edition. Handle them first.",
+                  "What follows comes from this loop: 🚨 new report · 📌 reminder of an existing report."]
     else:
-        lines.append("Ce qui suit vient de cette boucle : 🔴 🟠 nouveau report · 📌 rappel d'un report existant · "
-                     "🔁 bilan du recontrôle.")
+        lines.append("What follows comes from this loop: 🔴 🟠 new report · 📌 reminder of an existing report · "
+                     "🔁 re-check summary.")
     # la note est facultative (Romain, 05/10/2026 : « si on est d'accord avec l'erreur décrite sur le report, il n'y a pas de raison de commenter »)
-    lines += ["Chaque alerte a son fil « Feedback » : réponds **vrai**, **faux** ou **à discuter** ; une note seulement si tu "
-              "n'es pas d'accord avec l'erreur décrite, ou pour préciser.",
-              "📘 Guide de l'équipe : <%s>" % GUIDE_URL]
+    lines += ["Every alert has its « Feedback » thread: answer **true**, **false** or **discuss**; a note only if you "
+              "disagree with the error described, or for a detail.",
+              "📘 Team guide: <%s>" % GUIDE_URL]
     return "\n".join(lines)
 
 
@@ -2200,8 +2207,8 @@ def promote_unverifiable(entry, label, rank, product, page_url, offer, notify):
     passe À VÉRIFIER et part sur Discord (la règle des offres non vérifiables vaut au moment où l'offre est
     vraiment le premier prix, pas seulement au premier contrôle)."""
     res = {"verdict": "À VÉRIFIER", "reasons": entry.get("reasons") or [], "url": entry.get("url"),
-           "method": entry.get("method") or "aucune",
-           "notes": (entry.get("notes") or []) + ["devenue le premier prix de la page"]}
+           "method": entry.get("method") or "none",
+           "notes": (entry.get("notes") or []) + ["became the page's first price"]}
     msg = format_alert(label, rank, product, page_url, offer, res)
     log.info("%s", msg.replace("\n", " | "))
     try:
@@ -2263,8 +2270,8 @@ def reroute_existing(entry, label, rank, product, page_url, offer, notify, mode)
     res = {"verdict": entry["verdict"], "reasons": entry.get("reasons") or [], "notes": entry.get("notes") or [],
            "url": entry.get("url"), "method": entry.get("method") or "?"}
     msg = format_alert(label, rank, product, page_url, offer, res)
-    note = "📌 **Rappel** · report existant (signalé le %s), %s" % (
-        entry.get("at") or "?", "renvoyé dans le salon des urgences premiers prix" if target == "urgent" else "renvoyé dans le salon de son mode")
+    note = "📌 **Reminder** · existing report (flagged on %s), %s" % (
+        entry.get("at") or "?", "sent again to the first price emergency channel" if target == "urgent" else "sent again to its mode's channel")
     head, _, rest = msg.partition("\n")
     msg = "%s\n%s\n%s" % (head, note, rest) if msg.startswith(URGENT_PREFIX) else "%s\n%s" % (note, msg)
     log.info("%s", msg.replace("\n", " | "))
@@ -2308,7 +2315,7 @@ def apply_price_gap(res, offer, offers):
     if not gap:
         return res
     ratio, nxt = gap
-    reason = "premier prix anormalement bas : %.2f €, %d %% du deuxième prix de la page (%.2f €, %s, %s)" % (
+    reason = "abnormally low first price: %.2f €, %d %% of the page's second price (%.2f €, %s, %s)" % (
         offer["price"], round(100 * ratio), nxt["price"], nxt.get("merchantName") or "?", nxt.get("edition") or "?")
     kept = list(res.get("reasons") or []) if res.get("verdict") != "OK" else []
     return dict(res, verdict="SUSPECT", reasons=kept + [reason], quiet=False)
@@ -2345,14 +2352,14 @@ def apply_tail_words(res, state, page_url, key, stamp, product, offer):
                 decision, seen = "faux", info
                 break
     if decision == "faux":
-        return dict(res, notes=res["notes"] + ["mots en plus acceptés pour ce jeu : « %s » (offre %s jugée faux positif)" % (
+        return dict(res, notes=res["notes"] + ["extra words accepted for this game: « %s » (offer %s judged a false positive)" % (
             words, seen["offer"])])
     if decision == "vrai":
-        return dict(res, verdict="SUSPECT", reasons=["mots en plus déjà jugés comme une erreur sur cette page : « %s » (offre %s)" % (
+        return dict(res, verdict="SUSPECT", reasons=["extra words already judged an error on this page: « %s » (offer %s)" % (
             words, seen["offer"])], tail=tail)
     out = dict(res, verdict="À VÉRIFIER", reasons=["%s : « %s »" % (DOUBT_PREFIX, words)], unverifiable="report", tail=tail)
     if seen.get("offer") != key:  # le même doute qu'une offre déjà signalée de la page : pas de nouvelle alerte
-        out.update(quiet=True, notes=res["notes"] + ["même doute que l'offre %s : une seule alerte par page et par mots" % seen["offer"]])
+        out.update(quiet=True, notes=res["notes"] + ["same doubt as offer %s: one alert per page and per words" % seen["offer"]])
     return out
 
 
@@ -2381,9 +2388,9 @@ def apply_recheck(entry, label, rank, product, page_url, offer, res, notify, sta
     if res["verdict"] in ("À VÉRIFIER", "NON VÉRIFIABLE"):
         entry["last_recheck"] = stamp
         entry["seen"] = now
-        outcome["unknown"].append((entry, (res.get("reasons") or ["recontrôle sans conclusion"])[0]))
+        outcome["unknown"].append((entry, (res.get("reasons") or ["re-check without a conclusion"])[0]))
         return
-    names = ("URL", "région", "région", "plateforme", "édition")  # région : son nom, et son nom de filtre, chacun au sien
+    names = ("URL", "region", "region", "platform", "edition")  # région : son nom, et son nom de filtre, chacun au sien
     changed = list(dict.fromkeys(name for name, a, b in zip(names, before, after) if a and b and a != b))
     changed += seen_changes(entry, res)
     entry.update(reasons=res["reasons"], notes=res["notes"], method=res["method"], url=res["url"] or entry.get("url"),
@@ -2394,15 +2401,15 @@ def apply_recheck(entry, label, rank, product, page_url, offer, res, notify, sta
     if res["verdict"] == "OK":
         if was in ("À VÉRIFIER", "NON VÉRIFIABLE"):  # elle n'avait pas pu être vérifiée : vérifiée OK, ni réparée ni levée
             entry.update(fixed_at=stamp, fixed_kind="verified", fixed_from=was, verdict="OK",
-                         fixed_how="vérifiée OK au recontrôle" + (" (l'offre a changé : %s)" % ", ".join(changed) if changed else ""))
+                         fixed_how="verified OK at the re-check" + (" (the offer changed: %s)" % ", ".join(changed) if changed else ""))
             outcome["verified"].append(entry)
         elif was in REPORTED:
             if changed:  # l'offre a changé chez AllKeyShop ou chez le marchand : une vraie réparation
-                entry.update(fixed_at=stamp, fixed_kind="repaired", fixed_how="recontrôle OK, l'offre a changé (%s)" % ", ".join(changed),
+                entry.update(fixed_at=stamp, fixed_kind="repaired", fixed_how="re-check OK, the offer changed (%s)" % ", ".join(changed),
                              fixed_from=was, verdict="OK")
                 outcome["fixed"].append(entry)
             else:  # rien n'a changé : c'était un faux positif, levé par une règle ajoutée depuis
-                entry.update(fixed_at=stamp, fixed_kind="rule", fixed_how="ancien faux positif : rien n'a changé, levé par une règle",
+                entry.update(fixed_at=stamp, fixed_kind="rule", fixed_how="old false positive: nothing changed, cleared by a rule",
                              fixed_from=was, verdict="OK")
                 outcome["rules"].append(entry)
         else:
@@ -2464,8 +2471,8 @@ def rereport_due(entry, now=None):
 def rereport_note(decision):
     at = decision.get("at") or ""
     when = "%s/%s %s" % (at[8:10], at[5:7], at[11:16]) if len(at) >= 16 else at
-    return ("📌 **Rappel** · toujours en erreur après traitement par %s (%s le %s) : si l'offre est corrigée, vider le cache "
-            "de son URL sur AllKeyShop (gardée 24 h)" % (
+    return ("📌 **Reminder** · still wrong after being handled by %s (%s on %s): if the offer is fixed, clear the cache "
+            "of its URL on AllKeyShop (kept 24 h)" % (
                 decision.get("by") or "?", DECISION_LABELS.get(decision.get("decision"), decision.get("decision")), when))
 
 
@@ -2481,14 +2488,14 @@ def seen_changes(entry, res):
     « en rupture » le dit (la fiche servie était une autre)."""
     old, new = entry.get("evidence"), res.get("evidence") or {}
     if old is None:
-        was_stock = any(r.startswith(STOCK_REASON_START) for r in entry.get("reasons") or [])
-        now_stock = any(r.startswith(STOCK_REASON_START) for r in res.get("reasons") or [])
-        return ["fiche servie"] if was_stock and not now_stock else []
+        was_stock = any(r.startswith(STOCK_REASON_STARTS) for r in entry.get("reasons") or [])
+        now_stock = any(r.startswith(STOCK_REASON_STARTS) for r in res.get("reasons") or [])
+        return ["page served"] if was_stock and not now_stock else []
     changes = []
     if "served" in new and (old.get("served") or "") != (new.get("served") or ""):
-        changes.append("fiche servie")
+        changes.append("page served")
     if old.get("page") and new.get("page") and old["page"] != new["page"] and old.get("via") == new.get("via"):
-        changes.append("page marchand")
+        changes.append("merchant page")
     return changes
 
 
@@ -2521,7 +2528,7 @@ def recheck_flagged(label, rank, product, page_url, trans, state, notify, checke
             if key in listed or not listed:
                 # encore sur la page, mais « sans prix » (0.02) ou hors vente, ou page servie sans offres : pas une
                 # réparation (audit du 02/10/2026) ; le verdict reste, l'offre sera recontrôlée en revenant en vente
-                outcome["unknown"].append((entry, "offre momentanément sans prix sur la page" if listed else "page servie sans offres"))
+                outcome["unknown"].append((entry, "offer without a price on the page for now" if listed else "page served without offers"))
                 continue
             # retirée de la page : réparée, et recontrôlée tout de suite si elle revient (removed_at)
             entry.update(fixed_at=stamp, fixed_kind="repaired", fixed_how=REMOVED_HOW, fixed_from=entry["verdict"],
@@ -2534,7 +2541,7 @@ def recheck_flagged(label, rank, product, page_url, trans, state, notify, checke
         except Exception as e:
             if not isinstance(e, CheckError):
                 log.exception("%s / %s : %s (%s) : erreur imprévue", product, offer["edition"], offer["merchantName"], key)
-            outcome["unknown"].append((entry, "contrôle raté : %s" % e))
+            outcome["unknown"].append((entry, "check failed: %s" % e))
             continue
         if res["verdict"] == "À VÉRIFIER":
             res = dict(res, verdict=unverifiable_verdict(offer, label, page_url, res.get("unverifiable", "first-price")))
@@ -2613,34 +2620,34 @@ def recheck_orphans(state, followed, notify, checker=None, now=None):
 def format_recheck(label, by, outcome, full=False):
     """Récapitulatif Discord d'un recontrôle : complet (toutes les offres retenues, passage demandé depuis l'admin) ou
     des seules offres signalées (toutes les heures)."""
-    what = "Recontrôle de toutes les offres" if full else "Recontrôle des offres signalées"
-    lines = ["🔁 **%s** · %s%s · %d offre(s) recontrôlée(s)" % (
-        what, label, " (demandé depuis l'admin par %s)" % by if by else "", outcome["checked"])]
+    what = "Re-check of every offer" if full else "Re-check of the flagged offers"
+    lines = ["🔁 **%s** · %s%s · %d offer(s) re-checked" % (
+        what, label, " (requested from the admin by %s)" % by if by else "", outcome["checked"])]
     item = lambda e: "%s · %s · %s" % (e.get("product"), e.get("edition"), e.get("merchant"))
     # le plus important d'abord : le message est coupé à 1 900 caractères (limite Discord)
     new = ["%s (%s)" % (item(e), (e.get("reasons") or ["?"])[0][:90]) for e in outcome["new"]]
     if new:
-        lines.append("🆕 Nouvelles erreurs (%d) : %s%s" % (len(new), " ; ".join(new[:15]), " ; …" if len(new) > 15 else ""))
+        lines.append("🆕 New errors (%d): %s%s" % (len(new), " ; ".join(new[:15]), " ; …" if len(new) > 15 else ""))
     still = ["%s (%s)" % (item(e), (e.get("reasons") or ["?"])[0][:90]) for e in outcome["still"]]
     if still:
-        lines.append("🔴 Toujours en erreur (%d) : %s%s" % (len(still), " ; ".join(still[:15]), " ; …" if len(still) > 15 else ""))
+        lines.append("🔴 Still wrong (%d): %s%s" % (len(still), " ; ".join(still[:15]), " ; …" if len(still) > 15 else ""))
     fixed = ["%s — %s" % (item(e), e.get("fixed_how")) for e in outcome["removed"] + outcome["fixed"]]
     if fixed:
-        lines.append("✅ Réparées (%d) : %s%s" % (len(fixed), " ; ".join(fixed[:15]), " ; …" if len(fixed) > 15 else ""))
+        lines.append("✅ Repaired (%d): %s%s" % (len(fixed), " ; ".join(fixed[:15]), " ; …" if len(fixed) > 15 else ""))
     verified = [item(e) for e in outcome.get("verified", [])]
     if verified:
-        lines.append("🔎 Vérifiées OK, elles n'avaient pas pu être vérifiées (%d) : %s%s" % (
+        lines.append("🔎 Verified OK, they could not be verified before (%d): %s%s" % (
             len(verified), " ; ".join(verified[:10]), " ; …" if len(verified) > 10 else ""))
     rules = [item(e) for e in outcome.get("rules", [])]
     if rules:
-        lines.append("🧹 Anciens faux positifs levés par les règles, rien n'a changé (%d) : %s%s" % (
+        lines.append("🧹 Old false positives cleared by the rules, nothing changed (%d): %s%s" % (
             len(rules), " ; ".join(rules[:10]), " ; …" if len(rules) > 10 else ""))
     if outcome["unknown"]:
         unknown = ["%s (%s)" % (item(e), why[:70]) for e, why in outcome["unknown"]]
-        lines.append("⚪ Recontrôle sans conclusion, verdict inchangé (%d) : %s%s" % (
+        lines.append("⚪ Re-check without a conclusion, verdict unchanged (%d): %s%s" % (
             len(unknown), " ; ".join(unknown[:5]), " ; …" if len(unknown) > 5 else ""))
     if not (fixed or verified or rules or new or still or outcome["unknown"]):
-        lines.append("Rien à signaler : aucune offre réparée ni en erreur.")
+        lines.append("Nothing to report: no offer repaired or wrong.")
     return "\n".join(lines)[:1900]
 
 
@@ -2668,7 +2675,7 @@ def iso_time(at):
 
 def age_label(seconds):
     hours = int(seconds // 3600)
-    return "moins d'une heure" if hours < 1 else "%d h" % hours if hours < 48 else "%d j" % (hours // 24)
+    return "less than an hour" if hours < 1 else "%d h" % hours if hours < 48 else "%d d" % (hours // 24)
 
 
 def daily_reminder_due(state, t=None):
@@ -2693,30 +2700,28 @@ def format_daily_reminder(state, decisions, now=None, limit=1900):
                     key=lambda ke: ke[1].get("at") or "")
     others = sum(1 for e in checked.values() if e.get("verdict") in ("SUSPECT", "À VÉRIFIER") and live(e)
                  and not (e.get("verdict") == "SUSPECT" and first(e)))
-    lines = ["📋 **Rappel du matin · urgences premiers prix** · %s" % time.strftime("%d/%m/%Y", time.localtime(now))]
+    lines = ["📋 **Morning reminder · first price emergencies** · %s" % time.strftime("%d/%m/%Y", time.localtime(now))]
     if urgent:
-        lines.append("**%d premier%s prix en erreur, pas encore corrigé%s** (les plus anciens d'abord) :" % (
-            len(urgent), "s" if len(urgent) > 1 else "", "s" if len(urgent) > 1 else ""))
+        lines.append("**%d first price%s wrong, not fixed yet** (oldest first):" % (len(urgent), "s" if len(urgent) > 1 else ""))
         for k, e in urgent:
             d = e.get("decision") or {}
-            status = "%s (%s)" % (DECISION_LABELS.get(d.get("decision"), d.get("decision")), d.get("by") or "?") if d.get("decision") else "à traiter"
+            status = "%s (%s)" % (DECISION_LABELS.get(d.get("decision"), d.get("decision")), d.get("by") or "?") if d.get("decision") else "to handle"
             seen = entry_time(e.get("at"))
             lines.append("• **%s** · %s · %s · %s · %s · %s · <%s#offer-%s>" % (
-                e.get("product"), e.get("edition"), e.get("merchant"), rank_label(e) or "premier prix",
-                "depuis " + age_label(now - seen) if seen else "depuis ?", status, ADMIN_URL, k))
+                e.get("product"), e.get("edition"), e.get("merchant"), rank_label(e) or "first price",
+                "for " + age_label(now - seen) if seen else "for ?", status, ADMIN_URL, k))
     else:
-        lines.append("✅ **Aucun premier prix en erreur ce matin.**")
+        lines.append("✅ **No first price wrong this morning.**")
     if others:
-        lines.append("… et %d autre%s report%s ouvert%s dans l'admin (hors urgences)." % ((others,) + ("s",) * 3 if others > 1 else (others, "", "", "")))
+        lines.append("… and %d other open report%s in the admin (emergencies aside)." % (others, "s" if others > 1 else ""))
     new = sum(1 for e in checked.values() if e.get("verdict") in REPORTED and (entry_time(e.get("at")) or 0) >= since)
     fixed = lambda kind: sum(1 for e in checked.values() if e.get("fixed_kind") == kind and (entry_time(e.get("fixed_at")) or 0) >= since)
     by = collections.Counter(d.get("by") or "?" for d in (decisions or {}).values() if (iso_time(d.get("at")) or 0) >= since)
-    lines.append("**Bilan des dernières 24 h** : %d nouveau%s report%s · %d réparé%s · %d faux positif%s levé%s par une règle · "
-                 "%d décision%s%s" % (new, "x" if new > 1 else "", "s" if new > 1 else "", fixed("repaired"), "s" if fixed("repaired") > 1 else "",
-                                     fixed("rule"), "s" if fixed("rule") > 1 else "", "s" if fixed("rule") > 1 else "",
+    lines.append("**Last 24 hours**: %d new report%s · %d repaired · %d false positive%s cleared by a rule · "
+                 "%d decision%s%s" % (new, "s" if new > 1 else "", fixed("repaired"), fixed("rule"), "s" if fixed("rule") > 1 else "",
                                      sum(by.values()), "s" if sum(by.values()) > 1 else "",
                                      " (%s)" % ", ".join("%s %d" % (n, c) for n, c in by.most_common()) if by else ""))
-    lines.append("📘 Admin : <%s> · guide : <%s>" % (ADMIN_URL, GUIDE_URL))
+    lines.append("📘 Admin: <%s> · guide: <%s>" % (ADMIN_URL, GUIDE_URL))
     messages, current = [], ""
     for line in lines:
         if current and len(current) + 1 + len(line) > limit:
@@ -2739,7 +2744,7 @@ def check_stop():
         raise Stop()
 
 
-REMOVED_HOW = "offre retirée de la page"
+REMOVED_HOW = "offer removed from the page"
 
 
 def run_cycle(targets, notify, state, checker=None, save=None, per_edition=1, between=None, progress=None, recheck=False,
@@ -2841,10 +2846,10 @@ def run_cycle(targets, notify, state, checker=None, save=None, per_edition=1, be
                 log.warning("%s / %s : %s (%s) : %s", product, offer["edition"], offer["merchantName"], key, e)
                 if FAILURES[key] < MAX_CHECK_FAILURES:
                     if entry is not None:
-                        outcome["unknown"].append((entry, "contrôle raté : %s" % e))
+                        outcome["unknown"].append((entry, "check failed: %s" % e))
                     continue
-                res = {"verdict": "À VÉRIFIER", "url": None, "method": "aucune", "notes": [],
-                       "reasons": ["contrôle impossible : %s" % e]}
+                res = {"verdict": "À VÉRIFIER", "url": None, "method": "none", "notes": [],
+                       "reasons": ["check impossible: %s" % e]}
             FAILURES.pop(key, None)
             if res["verdict"] == "À VÉRIFIER":
                 res = dict(res, verdict=unverifiable_verdict(offer, label, page_url, res.get("unverifiable", "first-price")))
@@ -2875,7 +2880,7 @@ def run_cycle(targets, notify, state, checker=None, save=None, per_edition=1, be
                 "evidence": res.get("evidence"), "mode": mode, "tail": res.get("tail"),
                 "sent_to": ("urgent" if is_urgent(offer, res) else mode_channel({}, mode)) if res["verdict"] not in NOT_SENT else None,
             }
-            if res["method"] != "aucune":
+            if res["method"] != "none":
                 m = state["merchants"].setdefault(offer["merchantName"], {"methods": {}})
                 m["methods"][res["method"]] = m["methods"].get(res["method"], 0) + 1
                 m.update(url=res["url"], at=stamp)
@@ -2958,7 +2963,7 @@ def write_status(directory, status):
         write_shared(os.path.join(directory, STATUS_FILE), dict(status, updated_at=time.strftime("%Y-%m-%dT%H:%M:%S%z")))
     except OSError as e:
         log.warning("status.json non écrit : %s", e)
-DECISIONS = {"vrai": "Vrai positif : alerter", "faux": "Faux positif : ne pas alerter", "a_discuter": "À discuter"}
+DECISIONS = {"vrai": "True positive: alert", "faux": "False positive: do not alert", "a_discuter": "To discuss"}
 
 
 def read_decisions(directory):
@@ -2983,7 +2988,7 @@ def read_decisions(directory):
 # aussi) : le bot ouvre un fil sur chaque alerte et note dans threads.json, par offre, le dernier fil ouvert (salon,
 # mode du webhook, serveur). Le moniteur y poste les suites de l'offre et en donne le lien à l'admin.
 THREADS_FILE = "threads.json"
-DECISION_LABELS = {"vrai": "Vrai positif", "faux": "Faux positif", "a_discuter": "À discuter"}
+DECISION_LABELS = {"vrai": "True positive", "faux": "False positive", "a_discuter": "To discuss"}
 
 
 def read_threads(directory):
@@ -3007,15 +3012,15 @@ def follow_up_message(kind, entry, stamp):
     """Le message posté dans le fil de feedback d'une offre quand son recontrôle conclut."""
     at = stamp or entry.get("fixed_at") or entry.get("last_recheck") or ""
     if kind == "fixed":
-        return "✅ **Réparée** au recontrôle du %s : %s" % (at, entry.get("fixed_how") or "recontrôle OK")
+        return "✅ **Repaired** at the re-check of %s: %s" % (at, entry.get("fixed_how") or "re-check OK")
     if kind == "removed":
-        return "✅ **Réparée** au recontrôle du %s : offre retirée de la page" % at
+        return "✅ **Repaired** at the re-check of %s: offer removed from the page" % at
     if kind == "rules":
-        return "🧹 **Faux positif levé par une règle** au recontrôle du %s : rien n'a changé dans l'offre" % at
+        return "🧹 **False positive cleared by a rule** at the re-check of %s: nothing changed in the offer" % at
     if kind == "verified":
-        return "🔎 **Vérifiée OK** au recontrôle du %s (elle n'avait pas pu être vérifiée)" % at
+        return "🔎 **Verified OK** at the re-check of %s (it could not be verified before)" % at
     if kind == "new":
-        return "🆕 **De nouveau en erreur** au recontrôle du %s : %s" % (at, (entry.get("reasons") or ["?"])[0])
+        return "🆕 **Wrong again** at the re-check of %s: %s" % (at, (entry.get("reasons") or ["?"])[0])
     raise ValueError(kind)
 
 
@@ -3050,7 +3055,7 @@ def post_admin_decisions(state, keys, threads, send):
             continue
         note = decision.get("note")
         try:
-            send(info, "📝 Décision prise dans l'admin : **%s**%s — par %s" % (
+            send(info, "📝 Decision taken in the admin: **%s**%s — by %s" % (
                 DECISION_LABELS.get(decision.get("decision"), decision.get("decision")), (" — « %s »" % note) if note else "",
                 decision.get("by") or "?"))
         except Exception as e:
@@ -3061,7 +3066,7 @@ def send_to_thread(info, msg):
     """Poste dans un fil, par le webhook de son salon (un webhook ne poste que dans les fils de son salon)."""
     hook = webhook_for(info.get("mode") or "top-games")
     if not hook:
-        raise OSError("pas de webhook pour le mode %s" % info.get("mode"))
+        raise OSError("no webhook for mode %s" % info.get("mode"))
     send_discord("%s?thread_id=%s" % (hook, info["thread"]), msg)
 
 
@@ -3311,7 +3316,7 @@ GGDEALS_API = "https://api.gg.deals/v1/prices/by-steam-app-id/"
 STEAM_SEARCH = "https://store.steampowered.com/api/storesearch/?term=%s&l=english&cc=FR"
 STEAM_RETRY = 86400  # un jeu introuvable sur Steam est recherché de nouveau au plus une fois par jour
 GGDEALS_MESSAGES = {"You need to confirm your email address.":
-                    "clé de l'API gg.deals pas encore active : confirmer l'adresse e-mail du compte gg.deals"}
+                    "gg.deals API key not active yet: confirm the email address of the gg.deals account"}
 
 
 class CompetitorBlocked(Exception):
@@ -3347,23 +3352,23 @@ def ggdeals_prices(app_ids, key):
     try:
         status, _, body = http_get(url, BROWSER_UA, error_body=True)
     except OSError as e:
-        raise CompetitorBlocked("API gg.deals injoignable (%s)" % type(e).__name__)
+        raise CompetitorBlocked("gg.deals API unreachable (%s)" % type(e).__name__)
     finally:
         time.sleep(REQUEST_DELAY)
     try:
         data = json.loads(body.decode("utf-8") if isinstance(body, bytes) else body)
     except (ValueError, AttributeError):
-        raise CompetitorBlocked("réponse de l'API gg.deals illisible (HTTP %s)" % status)
+        raise CompetitorBlocked("gg.deals API answer unreadable (HTTP %s)" % status)
     if not isinstance(data, dict) or not data.get("success"):
         message = str(((data.get("data") if isinstance(data, dict) else None) or {}).get("message") or "HTTP %s" % status)
-        raise CompetitorBlocked(GGDEALS_MESSAGES.get(message, "API gg.deals : %s" % message[:200]))
+        raise CompetitorBlocked(GGDEALS_MESSAGES.get(message, "gg.deals API: %s" % message[:200]))
     out = {}
     for app_id, game in (data.get("data") or {}).items():
         prices = (game or {}).get("prices") if isinstance(game, dict) else None
         if not isinstance(prices, dict) or (prices.get("currency") or "EUR") != "EUR":
             continue
         found = sorted((round(p, 2), seller) for p, seller in ((as_price(prices.get("currentKeyshops")), "keyshops"),
-                                                               (as_price(prices.get("currentRetail")), "boutiques officielles"))
+                                                               (as_price(prices.get("currentRetail")), "official stores"))
                        if p is not None)
         if found:
             price, seller = found[0]
@@ -3378,7 +3383,7 @@ def ggdeals_rows(rows, memo, now):
     appel à l'API pour toutes les pages."""
     key = os.environ.get("GGDEALS_API_KEY", "").strip()
     if not key:
-        raise CompetitorBlocked("clé de l'API gg.deals absente (GGDEALS_API_KEY dans .env)")
+        raise CompetitorBlocked("gg.deals API key missing (GGDEALS_API_KEY in .env)")
     ids = {}
     for row in rows:
         if page_console(row["product"]):
@@ -3549,7 +3554,7 @@ def main():
             by_mode[mode] = fetch_targets(MODES[mode]["lists"])
             for label, rank, product, url in by_mode[mode]:
                 pages.setdefault(product, (label, rank, url))
-        print(export_reports(state, args.export_reports, pages, page_modes_of(by_mode)), "reports écrits dans", args.export_reports)
+        print(export_reports(state, args.export_reports, pages, page_modes_of(by_mode)), "reports written to", args.export_reports)
         return  # state.json n'est pas réécrit : le service, s'il tourne, en est le seul auteur
     if args.check:
         product, url = args.check
@@ -3604,7 +3609,7 @@ def main():
     resume = {}
     for mode, info in list((state.get("running") or {}).items()):
         if mode in modes and isinstance(info, dict):
-            pending[mode] = "%s (reprise après redémarrage)" % (info.get("by") or "admin")
+            pending[mode] = "%s (resumed after a restart)" % (info.get("by") or "admin")
             resume[mode] = info.get("started")
             due[mode] = 0.0
             log.info("%s : reprise du passage demandé par %s, interrompu (commencé le %s)", mode, info.get("by"), info.get("started"))

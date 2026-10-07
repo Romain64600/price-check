@@ -42,7 +42,7 @@ FILE_THRESHOLD = 6000  # au-delà, la réponse est aussi jointe en fichier .md
 PROGRESS_EVERY = 5  # secondes entre deux mises à jour du message de progression
 
 SYSTEM_PROMPT = (
-    "Tu réponds dans un salon Discord, pas dans un terminal : messages courts et directs, en français ; "
+    "Tu réponds dans un salon Discord, pas dans un terminal : messages courts et directs, dans la langue du message ; "
     "pas de tableaux Markdown (Discord ne les affiche pas), utilise des listes ; les blocs de code sont bien rendus. "
     "Le salon reçoit aussi les alertes du moniteur price-check via un webhook."
 )
@@ -123,7 +123,7 @@ def split_message(text, limit=DISCORD_LIMIT):
             fence = None if fence is not None else m.group(1)
     if current:
         chunks.append(current)
-    return [c for c in chunks if c.strip()] or ["(réponse vide)"]
+    return [c for c in chunks if c.strip()] or ["(empty answer)"]
 
 
 def progress_line(event):
@@ -191,7 +191,7 @@ class ClaudeRunner:
     async def run(self, prompt, session_id, on_progress):
         """Lance `claude -p`, suit la progression, renvoie (texte, session_id, erreur)."""
         if not self.binary:
-            return "", session_id, "exécutable claude introuvable (CLAUDE_BIN dans .env)"
+            return "", session_id, "claude executable not found (CLAUDE_BIN in .env)"
         cmd = [self.binary, "-p", "--output-format", "stream-json", "--verbose",
                "--permission-mode", self.permission_mode, "--permission-prompts", "none",
                "--append-system-prompt", SYSTEM_PROMPT]
@@ -224,12 +224,12 @@ class ClaudeRunner:
                 await self.process.wait()
         except TimeoutError:
             self.process.kill()
-            error = "délai dépassé (%d s), session interrompue" % self.timeout
+            error = "time limit exceeded (%d s), session interrupted" % self.timeout
             stderr = ""
         finally:
             self.process = None
         if result is None and not error:
-            error = "pas de réponse de Claude Code" + (" : " + stderr.strip()[-500:] if stderr.strip() else "")
+            error = "no answer from Claude Code" + (" : " + stderr.strip()[-500:] if stderr.strip() else "")
         return result or "", new_session, error
 
     def stop(self):
@@ -385,8 +385,8 @@ class Bot(discord.Client):
         if not parsed or not offer:
             return
         if not is_authorized(message.author.id, self.owner_id, self.state["allowed"]):
-            await message.reply("Seules les personnes autorisées sur le bot peuvent trancher (le propriétaire les ajoute "
-                                "avec `!allow @membre`). Ta remarque reste dans le fil.", mention_author=False)
+            await message.reply("Only the people allowed on the bot can decide (the owner adds them "
+                                "with `!allow @member`). Your remark stays in the thread.", mention_author=False)
             return
         key, note = parsed
         by = "%s (Discord)" % message.author.display_name
@@ -394,7 +394,7 @@ class Bot(discord.Client):
             fb.append_decision(self.reports_dir, offer, key, note, by)
         except (OSError, ValueError) as e:
             log.error("feedback : décision non enregistrée pour l'offre %s : %s", offer, e)
-            await message.reply("❌ Décision non enregistrée : %s" % e, mention_author=False)
+            await message.reply("❌ Decision not saved: %s" % e, mention_author=False)
             return
         log.warning("feedback : décision %s pour l'offre %s par %s%s", key, offer, by, (" : " + note[:120]) if note else "")
         await message.reply(fb.confirmation(key, note, by), mention_author=False)
@@ -417,7 +417,7 @@ class Bot(discord.Client):
             self.state["owner_id"] = self.owner_id
             save_state(self.state)
             log.warning("propriétaire appairé : %s (%s)", message.author, self.owner_id)
-            await message.reply("👋 Appairé : je ne réponds qu'à toi ici. Envoie `!help` pour les commandes.")
+            await message.reply("👋 Paired: I only answer you here. Send `!help` for the commands.")
         if not is_authorized(message.author.id, self.owner_id, self.state["allowed"]):
             log.info("ignoré : %s (%s) n'est pas autorisé", message.author, message.author.id)
             return
@@ -440,12 +440,12 @@ class Bot(discord.Client):
     async def command(self, message, text):
         word = text.split()[0].lower()
         if is_owner_only(word) and message.author.id != self.owner_id:
-            await message.reply("Commande réservée au propriétaire du bot.")
+            await message.reply("Command reserved to the bot's owner.")
             return True
         if word == "!allow" or word == "!deny":
             people = [m for m in message.mentions if m != self.user]
             if not people:
-                await message.reply("Mentionne la ou les personnes : `%s @membre`" % word)
+                await message.reply("Mention the person or people: `%s @member`" % word)
                 return True
             for member in people:
                 if word == "!allow" and member.id not in self.state["allowed"] and member.id != self.owner_id:
@@ -454,36 +454,36 @@ class Bot(discord.Client):
                     self.state["allowed"].remove(member.id)
             save_state(self.state)
             log.warning("%s par %s : %s", word, message.author, [(m.name, m.id) for m in people])
-            await message.reply("✅ %s : %s" % ("autorisé(s)" if word == "!allow" else "retiré(s)", ", ".join(m.mention for m in people)))
+            await message.reply("✅ %s : %s" % ("allowed" if word == "!allow" else "removed", ", ".join(m.mention for m in people)))
         elif word == "!who":
             names = []
             for uid in [self.owner_id] + self.state["allowed"]:
                 member = message.guild.get_member(uid) if message.guild else None
-                names.append("%s%s" % (member.mention if member else "`%s`" % uid, " (propriétaire)" if uid == self.owner_id else ""))
-            await message.reply("Peuvent me parler : " + ", ".join(names) + "\nMention obligatoire : %s" % ("oui" if self.state["require_mention"] else "non"))
+                names.append("%s%s" % (member.mention if member else "`%s`" % uid, " (owner)" if uid == self.owner_id else ""))
+            await message.reply("Can talk to me: " + ", ".join(names) + "\nMention required: %s" % ("yes" if self.state["require_mention"] else "no"))
         elif word == "!mention":
             arg = (text.split() + [""])[1].lower()
             if arg not in ("on", "off"):
-                await message.reply("Usage : `!mention on` (je ne réponds qu'aux messages qui me mentionnent, me répondent ou commencent par `!`) ou `!mention off`.")
+                await message.reply("Usage: `!mention on` (I only answer the messages that mention me, reply to me or start with `!`) or `!mention off`.")
                 return True
             self.state["require_mention"] = arg == "on"
             save_state(self.state)
-            await message.reply("Mention obligatoire : %s." % ("oui" if arg == "on" else "non"))
+            await message.reply("Mention required: %s." % ("yes" if arg == "on" else "no"))
         elif word == "!new":
             self.state["session_id"] = None
             save_state(self.state)
-            await message.reply("🆕 Nouvelle session : la suivante repart de zéro (mémoire du projet conservée).")
+            await message.reply("🆕 New session: the next one starts afresh (the project's memory is kept).")
         elif word == "!stop":
-            await message.reply("🛑 Interrompu." if self.runner.stop() else "Rien en cours.")
+            await message.reply("🛑 Interrupted." if self.runner.stop() else "Nothing running.")
         elif word == "!status":
-            await message.reply("session : `%s`\nen cours : %s\nen attente : %d\nmode : %s\nautorisés : %d + propriétaire, mention obligatoire : %s\nactif depuis : %s" % (
-                self.state.get("session_id") or "aucune", "oui" if self.busy else "non", self.queue.qsize(),
-                self.runner.permission_mode, len(self.state["allowed"]), "oui" if self.state["require_mention"] else "non",
+            await message.reply("session: `%s`\nrunning: %s\nwaiting: %d\nmode: %s\nallowed: %d + owner, mention required: %s\nactive since: %s" % (
+                self.state.get("session_id") or "none", "yes" if self.busy else "no", self.queue.qsize(),
+                self.runner.permission_mode, len(self.state["allowed"]), "yes" if self.state["require_mention"] else "no",
                 time.strftime("%d/%m %H:%M", time.localtime(self.started))))
         elif word == "!help":
-            await message.reply("Écris-moi ici comme dans le terminal ; la conversation est partagée par tout le salon et chaque message est signé.\n"
-                                "Commandes : `!new` nouvelle session, `!stop` interrompre, `!status` état, `!help`.\n"
-                                "Propriétaire : `!allow @membre`, `!deny @membre`, `!who`, `!mention on|off`.")
+            await message.reply("Write to me here as in the terminal; the whole channel shares the conversation and every message is signed.\n"
+                                "Commands: `!new` new session, `!stop` interrupt, `!status` state, `!help`.\n"
+                                "Owner: `!allow @member`, `!deny @member`, `!who`, `!mention on|off`.")
         else:
             return False
         return True
@@ -506,7 +506,7 @@ class Bot(discord.Client):
 
     async def handle(self, message, text):
         await message.add_reaction("⏳")
-        status = await message.channel.send("⚙️ je réfléchis…")
+        status = await message.channel.send("⚙️ thinking…")
         last = {"text": None, "at": 0.0}
 
         async def on_progress(line):
@@ -550,8 +550,8 @@ class Bot(discord.Client):
             else:
                 await message.channel.send(chunk)
         if len(text) > FILE_THRESHOLD:
-            await message.channel.send("📎 réponse complète en pièce jointe",
-                                       file=discord.File(io.BytesIO(text.encode()), filename="reponse.md"))
+            await message.channel.send("📎 full answer attached",
+                                       file=discord.File(io.BytesIO(text.encode()), filename="answer.md"))
         if error:
             await message.channel.send("⚠️ %s" % error[:1500])
         log.info("répondu en %d s (%d caractères, %d morceaux)", elapsed, len(text), len(chunks))

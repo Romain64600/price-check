@@ -81,7 +81,7 @@ class TestTeamIsQuestionsAndAnswers(ConsoleCase):
         deny = json.loads(cmd[cmd.index("--settings") + 1])["permissions"]["deny"]
         self.assertIn("Read(**/.env)", deny, "the team can read the secrets")
         self.assertIn("Garance", cmd[cmd.index("--append-system-prompt") + 1])
-        self.assertNotIn("Questions en cours", self.claude.calls[0]["prompt"])
+        self.assertNotIn("Open questions", self.claude.calls[0]["prompt"])
 
     def test_romain_has_the_bot_rights(self):
         c = self.console()
@@ -128,6 +128,18 @@ class TestQuestionsForRomain(ConsoleCase):
             self.assertIn("Q1 (Rémy", call["prompt"])
             self.assertIn("Dawnwalker Eclipse Edition", call["prompt"])
 
+    def test_the_english_markers_and_the_french_ones(self):
+        # 07/10/2026 : « tout l'outil en anglais » ; a French marker is still understood
+        c = self.console(("Noted.\nQUESTION FOR ROMAIN: GAMIVO ROW key shown EUROPE: a doubt as at G2A?", None),
+                         ("Done.\nQUESTION SETTLED: Q1: keep the rule", None))
+        self.request(kind="message", user="lionel", text="GAMIVO ROW?")
+        c.take_requests()
+        self.assertEqual(self.saved("questions.json")["questions"][0]["text"], "GAMIVO ROW key shown EUROPE: a doubt as at G2A?")
+        self.request(kind="message", user="romain", text="Q1: keep it")
+        c.take_requests()
+        self.assertEqual(self.saved("questions.json")["questions"][0]["status"], "closed")
+        self.assertIn("in the language of", self.claude.calls[0]["cmd"][self.claude.calls[0]["cmd"].index("--append-system-prompt") + 1])
+
     def test_only_a_reply_to_romain_settles_a_question(self):
         self.store.add_question("Garder battlestategames.toml ?", "claude", "Claude", "récolte")
         c = self.console(("QUESTION RÉGLÉE : Q1 : c'est Romain qui décide", None), ("Noté.\nQUESTION RÉGLÉE : Q1 : garder", None))
@@ -149,15 +161,15 @@ class TestQuestionsForRomain(ConsoleCase):
         self.assertEqual((q["status"], q["answer"]), ("closed", "on garde"))
         self.request(kind="message", user="romain", text="Et ensuite ?")
         c.take_requests()
-        self.assertIn("Romain a réglé Q1 depuis l'onglet Romain : on garde", self.claude.calls[0]["prompt"])
-        self.assertNotIn("Questions en cours", self.claude.calls[0]["prompt"])
+        self.assertIn("Romain settled Q1 from the Romain tab: on garde", self.claude.calls[0]["prompt"])
+        self.assertNotIn("Open questions", self.claude.calls[0]["prompt"])
 
     def test_the_harvest_files_its_points_as_questions(self):
         c = self.console(("1 point.\nQUESTION POUR ROMAIN : GAMIVO, clé ROW affichée EUROPE : un doute comme chez G2A ?", None))
         self.request(kind="harvest", user="romain")
         c.take_requests()
         self.assertIn("decisions.jsonl", self.claude.calls[0]["prompt"])
-        self.assertEqual(self.saved("console.json")["messages"][0]["text"], "Récolte des décisions sur les feedbacks des reports")
+        self.assertEqual(self.saved("console.json")["messages"][0]["text"], "Harvest of the decisions on the reports' feedback")
         self.assertEqual(self.saved("questions.json")["questions"][0]["source"], "console")
 
 
@@ -168,16 +180,16 @@ class TestRobustness(ConsoleCase):
         c = self.console()
         c.take_requests()
         self.assertEqual(self.claude.calls, [])
-        self.assertIn("service redémarré", self.saved("console.json")["messages"][0]["text"])
+        self.assertIn("service restarted", self.saved("console.json")["messages"][0]["text"])
         self.assertFalse(os.path.exists(os.path.join(self.dir, "console-1-x.work")))
 
     def test_an_error_is_shown_and_the_console_is_free_again(self):
-        c = self.console(("", "délai dépassé (900 s), réponse interrompue"))
+        c = self.console(("", "time limit exceeded (900 s), answer interrupted"))
         self.request(kind="message", user="remy", text="?")
         c.take_requests()
         data = self.saved("console.json")
         self.assertIsNone(data["busy"])
-        self.assertEqual((data["messages"][1]["kind"], data["messages"][1]["text"]), ("error", "délai dépassé (900 s), réponse interrompue"))
+        self.assertEqual((data["messages"][1]["kind"], data["messages"][1]["text"]), ("error", "time limit exceeded (900 s), answer interrupted"))
 
     def test_long_texts_are_cut_and_history_is_bounded(self):
         c = self.console()

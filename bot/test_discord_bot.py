@@ -8,7 +8,7 @@ import discord_bot as db
 class TestSplitMessage(unittest.TestCase):
     def test_short_text_is_one_chunk(self):
         self.assertEqual(db.split_message("bonjour"), ["bonjour"])
-        self.assertEqual(db.split_message(""), ["(réponse vide)"])
+        self.assertEqual(db.split_message(""), ["(empty answer)"])
 
     def test_splits_on_lines_under_the_limit(self):
         text = "\n".join("ligne %03d" % i for i in range(500))

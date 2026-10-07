@@ -176,20 +176,20 @@ class TestAnalyzeSuspects(unittest.TestCase):
 
     def test_wrong_product(self):
         r = self.reasons("Sonic Racing CrossWorlds", "https://www.kinguin.net/category/1/sonic-the-hedgehog-pc-steam")
-        self.assertEqual(r, ["autre produit chez le marchand : « Sonic The Hedgehog » au lieu de « Sonic Racing CrossWorlds » (URL)"])
+        self.assertEqual(r, ["another product at the merchant: « Sonic The Hedgehog » instead of « Sonic Racing CrossWorlds » (URL)"])
 
     def test_account_sold_as_key(self):
         r = self.reasons("EA SPORTS FC 27", "https://shop.example/ea-sports-fc-27-pc-steam-account-global")
-        self.assertIn("compte chez le marchand, saisi en clé", r)
+        self.assertIn("account at the merchant, entered as a key", r)
         self.assertEqual(self.reasons("EA SPORTS FC 27", "https://shop.example/ea-sports-fc-27-account", account=True), [])
 
     def test_forbidden_region(self):
         r = self.reasons("EA SPORTS FC 27", "https://shop.example/ea-sports-fc-27-pc-steam-key-ru-cis")
-        self.assertEqual(r, ["région interdite : ru, cis"])
+        self.assertEqual(r, ["forbidden region: ru, cis"])
 
     def test_region_family_mismatch(self):
         self.assertEqual(self.reasons("EA SPORTS FC 27", "https://shop.example/ea-sports-fc-27-steam-key-europe", region="GLOBAL"),
-                         ["région : AllKeyShop GLOBAL, marchand EU"])
+                         ["region: AllKeyShop GLOBAL, merchant EU"])
         # l'inverse est sans danger : une clé GLOBAL affichée EUROPE marche en Europe
         self.assertEqual(self.reasons("EA SPORTS FC 27", "https://shop.example/ea-sports-fc-27-steam-key-global", region="EUROPE"), [])
         self.assertEqual(self.reasons("EA SPORTS FC 27", "https://shop.example/ea-sports-fc-27-steam-key-europe", region="GIFT EU"), [])
@@ -214,17 +214,17 @@ class TestAnalyzeSuspects(unittest.TestCase):
 
         self.assertEqual(self.reasons("Screamer 2026", url, edition="Deluxe", region="GLOBAL"),
 
-                         ["région : AllKeyShop GLOBAL, marchand EU", "gift chez le marchand, affiché en clé GLOBAL"])
+                         ["region: AllKeyShop GLOBAL, merchant EU", "gift at the merchant, shown as a key GLOBAL"])
 
 
     def test_gift_sold_as_key(self):
         self.assertEqual(self.reasons("EA SPORTS FC 27", "https://shop.example/ea-sports-fc-27-steam-altergift", region="GLOBAL"),
-                         ["gift chez le marchand, affiché en clé GLOBAL"])
+                         ["gift at the merchant, shown as a key GLOBAL"])
         self.assertEqual(self.reasons("EA SPORTS FC 27", "https://shop.example/ea-sports-fc-27-steam-gift-global", region="GIFT"), [])
 
     def test_platform_mismatch(self):
         self.assertEqual(self.reasons("EA SPORTS FC 27", "https://shop.example/ea-sports-fc-27-pc-steam-key", platform="ea-app"),
-                         ["plateforme : AllKeyShop ea-app, marchand steam"])
+                         ["platform: AllKeyShop ea-app, merchant steam"])
         self.assertEqual(self.reasons("EA SPORTS FC 27", "https://shop.example/ea-sports-fc-27-origin-key", platform="ea-app"), [])
         self.assertEqual(self.reasons("EA SPORTS FC 27", "https://shop.example/ea-sports-fc-27-xbox-pc-key", platform="xbox-play-anywhere"), [])
         self.assertEqual(self.reasons("EA SPORTS FC 27", "https://shop.example/ea-sports-fc-27-pc-key", platform="mystery-platform"), [])
@@ -233,11 +233,11 @@ class TestAnalyzeSuspects(unittest.TestCase):
         # édition supérieure vendue sous Standard alors que la page a une édition Deluxe : erreur (arbitrage du 01/10/2026)
         self.assertEqual(self.reasons("EA SPORTS FC 27", "https://shop.example/ea-sports-fc-27-deluxe-edition-pc-steam", edition="Standard",
                                       page_editions=["Standard", "Deluxe"]),
-                         ["édition : rangée en Standard, le marchand vend deluxe (la page a une édition Deluxe)"])
+                         ["edition: filed under Standard, the merchant sells deluxe (the page has the edition Deluxe)"])
         # pas d'édition Deluxe sur la page : l'acheteur a plus que ce qui est affiché, pas d'alerte
         self.assertEqual(self.reasons("EA SPORTS FC 27", "https://shop.example/ea-sports-fc-27-deluxe-edition-pc-steam", edition="Standard"), [])
         self.assertEqual(self.reasons("EA SPORTS FC 27", "https://shop.example/ea-sports-fc-27-standard-edition", edition="Ultimate"),
-                         ["édition : AllKeyShop Ultimate, marchand standard"])
+                         ["edition: AllKeyShop Ultimate, merchant standard"])
         self.assertEqual(self.reasons("EA SPORTS FC 27", "https://shop.example/ea-sports-fc-27-standard-edition", edition="Standard + Bonus"), [])
         self.assertEqual(self.reasons("EA SPORTS FC 27", "https://shop.example/ea-sports-fc-27-goty", edition="Game of the Year"), [])
         self.assertEqual(self.reasons("EA SPORTS FC 27", "https://shop.example/ea-sports-fc-27-digital-deluxe", edition="Deluxe"), [])
@@ -248,7 +248,7 @@ class TestAnalyzeSuspects(unittest.TestCase):
 
     def test_dlc(self):
         self.assertEqual(self.reasons("Valheim", "https://shop.example/valheim-season-pass-dlc"),
-                         ["contenu additionnel : dlc, season-pass"])
+                         ["additional content: dlc, season-pass"])
 
     def test_preorder_bonus_dlc_sold_with_the_game(self):
         # Driffle, 30/09/2026, édition AllKeyShop « Standard + Bonus »
@@ -261,21 +261,21 @@ class TestAnalyzeSuspects(unittest.TestCase):
         self.assertEqual(self.reasons("The Witcher 3 Wild Hunt", url, edition="GOTY", platform="gog"), [])
         self.assertEqual(self.reasons("The Witcher 3 Wild Hunt", url, edition="Standard", platform="gog",
                                       page_editions=["Complete", "GOTY", "Standard", "Bundle"]),
-                         ["édition : rangée en Standard, le marchand vend goty (la page a une édition GOTY)"])
+                         ["edition: filed under Standard, the merchant sells goty (the page has the edition GOTY)"])
 
     def test_bundle_edition_has_another_name(self):
         # G2A, 30/09/2026, édition AllKeyShop « Bundle » : The Witcher Trilogy Pack
         url = "https://www.g2a.com/en/the-witcher-trilogy-pack-steam-gift-global-i10000000746004"
         res = pc.analyze("The Witcher 3 Wild Hunt", offer(edition="Bundle", region="GIFT"), pc.url_text(url), "URL")
         self.assertEqual((res["match"], res["reasons"], res["notes"]),
-                         (None, [], ["édition Bundle : nom non contrôlé en entier (un mot du nom présent)"]))
+                         (None, [], ["edition Bundle: name not fully checked (one word of the name present)"]))
         res = pc.analyze("The Witcher 3 Wild Hunt", offer(edition="Bundle", region="GLOBAL"), pc.url_text(url), "URL")
-        self.assertEqual(res["reasons"], ["gift chez le marchand, affiché en clé GLOBAL"])
+        self.assertEqual(res["reasons"], ["gift at the merchant, shown as a key GLOBAL"])
         # audit du 02/10/2026 : sans un mot du nom, un lot n'est pas blanchi (Sonic en « Starter Pack » sur The Witcher 3)
         sonic = "https://www.g2a.com/sonic-the-hedgehog-4-episode-1-steam-key-global-i10000000001"
         for edition in ("Starter Pack", "Bundle", "Complete Collection"):
             res = pc.analyze("The Witcher 3 Wild Hunt", offer(edition=edition), pc.url_text(sonic), "URL")
-            self.assertTrue(res["reasons"] and res["reasons"][0].startswith("autre produit chez le marchand"), (edition, res["reasons"]))
+            self.assertTrue(res["reasons"] and res["reasons"][0].startswith("another product at the merchant"), (edition, res["reasons"]))
         # DREDGE vendu « dredging-the-depths-bundle » : un mot du nom par ses 5 premières lettres suffit
         self.assertEqual(pc.analyze("DREDGE", offer(edition="Bundle"), pc.url_text("https://shop.example/dredging-the-depths-bundle"),
                                     "URL")["reasons"], [])
@@ -298,9 +298,9 @@ class TestAnalyzeSuspects(unittest.TestCase):
         # depuis l'audit du 02/10/2026, le nom n'est plus cherché au milieu d'un mot : « gtavi » dans « gtaviultimate001 »
         # ne prouve rien (« ron » était trouvé dans « iron ») ; au PS Store, c'est le JSON de la page qui décide
         self.assertEqual(self.reasons("GTA 6 PS5", url, edition="Ultimate", region="PS5", platform="playstation-store"),
-                         ["nom du produit introuvable (URL)"])
+                         ["product name not found (URL)"])
         res = pc.analyze("GTA 6 PS5", offer(edition="Ultimate", region="PS5", platform="playstation-store"),
-                         "Grand Theft Auto VI Ultimate Edition | PlayStation Store", "titre de la page")
+                         "Grand Theft Auto VI Ultimate Edition | PlayStation Store", "page title")
         self.assertEqual((res["match"], res["reasons"]), ("exact", []))
         self.assertIn("gta 6", pc.name_variants("GTA 6 PS5"))
         self.assertIn("ea sports fc 27", pc.name_variants("EA SPORTS FC 27 Xbox Series"))
@@ -314,16 +314,16 @@ class TestAnalyzeSuspects(unittest.TestCase):
         self.assertEqual(self.reasons("WARDOGS", "https://shop.example/wardogs-deluxe-edition-pc-steam", edition="Early Access"), [])
         self.assertEqual(self.reasons("WARDOGS", "https://shop.example/wardogs-deluxe-edition-pc-steam", edition="Standard",
                                       page_editions=["Standard", "Deluxe"]),
-                         ["édition : rangée en Standard, le marchand vend deluxe (la page a une édition Deluxe)"])
+                         ["edition: filed under Standard, the merchant sells deluxe (the page has the edition Deluxe)"])
         # une édition supérieure affichée, l'édition de base vendue : alerte aussi
         self.assertEqual(self.reasons("WARDOGS", "https://shop.example/wardogs-standard-edition-pc-steam", edition="Deluxe"),
-                         ["édition : AllKeyShop Deluxe, marchand standard"])
+                         ["edition: AllKeyShop Deluxe, merchant standard"])
 
     def test_edition_announcing_dlc(self):
         # Kinguin, 30/09/2026 : édition AllKeyShop « Standard + DLC Bundle »
         url = "https://www.kinguin.net/en/category/553797/hunt-showdown-1896-10-dlc-bundle-pc-steam-cd-key?r=3445"
         self.assertEqual(self.reasons("Hunt Showdown", url, edition="Standard + DLC Bundle"), [])
-        self.assertEqual(self.reasons("Hunt Showdown", url, edition="Standard"), ["contenu additionnel : dlc"])
+        self.assertEqual(self.reasons("Hunt Showdown", url, edition="Standard"), ["additional content: dlc"])
 
     def test_language_lists_are_not_regions(self):
         # GAMIVO, 30/09/2026 : les langues de la clé dans l'URL, dont « ru » et « tr »
@@ -332,16 +332,16 @@ class TestAnalyzeSuspects(unittest.TestCase):
         url = "https://www.gamivo.com/product/age-of-wonders-4-pc-steam-global-en-de-fr-pl-ja-ko-ru-zh-es-standard"
         self.assertEqual(self.reasons("Age of Wonders 4", url), [])
         self.assertEqual(self.reasons("Age of Wonders 4", "https://shop.example/age-of-wonders-4-steam-key-ru-cis"),
-                         ["région interdite : ru, cis"])
+                         ["forbidden region: ru, cis"])
         self.assertEqual(self.reasons("Age of Wonders 4", "https://shop.example/age-of-wonders-4-pc-eu-key", region="GLOBAL"),
-                         ["région : AllKeyShop GLOBAL, marchand EU"])
+                         ["region: AllKeyShop GLOBAL, merchant EU"])
 
     def test_soundtrack_edition(self):
         # Steam, 30/09/2026 : Stray « Soundtrack Edition »
-        res = pc.analyze("Stray", offer(edition="Soundtrack Edition"), "Stray + Soundtrack Bundle on Steam", "titre de la page")
+        res = pc.analyze("Stray", offer(edition="Soundtrack Edition"), "Stray + Soundtrack Bundle on Steam", "page title")
         self.assertEqual(res["reasons"], [])
         self.assertEqual(self.reasons("Stray", "https://shop.example/stray-soundtrack-dlc", edition="Standard"),
-                         ["contenu additionnel : dlc, soundtrack"])
+                         ["additional content: dlc, soundtrack"])
 
     def test_long_name_tolerates_one_missing_word(self):
         # Amazon.fr, 30/09/2026 : URL tronquée « Nintendo-Legend-Zelda-Kingdom-Collector »
@@ -353,9 +353,9 @@ class TestAnalyzeSuspects(unittest.TestCase):
         self.assertEqual((res["match"], res["reasons"]), ("partial", []))
         # mais un numéro qui manque, c'est un autre jeu
         self.assertEqual(self.reasons("Call of Duty Modern Warfare 4", "https://shop.example/call-of-duty-modern-warfare-3-pc"),
-                         ["autre produit chez le marchand : « Call Of Duty Modern Warfare 3 » au lieu de « Call of Duty Modern Warfare 4 » (URL)"])
+                         ["another product at the merchant: « Call Of Duty Modern Warfare 3 » instead of « Call of Duty Modern Warfare 4 » (URL)"])
         self.assertEqual(self.reasons("Red Dead Redemption 2", "https://shop.example/red-dead-redemption-pc-rockstar-key",
-                                      platform="rockstar"), ["autre produit chez le marchand : « Red Dead Redemption » au lieu de « Red Dead Redemption 2 » (URL)"])
+                                      platform="rockstar"), ["another product at the merchant: « Red Dead Redemption » instead of « Red Dead Redemption 2 » (URL)"])
 
     def test_console_names_and_stores(self):
         # Instant Gaming et Playerland, 30/09/2026 : « microsoft-store » dans l'URL d'une offre Xbox
@@ -368,7 +368,7 @@ class TestAnalyzeSuspects(unittest.TestCase):
         self.assertEqual(self.reasons("NBA 2K26 Xbox Series", url, edition="Superstar Edition", region="EU IN ENGLISH ONLY", platform="xbox"), [])
         # mais une clé Steam affichée EA App reste suspecte
         self.assertEqual(self.reasons("EA SPORTS FC 26", "https://www.gamingdragons.com/en/game/buy-ea-sports-fc-26-ultimate-edition-steam-key.html",
-                                      edition="Ultimate", platform="ea-app"), ["plateforme : AllKeyShop ea-app, marchand steam"])
+                                      edition="Ultimate", platform="ea-app"), ["platform: AllKeyShop ea-app, merchant steam"])
 
     def test_suffixes_year_vr_switch2_and_acronyms(self):
         self.assertEqual(self.reasons("Screamer 2026", "https://store.steampowered.com/app/2814990/Screamer/"), [])
@@ -390,13 +390,13 @@ class TestAnalyzeSuspects(unittest.TestCase):
     def test_short_page_title_contained_in_the_name(self):
         # PS Store US, 30/09/2026 : <title> « UFC® 5 » pour « EA Sports UFC 5 PS5 »
         o = offer(region="PS5", platform="playstation-store")
-        res = pc.analyze("EA Sports UFC 5 PS5", o, "UFC® 5 | Access Denied", "titre de la page")
+        res = pc.analyze("EA Sports UFC 5 PS5", o, "UFC® 5 | Access Denied", "page title")
         self.assertEqual((res["match"], res["reasons"]), ("exact", []))  # « UFC 5 » sans « EA Sports », depuis le 01/10/2026
-        res = pc.analyze("Ace Combat 8 Wings of Theve", o, "Wings of Theve | Bandai Namco", "titre de la page")
+        res = pc.analyze("Ace Combat 8 Wings of Theve", o, "Wings of Theve | Bandai Namco", "page title")
         self.assertEqual((res["match"], res["reasons"]), ("partial", []))  # titre court contenu dans le nom
-        res = pc.analyze("Pokemon Sword Nintendo Switch", o, "Pokémon Shield | Nintendo", "titre de la page")
+        res = pc.analyze("Pokemon Sword Nintendo Switch", o, "Pokémon Shield | Nintendo", "page title")
         self.assertIsNone(res["match"])
-        res = pc.analyze("Sonic Racing CrossWorlds", o, "Sonic | SEGA", "titre de la page")
+        res = pc.analyze("Sonic Racing CrossWorlds", o, "Sonic | SEGA", "page title")
         self.assertIsNone(res["match"])  # un seul mot, pas assez
 
     def test_dlc_page(self):
@@ -405,7 +405,7 @@ class TestAnalyzeSuspects(unittest.TestCase):
         o = offer(edition="Ultimate", region="XBOX X|S", platform="xbox", page_dlc=True)
         self.assertEqual(pc.analyze("Diablo 4 Lord of Hatred Xbox Series", o, pc.url_text(url), "URL")["reasons"], [])
         o["page_dlc"] = False
-        self.assertEqual(pc.analyze("Diablo 4 Lord of Hatred Xbox Series", o, pc.url_text(url), "URL")["reasons"], ["contenu additionnel : dlc"])
+        self.assertEqual(pc.analyze("Diablo 4 Lord of Hatred Xbox Series", o, pc.url_text(url), "URL")["reasons"], ["additional content: dlc"])
         trans = {"editions": {"1": {"name": "Standard"}, "16": {"name": "DLC"}, "21": {"name": "Ultimate"}}}
         self.assertTrue(pc.is_dlc_page(trans, "Diablo 4 Lord of Hatred Xbox Series"))
         self.assertFalse(pc.is_dlc_page({"editions": {"1": {"name": "Standard"}}}, "Diablo 4"))
@@ -414,7 +414,7 @@ class TestAnalyzeSuspects(unittest.TestCase):
     def test_wrong_product_dredge_doom(self):
         # Greenmangaming, 30/09/2026 : DOOM The Dark Ages en premier prix « Premium » de la page DREDGE
         self.assertEqual(self.reasons("DREDGE", "https://www.greenmangaming.com/games/doom-the-dark-ages-premium-edition-pc/",
-                                      edition="Premium"), ["autre produit chez le marchand : « Doom The Dark Ages Premium Edition » au lieu de « DREDGE » (URL)"])
+                                      edition="Premium"), ["another product at the merchant: « Doom The Dark Ages Premium Edition » instead of « DREDGE » (URL)"])
 
     def test_alias(self):
         self.assertEqual(self.reasons("GTA 6", "https://shop.example/grand-theft-auto-vi-ps5", platform="playstation"), [])
@@ -427,8 +427,8 @@ class TestAnalyzeSuspects(unittest.TestCase):
 
     def test_partial_name(self):
         res = pc.analyze("The Witcher 3 Wild Hunt", offer(page_editions=["Standard", "GOTY"]), "witcher-3-wild-hunt-goty-steam-key", "URL")
-        self.assertEqual((res["match"], res["notes"]), ("partial", ["nom partiel"]))
-        self.assertEqual(res["reasons"], ["édition : rangée en Standard, le marchand vend goty (la page a une édition GOTY)"])
+        self.assertEqual((res["match"], res["notes"]), ("partial", ["partial name"]))
+        self.assertEqual(res["reasons"], ["edition: filed under Standard, the merchant sells goty (the page has the edition GOTY)"])
 
 
 class TestPageTitle(unittest.TestCase):
@@ -468,7 +468,7 @@ class TestMerchantConfigs(unittest.TestCase):
         self.assertEqual(res["reasons"], [])
         res = pc.analyze("GTA 5", o, pc.url_text(url.replace("region=1", "region=4")), "URL",
                          region=pc.region_text(url.replace("region=1", "region=4"), cfg))
-        self.assertEqual(res["reasons"], ["région : AllKeyShop GLOBAL, marchand EU"])
+        self.assertEqual(res["reasons"], ["region: AllKeyShop GLOBAL, merchant EU"])
         url2 = "https://wyrel.com/en/buy-cheap-ea-sports-fc-27-pc-196673?referal=allkeyshop&marketplace_id=2&edition_id=780&region=4"
         res = pc.analyze("EA SPORTS FC 27", offer(merchantName="Wyrel", region="GIFT EU"), pc.url_text(url2), "URL",
                          region=pc.region_text(url2, cfg))
@@ -476,7 +476,7 @@ class TestMerchantConfigs(unittest.TestCase):
         self.assertEqual(pc.region_text(url.replace("region=1", "region=9"), cfg), "")  # inconnue : pas de contrôle
         # region=5 = ROW : normal pour une offre affichée ROW, suspect pour une offre affichée GLOBAL
         url5 = "https://wyrel.com/en/buy-cheap-kingdom-come-deliverance-ii-pc-146507?referal=allkeyshop&region=5"
-        for region, expected in (("ROW", []), ("GLOBAL", ["région : AllKeyShop GLOBAL, marchand ROW"])):
+        for region, expected in (("ROW", []), ("GLOBAL", ["region: AllKeyShop GLOBAL, merchant ROW"])):
             res = pc.analyze("Kingdom Come Deliverance 2", offer(merchantName="Wyrel", region=region), pc.url_text(url5), "URL",
                              region=pc.region_text(url5, cfg))
             self.assertEqual(res["reasons"], expected, region)
@@ -503,9 +503,9 @@ class TestMerchantConfigs(unittest.TestCase):
                  mock.patch.object(pc, "page_title") as title:
                 res = pc.check_offer(product, offer(merchantName="Nintendo eShop FR", region="GLOBAL", platform="nintendo-eshop"))
             title.assert_not_called()
-            self.assertEqual((res["verdict"], res["method"]), (expected, "URL de la version en-GB"), product)
+            self.assertEqual((res["verdict"], res["method"]), (expected, "URL of the en-GB version"), product)
             if expected == "SUSPECT":  # le message dit ce que vend le marchand (formation du 01/10/2026)
-                self.assertEqual(res["reasons"], ["autre produit chez le marchand : « Metal Garden » au lieu de « TORO 2 Nintendo Switch » (URL de la version en-GB)"])
+                self.assertEqual(res["reasons"], ["another product at the merchant: « Metal Garden » instead of « TORO 2 Nintendo Switch » (URL of the en-GB version)"])
 
     @mock.patch.object(pc, "REQUEST_DELAY", 0)
     def test_amazon_never_opens_a_browser(self):
@@ -530,32 +530,32 @@ class TestStudy20260930(unittest.TestCase):
     def test_eu_key_shown_global(self):
         self.assertEqual(self.reasons("Stellaris", "https://kinguin.net/category/172478/stellaris-starter-pack-eu-steam-cd-key",
                                       edition="Bundle 1", region="GLOBAL", region_filter="STEAM GLOBAL"),
-                         ["région : AllKeyShop GLOBAL, marchand EU"])
+                         ["region: AllKeyShop GLOBAL, merchant EU"])
         self.assertEqual(self.reasons("The Blood Of Dawnwalker",
                                       "https://www.eneba.com/steam-the-blood-of-dawnwalker-eclipse-edition-deluxe-steam-key-pc-europe",
                                       edition="Deluxe", region="GLOBAL", region_filter="STEAM GLOBAL"),
-                         ["région : AllKeyShop GLOBAL, marchand EU"])
+                         ["region: AllKeyShop GLOBAL, merchant EU"])
 
     def test_wrong_platform(self):
         self.assertEqual(self.reasons("F1 25", "https://www.gamivo.com/product/f1-25-xbox-xbox-series-eu-2026-season",
                                       edition="2026 Season Edition", region="EU ENGLISH ONLY", region_filter="STEAM EU EN ONLY"),
-                         ["plateforme : AllKeyShop steam, marchand xbox"])
+                         ["platform: AllKeyShop steam, merchant xbox"])
         self.assertEqual(self.reasons("EA SPORTS FC 26", "https://www.driffle.com/ea-sports-fc-26-icons-edition-global-pc-steam-digital-key-p9990128",
                                       edition="ICONS Edition", region="GLOBAL", region_filter="EA GLOBAL", platform="ea-app"),
-                         ["plateforme : AllKeyShop ea-app, marchand steam"])
+                         ["platform: AllKeyShop ea-app, merchant steam"])
 
     def test_platform_from_region_filter(self):
         # activationPlatform vide, mais la région dit EA GLOBAL
         self.assertEqual(self.reasons("EA SPORTS FC 26", "https://shop.example/ea-sports-fc-26-pc-steam-key",
                                       region="GLOBAL", region_filter="EA GLOBAL", platform=""),
-                         ["plateforme : AllKeyShop ea, marchand steam".replace("ea,", "ea-app,")])
+                         ["platform: AllKeyShop ea, merchant steam".replace("ea,", "ea-app,")])
 
     def test_console_of_the_page(self):
         # Amazon.fr, Elden Ring Xbox Series : l'URL parle de PlayStation
         url = "https://www.amazon.fr/Bandai-Namco-Entertainment-3391892017632-PlayStation/dp/B0977LKSQ6/"
         res = pc.analyze("Elden Ring Xbox Series", offer(edition="Launch Edition", region="BOX", region_filter="BOX", platform="physical-medium"),
                          pc.url_text(url), "URL")
-        self.assertIn("plateforme : page AllKeyShop Xbox, marchand PlayStation", res["reasons"])
+        self.assertIn("platform: AllKeyShop page Xbox, merchant PlayStation", res["reasons"])
         # la bonne console, ou une URL qui n'en parle pas : rien
         self.assertEqual(self.reasons("GTA The Trilogy The Definitive Edition Xbox Series", "https://www.amazon.fr/GTA-Trilogy-Definition-Xbox-X/dp/B09KGZ37M1/",
                                       region="BOX", platform="physical-medium"), [])
@@ -569,26 +569,26 @@ class TestStudy20260930(unittest.TestCase):
         # le même pass rangé ailleurs, ou le pass d'une autre année, reste du contenu additionnel ; rangé en Standard, il est
         # aussi dans la mauvaise édition (06/10/2026 : les éditions de la page nommées par l'URL)
         self.assertEqual(self.reasons("Farming Simulator 25", url, edition="Standard", page_editions=fs25),
-                         ["édition : rangée en Standard, le marchand vend year (la page a une édition Year 1 Bundle ou Year 1 Edition)",
-                          "contenu additionnel : season-pass"])
+                         ["edition: filed under Standard, the merchant sells year (the page has the edition Year 1 Bundle or Year 1 Edition)",
+                          "additional content: season-pass"])
         self.assertEqual(self.reasons("Farming Simulator 25", "https://www.loaded.com/farming-simulator-25-year-2-season-pass-pc-steam",
                                       edition="Year 1 Edition", page_editions=fs25),
-                         ["contenu additionnel : season-pass"])
+                         ["additional content: season-pass"])
 
     def test_edition_misfiled_while_the_page_has_it(self):
         # arbitrage du 01/10/2026 : mauvaise édition = erreur, même si l'acheteur reçoit plus (annule la formation
         # du matin, qui tenait GTA 4 pour un faux positif)
         gta4 = ["Complete", "Standard", "Collection", "Complete Bundle", "Complete Pack", "Bundle"]
-        res = pc.analyze("GTA 4", offer(edition="Standard", page_editions=gta4), "Grand Theft Auto IV: The Complete Edition on Steam", "titre de la page")
-        self.assertEqual(res["reasons"], ["édition : rangée en Standard, le marchand vend complete (la page a une édition Complete)"])
+        res = pc.analyze("GTA 4", offer(edition="Standard", page_editions=gta4), "Grand Theft Auto IV: The Complete Edition on Steam", "page title")
+        self.assertEqual(res["reasons"], ["edition: filed under Standard, the merchant sells complete (the page has the edition Complete)"])
         zero = ["Standard", "Deluxe", "Deluxe + Bonus", "Bonus", "Standard + DLC"]
         self.assertEqual(self.reasons("STAR WARS Zero Company Xbox Series",
                                       "https://www.gamivo.com/product/star-wars-zero-company-xbox-xbox-series-global-deluxe-pre-order-bonus",
                                       edition="Standard + DLC", region="XBOX X|S", region_filter="XBOX X|S GLOBAL", platform="xbox", page_editions=zero),
-                         ["édition : rangée en Standard + DLC, le marchand vend deluxe (la page a une édition Deluxe)"])
+                         ["edition: filed under Standard + DLC, the merchant sells deluxe (the page has the edition Deluxe)"])
         # la page n'a pas l'édition vendue : rien de mieux où ranger l'offre, pas d'alerte
         alone = pc.analyze("GTA 4", offer(edition="Standard", page_editions=["Standard"]),
-                           "Grand Theft Auto IV: The Complete Edition on Steam", "titre de la page")
+                           "Grand Theft Auto IV: The Complete Edition on Steam", "page title")
         self.assertEqual(alone["reasons"], [])
 
     # -- faux positifs : ne doivent plus sortir --
@@ -612,7 +612,7 @@ class TestStudy20260930(unittest.TestCase):
                 ("Crimson Desert PS5", "Standard", "Crimson Desert Enhanced | Standard Edition")):
             o["edition"] = edition
             o["page_editions"] = ["Standard", "Enhanced", "Deluxe"]
-            res = pc.analyze(product, o, title, "titre de la page")
+            res = pc.analyze(product, o, title, "page title")
             self.assertIsNotNone(res["match"], product)
             self.assertEqual(res["reasons"], [], product)
 
@@ -638,7 +638,7 @@ class TestStudy20260930(unittest.TestCase):
 
     def test_one_letter_tolerance_is_narrow(self):
         self.assertEqual(self.reasons("Portal 2", "https://shop.example/mortal-kombat-2-pc-steam"),
-                         ["autre produit chez le marchand : « Mortal Kombat 2 » au lieu de « Portal 2 » (URL)"])
+                         ["another product at the merchant: « Mortal Kombat 2 » instead of « Portal 2 » (URL)"])
         self.assertEqual(self.reasons("Horizon Forbidden West Complete Edition", "https://shop.example/horizon-forbidden-west-complete-edition-pc-steam",
                                       edition="Complete"), [])
         self.assertFalse(pc.is_block_page("Horizon Forbidden West™ Complete Edition"))
@@ -657,26 +657,26 @@ class TestStudy20260930(unittest.TestCase):
         # Eneba, 30/09/2026 : Persona 5 Royal, offre saisie STEAM EU sur la page Nintendo Switch
         self.assertEqual(self.reasons("Persona 5 Royal Nintendo Switch", "https://www.eneba.com/nintendo-persona-5-royal-nintendo-switch-eshop-key-europe",
                                       region="EUROPE", region_filter="STEAM EU", platform="steam"),
-                         ["plateforme : AllKeyShop steam, marchand nintendo"])
+                         ["platform: AllKeyShop steam, merchant nintendo"])
 
     def test_full_replay_new_catches(self):
         # et trois vraies erreurs que les anciennes règles ne voyaient pas
         self.assertEqual(self.reasons("Call of Duty Black Ops 6", "https://www.eneba.com/steam-call-of-duty-r-black-ops-6-pc-steam-key-europe",
                                       region="EUROPE", region_filter="WINDOWS EU", platform="microsoft-windows"),
-                         ["plateforme : AllKeyShop microsoft-windows, marchand steam"])
+                         ["platform: AllKeyShop microsoft-windows, merchant steam"])
         self.assertEqual(self.reasons("The Witcher 3 Wild Hunt Xbox Series", "https://www.lootbar.com/game-key/the-witcher-3-wild-hunt-xbox",
                                       region="ROW", region_filter="STEAM ROW", platform="steam"),
-                         ["plateforme : AllKeyShop steam, marchand xbox"])
+                         ["platform: AllKeyShop steam, merchant xbox"])
         # Splatoon Raiders : offre saisie Xbox (plateforme et région) sur la page Nintendo Switch 2
         self.assertEqual(self.reasons("Splatoon Raiders Nintendo Switch 2", "https://www.gamingdragons.com/en/game/buy-splatoon-raiders-switch-2-code.html",
                                       region="EU XBOX X|S", region_filter="XBOX X|S EUROPE", platform="xbox"),
-                         ["plateforme : AllKeyShop xbox, marchand nintendo"])
+                         ["platform: AllKeyShop xbox, merchant nintendo"])
 
     def test_distinctive_word_never_missing(self):
         # LDShop : page du jeu de base pour l'offre de l'upgrade (cas à trancher, doit rester signalé)
         res = pc.analyze("Forza Horizon 6 Premium Upgrade Bundle Xbox Series", offer(edition="Upgrade", region="XBOX/PC", platform="xbox-play-anywhere"),
-                         "Forza Horizon 6 CD-Key for Xbox & PC – Safe & Fast | Forza Horizon 6 Global Key (Xbox/PC)", "titre de la page")
-        self.assertEqual(res["reasons"], ["autre produit chez le marchand : « Forza Horizon 6 CD-Key for Xbox & PC » au lieu de « Forza Horizon 6 Premium Upgrade Bundle Xbox Series » (titre de la page)"])
+                         "Forza Horizon 6 CD-Key for Xbox & PC – Safe & Fast | Forza Horizon 6 Global Key (Xbox/PC)", "page title")
+        self.assertEqual(res["reasons"], ["another product at the merchant: « Forza Horizon 6 CD-Key for Xbox & PC » instead of « Forza Horizon 6 Premium Upgrade Bundle Xbox Series » (page title)"])
 
     def test_european_title_alias(self):
         self.assertEqual(self.reasons("Rhythm Heaven Groove Nintendo Switch 2", "https://www.loaded.com/rhythm-paradise-groove-switch-eu",
@@ -709,27 +709,27 @@ class TestStudy20260930(unittest.TestCase):
         for product, title in (("Kirby and the Forgotten Land Nintendo Switch", "Amazon.fr : Kirby et le monde oublié (Nintendo Switch) : Jeux vidéo"),
                                ("Pokemon Sword Nintendo Switch", "Pokémon Épée (Nintendo Switch) : Amazon.fr"),
                                ("Pokémon Brilliant Diamond Nintendo Switch", "Pokémon Diamant Étincelant - Nintendo Switch : Amazon.fr")):
-            self.assertEqual(pc.analyze(product, o, title, "titre de la page")["reasons"], [], product)
+            self.assertEqual(pc.analyze(product, o, title, "page title")["reasons"], [], product)
         # mais Épée n'est pas Bouclier
-        self.assertEqual(pc.analyze("Pokemon Sword Nintendo Switch", o, "Pokémon Bouclier (Nintendo Switch)", "titre de la page")["reasons"],
-                         ["autre produit chez le marchand : « Pokémon Bouclier (Nintendo Switch) » au lieu de « Pokemon Sword Nintendo Switch » (titre de la page)"])
+        self.assertEqual(pc.analyze("Pokemon Sword Nintendo Switch", o, "Pokémon Bouclier (Nintendo Switch)", "page title")["reasons"],
+                         ["another product at the merchant: « Pokémon Bouclier (Nintendo Switch) » instead of « Pokemon Sword Nintendo Switch » (page title)"])
 
     def test_names_merchants_shorten_20261001(self):
         # premier jour de Top Offers (étude) : « UFC 5 » sans le préfixe d'éditeur, chez Eneba (URL « ufc-r-5 », ® écrit r)
         # et GAMIVO ; « Onimusha: WotS », sigle des derniers mots, au PS Store (2 éditions, boutiques UK et FR)
         ufc = offer(edition="Standard", region="EU XBOX X|S", region_filter="XBOX X|S EUROPE", platform="xbox")
         for text, source in (("xbox-ufc-r-5-xbox-series-x-s-xbox-live-key-europe", "URL"),
-                             ("Buy UFC® 5 Xbox key! Cheap price | Eneba", "titre de la page"),
-                             ("Buy UFC 5 Xbox Series Key Europe", "titre de la page"),
+                             ("Buy UFC® 5 Xbox key! Cheap price | Eneba", "page title"),
+                             ("Buy UFC 5 Xbox Series Key Europe", "page title"),
                              (pc.url_text("https://www.gamivo.com/product/ufc-5-xbox-xboxseries-eu-en-standard"), "URL")):
             with self.subTest(text=text):
                 res = pc.analyze("EA Sports UFC 5 Xbox Series", ufc, text, source)
                 self.assertNotIn("name", res["kinds"], res["reasons"])
         oni = offer(edition="Deluxe", region="PS5", platform="playstation-store")
-        self.assertEqual(pc.analyze("Onimusha Way of the Sword PS5", oni, "Onimusha: WotS | Deluxe Edition", "titre de la page")["reasons"], [])
+        self.assertEqual(pc.analyze("Onimusha Way of the Sword PS5", oni, "Onimusha: WotS | Deluxe Edition", "page title")["reasons"], [])
         # un autre jeu de la série, ou un autre UFC, reste un autre produit
-        self.assertEqual(pc.analyze("Onimusha Way of the Sword PS5", oni, "Onimusha 2: Samurai's Destiny", "titre de la page")["kinds"], ["name"])
-        self.assertEqual(pc.analyze("EA Sports UFC 5 Xbox Series", ufc, "Buy UFC 4 Xbox key! Cheap price", "titre de la page")["kinds"], ["name"])
+        self.assertEqual(pc.analyze("Onimusha Way of the Sword PS5", oni, "Onimusha 2: Samurai's Destiny", "page title")["kinds"], ["name"])
+        self.assertEqual(pc.analyze("EA Sports UFC 5 Xbox Series", ufc, "Buy UFC 4 Xbox key! Cheap price", "page title")["kinds"], ["name"])
         self.assertIn("ufc 5 xbox series", pc.name_variants("EA Sports UFC 5 Xbox Series"))
         self.assertIn("onimusha wots", pc.name_variants("Onimusha Way of the Sword PS5"))
 
@@ -740,10 +740,10 @@ class TestStudy20260930(unittest.TestCase):
         url = "https://k4g.com/product/mario-kart-8-deluxe-booster-courses-pack-nintendo-switch-europe-cd-key-D492FAEB"
         self.assertEqual(pc.analyze("Mario Kart 8 Deluxe Booster Course Pass Nintendo Switch", o, pc.url_text(url), "URL")["reasons"], [])
         self.assertEqual(pc.analyze("Mario Kart 8 Deluxe Booster Course Pass Nintendo Switch", o,
-                                    "Buy Mario Kart 8 Deluxe - Booster Courses Pack - cheap | K4G.com", "titre de la page")["reasons"], [])
+                                    "Buy Mario Kart 8 Deluxe - Booster Courses Pack - cheap | K4G.com", "page title")["reasons"], [])
         # le jeu de base vendu sur la page du DLC reste un autre produit
         self.assertEqual(pc.analyze("Mario Kart 8 Deluxe Booster Course Pass Nintendo Switch", o,
-                                    "Buy Mario Kart 8 Deluxe Nintendo Switch Europe - cheap | K4G.com", "titre de la page")["kinds"], ["name"])
+                                    "Buy Mario Kart 8 Deluxe Nintendo Switch Europe - cheap | K4G.com", "page title")["kinds"], ["name"])
 
     def test_multi_product_page_selected_option(self):
         # LDShop, 01/10/2026 (formation « à discuter ») : la page Forza Horizon 6 a l'option « Premium Upgrade » cochée
@@ -754,7 +754,7 @@ class TestStudy20260930(unittest.TestCase):
         self.assertEqual(pc.selected_option_text(priced), "Forza Horizon 6 Premium Upgrade (Global)")
         text = pc.page_text_from_dom(dom, "https://www.ldshop.gg/card/forza-horizon-6.html?skuId=16560", "selected-option")
         res = pc.analyze("Forza Horizon 6 Premium Upgrade Bundle Xbox Series", offer(edition="Upgrade", region="XBOX/PC", platform="xbox-play-anywhere"),
-                         text, "titre de la page")
+                         text, "page title")
         self.assertEqual(res["reasons"], [])
         self.assertEqual(pc.merchant_config("https://www.ldshop.gg/card/x.html", "LDShop")["page"]["parser"], "selected-option")
 
@@ -788,14 +788,14 @@ class TestConfirmOnMerchantPage(unittest.TestCase):
                              "https://www.gamingdragons.com/en/game/buy-ea-sports-fc-26-ultimate-edition-steam-key.html",
                              "<title>Acheter EA SPORTS FC 26 Ultimate Edition Jeu PC | PC - EA App Download</title>")
         self.assertEqual(res["verdict"], "OK")
-        self.assertTrue(any(n.startswith("URL contredite par la page") for n in res["notes"]))
+        self.assertTrue(any(n.startswith("URL contradicted by the page") for n in res["notes"]))
 
     def test_url_confirmed_by_the_page(self):
         res = self.run_check("F1 25", offer(edition="2026 Season Edition", region="EU ENGLISH ONLY", region_filter="STEAM EU EN ONLY"),
                              "https://www.gamivo.com/product/f1-25-xbox-xbox-series-eu-2026-season",
                              "<title>Buy F1 25 2026 Season Edition Xbox Series Key Europe | GAMIVO</title>")
-        self.assertEqual((res["verdict"], res["reasons"]), ("SUSPECT", ["plateforme : AllKeyShop steam, marchand xbox"]))
-        self.assertTrue(any(n.startswith("confirmé par la page") for n in res["notes"]))
+        self.assertEqual((res["verdict"], res["reasons"]), ("SUSPECT", ["platform: AllKeyShop steam, merchant xbox"]))
+        self.assertTrue(any(n.startswith("confirmed by the page") for n in res["notes"]))
         res = self.run_check("The Blood Of Dawnwalker", offer(edition="Deluxe", region="GLOBAL", region_filter="STEAM GLOBAL"),
                              "https://www.eneba.com/steam-the-blood-of-dawnwalker-eclipse-edition-deluxe-steam-key-pc-europe",
                              "<title>Buy The Blood of Dawnwalker Eclipse Edition (Deluxe) Steam key PC! Cheap price</title>"
@@ -811,14 +811,14 @@ class TestConfirmOnMerchantPage(unittest.TestCase):
                              "<title>GTA V + Criminal Enterprise - Buy Now on Keycense | Keycense</title>"
                              "<h1>Grand Theft Auto V + Criminal Enterprise Starter Pack DLC | Rockstar</h1>")
         self.assertEqual((res["verdict"], res["reasons"]), ("OK", []))
-        self.assertTrue(any(n.startswith("URL contredite par la page") for n in res["notes"]))
+        self.assertTrue(any(n.startswith("URL contradicted by the page") for n in res["notes"]))
         # le DLC seul, dans la même édition : l'alerte reste, confirmée par la page
         res = self.run_check("GTA 5", o, url, "<title>GTA V: Criminal Enterprise Starter Pack DLC | Keycense</title>")
-        self.assertEqual(res["reasons"], ["contenu additionnel : dlc"])
-        self.assertTrue(any(n.startswith("confirmé par la page") for n in res["notes"]))
+        self.assertEqual(res["reasons"], ["additional content: dlc"])
+        self.assertTrue(any(n.startswith("confirmed by the page") for n in res["notes"]))
         # un « + » qui ne suit pas le jeu (le pack plus une carte) ne vaut pas le jeu
         res = self.run_check("GTA 5", o, url, "<title>Criminal Enterprise Starter Pack + Great White Shark Card DLC</title>")
-        self.assertEqual(res["reasons"], ["contenu additionnel : dlc"])
+        self.assertEqual(res["reasons"], ["additional content: dlc"])
 
     def test_nintendo_old_domains_are_read_in_english(self):
         # 01/10/2026 (étude, Top Offers) : liens eShop ES et DE sur nintendo.es / nintendo.de (308 vers nintendo.com) ;
@@ -835,7 +835,7 @@ class TestConfirmOnMerchantPage(unittest.TestCase):
         o = offer(merchantName="Nintendo eShop ES", region="GLOBAL", platform="nintendo-eshop")
         with mock.patch.object(pc, "http_get", side_effect=[(200, None, self.page(es)), (200, None, page)]):
             res = pc.check_offer("Ni no Kuni Wrath of the White Witch Remastered Nintendo Switch", o)
-        self.assertEqual((res["verdict"], res["method"]), ("OK", "URL de la version en-GB"))
+        self.assertEqual((res["verdict"], res["method"]), ("OK", "URL of the en-GB version"))
 
     def test_unverifiable_reason_says_what_the_url_names(self):
         # 02/10/2026, World of Warcraft: Forever (Heroic Pack) chez Driffle : la page bloque le moniteur ; l'ancien
@@ -843,10 +843,10 @@ class TestConfirmOnMerchantPage(unittest.TestCase):
         o = offer(edition="Heroic Pack", region="BATTLENET GIFT", region_filter="BATTLENET GIFT", platform="battle-net")
         url = "https://www.driffle.com/warcraft-forever-skyborne-heroic-pack-dlc-global-pc-mac-battlenet-gift-p10001673"
         self.assertEqual(pc.unverified_reason(o, url),
-                         "édition Heroic Pack : nom non contrôlé dans l'URL (elle nomme « Warcraft Forever Skyborne Heroic Pack Dlc Mac »), "
-                         "page marchand illisible")
+                         "edition Heroic Pack: name not checked in the URL (it names « Warcraft Forever Skyborne Heroic Pack Dlc Mac »), "
+                         "merchant page unreadable")
         self.assertEqual(pc.unverified_reason(offer(), "https://www.hrkgame.com/en/product/12345/"),
-                         "nom du produit introuvable dans l'URL, page marchand illisible")
+                         "product name not found in the URL, merchant page unreadable")
         # l'alias : « Warcraft Forever » est le produit, l'offre se vérifie par l'URL
         pc._PRODUCT_ALIASES = None
         res = pc.analyze("World of Warcraft: Forever", o, pc.url_text(url), "URL")
@@ -861,7 +861,7 @@ class TestConfirmOnMerchantPage(unittest.TestCase):
             res = pc.check_offer("Titanfall 2", offer(merchantName="Driffle", edition="Deluxe", region="IN ENGLISH ONLY",
                                                      region_filter="EA ENG/POL/RUS ONLY", platform="ea-app"))
         self.assertEqual((res["verdict"], res["method"], get.call_count), ("SUSPECT", "URL", 2))
-        self.assertTrue(res["reasons"][0].startswith("autre produit chez le marchand : « Titanfall Deluxe Edition"), res["reasons"])
+        self.assertTrue(res["reasons"][0].startswith("another product at the merchant: « Titanfall Deluxe Edition"), res["reasons"])
         # audit du 02/10/2026 : un slug périmé que le marchand redirige (301) vers la fiche du bon produit n'alerte pas
         # (Instant Gaming garde l'id et change le slug : « /en/4860-buy-key-…-breath-of-the-wild-2/ »)
         zelda = "The Legend of Zelda Tears of the Kingdom Nintendo Switch"
@@ -869,12 +869,12 @@ class TestConfirmOnMerchantPage(unittest.TestCase):
         good = "https://www.instant-gaming.com/en/4860-buy-the-legend-of-zelda-tears-of-the-kingdom-switch-game-nintendo-eshop-europe/"
         with mock.patch.object(pc, "http_get", side_effect=[(200, None, self.page(stale)), (301, good, "")]):
             res = pc.check_offer(zelda, offer(merchantName="Instant Gaming", region="EUROPE", platform="nintendo-eshop"))
-        self.assertEqual((res["verdict"], res["method"]), ("OK", "URL après 301 marchand"))
+        self.assertEqual((res["verdict"], res["method"]), ("OK", "URL after the merchant's 301"))
         # et un lien sans nom dont le 301 mène à une fiche d'un autre produit alerte, sans lire la page
         other = "https://www.instant-gaming.com/en/4860-buy-the-legend-of-zelda-breath-of-the-wild-switch/"
         with mock.patch.object(pc, "http_get", side_effect=[(200, None, self.page("https://www.instant-gaming.com/en/4860-/")), (301, other, "")]):
             res = pc.check_offer(zelda, offer(merchantName="Instant Gaming", region="EUROPE", platform="nintendo-eshop"))
-        self.assertEqual((res["verdict"], res["method"]), ("SUSPECT", "URL après 301 marchand"))
+        self.assertEqual((res["verdict"], res["method"]), ("SUSPECT", "URL after the merchant's 301"))
         self.assertIn("Breath Of The Wild", res["reasons"][0])
         # une boutique contrôlée sur sa version anglaise (Nintendo) n'alerte jamais sur son slug traduit
         fr = "https://www.nintendo.com/fr-fr/Jeux/Jeux-a-telecharger/Le-Chat-Chapeaute-Pagaille-sous-la-pluie-3177999.html"
@@ -926,7 +926,7 @@ class TestConfirmOnMerchantPage(unittest.TestCase):
             res = pc.check_offer("Titanfall 2", o)
         self.assertEqual(res["verdict"], "SUSPECT")
         self.assertIn("Titanfall Deluxe Edition", res["reasons"][0])
-        self.assertTrue(res["reasons"][1].startswith("offre en rupture chez le marchand"))  # et la redirection est signalée
+        self.assertTrue(res["reasons"][1].startswith("offer out of stock at the merchant"))  # et la redirection est signalée
         # Romain, 02/10/2026 : « on a juste besoin de suivre les redirections » — à chaque offre Kinguin, une requête sans
         # suivre la redirection : 200 = fiche en stock, 301 vers une autre fiche = rupture ; un 301 qui ne retire que le
         # segment de langue (« /en/category/… » -> « /category/… ») est la même fiche
@@ -937,15 +937,15 @@ class TestConfirmOnMerchantPage(unittest.TestCase):
         with mock.patch.object(pc, "http_get", side_effect=[(200, None, self.page(right)), (301, "/category/25568/titanfall-2-pc-ea-app-key", "")]):
             res = pc.check_offer("Titanfall 2", ok)
         self.assertEqual(res["verdict"], "SUSPECT")
-        self.assertEqual(res["reasons"], ["offre en rupture chez le marchand : le lien redirige vers une autre fiche "
-                                          "(https://www.kinguin.net/category/25568/titanfall-2-pc-ea-app-key), mais le prix reste dans le feed"])
+        self.assertEqual(res["reasons"], ["offer out of stock at the merchant: the link redirects to another page "
+                                          "(https://www.kinguin.net/category/25568/titanfall-2-pc-ea-app-key), but the price stays in the feed"])
         # une fiche seulement RENOMMÉE (même nom, région, plateforme, édition : 24 des 25 redirections en mémoire le 02/10)
         # n'est pas une rupture : une note, pas d'alerte
         dayz = "https://www.kinguin.net/category/55338/dayz-eu-steam-altergift/"
         with mock.patch.object(pc, "http_get", side_effect=[(200, None, self.page(dayz)), (301, "/category/55338/dayz-eu-pc-steam-altergift", "")]):
             res = pc.check_offer("Dayz", offer(merchantName="Kinguin", region="GIFT EU", region_filter="STEAM GIFT EU"))
         self.assertEqual((res["verdict"], res["reasons"]), ("OK", []))
-        self.assertTrue(any(n.startswith("fiche renommée chez le marchand") for n in res["notes"]), res["notes"])
+        self.assertTrue(any(n.startswith("page renamed at the merchant") for n in res["notes"]), res["notes"])
         # le jeu renommé par son éditeur (« Crimson Desert Enhanced », aliases.toml) : un renommage, pas une rupture
         pc._PRODUCT_ALIASES = None
         crimson = "https://www.kinguin.net/en/category/471878/crimson-desert-deluxe-edition-eu-xbox-series-x-s-cd-key"
@@ -959,7 +959,7 @@ class TestConfirmOnMerchantPage(unittest.TestCase):
         with mock.patch.object(pc, "http_get", side_effect=[(200, None, self.page(rust)), (301, "/category/55259/rust-de-pc-steam-altergift", "")]):
             res = pc.check_offer("Rust", offer(merchantName="Kinguin", region="GIFT EU", region_filter="STEAM GIFT EU"))
         self.assertEqual(res["verdict"], "SUSPECT")
-        self.assertTrue(res["reasons"][0].startswith("offre en rupture chez le marchand"), res)
+        self.assertTrue(res["reasons"][0].startswith("offer out of stock at the merchant"), res)
         en = "https://www.kinguin.net/en/category/360568/helldivers-2-super-citizen-edition-eu-xbox-series-x-s-cd-key"
         with mock.patch.object(pc, "http_get", side_effect=[(200, None, self.page(en)), (301, "/category/360568/helldivers-2-super-citizen-edition-eu-xbox-series-x-s-cd-key", "")]):
             res = pc.check_offer("Helldivers 2 Xbox Series", offer(merchantName="Kinguin", edition="Super Citizen", region="EU XBOX X|S",
@@ -972,7 +972,7 @@ class TestConfirmOnMerchantPage(unittest.TestCase):
             res = pc.check_offer("Titanfall 2", o)
         # la cible ne blanchit pas le nom, et la redirection elle-même est signalée : fiche en rupture, prix dans le feed
         self.assertEqual(res["verdict"], "SUSPECT")
-        self.assertTrue(res["reasons"][0].startswith("offre en rupture chez le marchand : le lien redirige vers une autre fiche"), res)
+        self.assertTrue(res["reasons"][0].startswith("offer out of stock at the merchant: the link redirects to another page"), res)
 
     def test_kinguin_probe_keeps_what_it_saw_and_never_passes_silently(self):
         # 02/10/2026 : la fiche servie à la place du lien est gardée pour le recontrôle (evidence) ; une sonde en erreur
@@ -1017,9 +1017,9 @@ class TestConfirmOnMerchantPage(unittest.TestCase):
         self.assertIn("REGION Europe", text)
         self.assertNotIn("Argentina", text)
         o = offer(merchantName="CJS CDKeys", edition="Triple Bundle", region="EUROPE", region_filter="WINDOWS EU", platform="microsoft-windows")
-        self.assertEqual(pc.analyze("Minecraft Dungeons", o, text, "titre de la page")["reasons"], [])
+        self.assertEqual(pc.analyze("Minecraft Dungeons", o, text, "page title")["reasons"], [])
         argentina = pc.page_text_from_dom(dom, base + "701", "url-variation")
-        self.assertEqual(pc.analyze("Minecraft Dungeons", o, argentina, "titre de la page")["reasons"], ["région interdite : ar, argentina"])
+        self.assertEqual(pc.analyze("Minecraft Dungeons", o, argentina, "page title")["reasons"], ["forbidden region: ar, argentina"])
 
         # de bout en bout : l'URL nomme le produit mais pas la région ; avec « variation= », la page est lue pour la variante
         def check(variation):
@@ -1029,9 +1029,9 @@ class TestConfirmOnMerchantPage(unittest.TestCase):
                                                          platform="microsoft-windows"))
         res = check("699")
         self.assertEqual(res["verdict"], "OK", res)
-        self.assertIn("région lue sur la variante choisie par le lien : Europe", res["notes"])
+        self.assertIn("region read on the variant chosen by the link: Europe", res["notes"])
         res = check("701")  # la clé argentine affichée EUROPE : une vraie erreur, que l'URL seule laissait passer
-        self.assertEqual((res["verdict"], res["reasons"]), ("SUSPECT", ["région interdite : ar, argentina"]))
+        self.assertEqual((res["verdict"], res["reasons"]), ("SUSPECT", ["forbidden region: ar, argentina"]))
 
     def test_browser_headers_and_moved(self):
         # 02/10/2026 : Akamai (Kinguin) répond 403 à l'Accept minimal, 200 ou 301 au jeu complet d'en-têtes de Chrome
@@ -1071,10 +1071,10 @@ class TestConfirmOnMerchantPage(unittest.TestCase):
         # Romain, 02/10/2026 : « on aura quand même une alerte » — en rupture, le prix reste dans le feed ; la région
         # (lue sur la fiche servie, globale comme l'affichage) n'est plus reprochée
         self.assertEqual(res["verdict"], "SUSPECT")
-        self.assertEqual(res["reasons"], ["offre en rupture chez le marchand : le lien redirige vers une autre fiche "
+        self.assertEqual(res["reasons"], ["offer out of stock at the merchant: the link redirects to another page "
                                           "(https://www.kinguin.net/category/172478/stellaris-starter-pack-bundle-2023-pc-steam-cd-key), "
-                                          "mais le prix reste dans le feed"])
-        self.assertTrue(any("fiche servie" in n for n in res["notes"]))
+                                          "but the price stays in the feed"])
+        self.assertTrue(any("page served" in n for n in res["notes"]))
         # repli : pas de redirection vue (200), mais la page servie a une autre URL canonique : même alerte
         with mock.patch.object(pc, "http_get", side_effect=[(200, None, self.page(link)), (200, None, ""), (200, None, dom), (200, None, dom)]), \
              mock.patch.object(pc, "page_title", return_value=None):
@@ -1085,7 +1085,7 @@ class TestConfirmOnMerchantPage(unittest.TestCase):
         with mock.patch.object(pc, "http_get", side_effect=[(200, None, self.page(link)), (200, None, ""), (200, None, same), (200, None, same)]), \
              mock.patch.object(pc, "page_title", return_value=None):
             res = pc.check_offer("Stellaris", o)
-        self.assertEqual(res["reasons"], ["région : AllKeyShop GLOBAL, marchand EU"])
+        self.assertEqual(res["reasons"], ["region: AllKeyShop GLOBAL, merchant EU"])
         self.assertEqual(pc.merchant_config(link, "Kinguin")["redirect"]["means"], "out-of-stock")
 
     def test_region_field_in_the_page_body(self):
@@ -1097,7 +1097,7 @@ class TestConfirmOnMerchantPage(unittest.TestCase):
         res = self.run_check("Marvel’s Spider-Man 2", offer(edition="Deluxe", region="GLOBAL", region_filter="STEAM GLOBAL"),
                              "https://k4g.com/product/marvel-s-spider-man-2-playstation-5-europe-cd-key-83338621", dom)
         self.assertEqual((res["verdict"], res["reasons"]), ("OK", []))
-        self.assertTrue(any(n.startswith("URL contredite par la page") for n in res["notes"]))
+        self.assertTrue(any(n.startswith("URL contradicted by the page") for n in res["notes"]))
 
     def test_region_menu_does_not_contradict(self):
         # une page qui liste plusieurs zones (menu de filtres) ne lève pas une vraie clé EU affichée GLOBAL
@@ -1110,7 +1110,7 @@ class TestConfirmOnMerchantPage(unittest.TestCase):
         res = self.run_check("EA SPORTS FC 26", offer(edition="ICONS Edition", region="GLOBAL", region_filter="EA GLOBAL", platform="ea-app"),
                              "https://www.driffle.com/ea-sports-fc-26-icons-edition-global-pc-steam-digital-key-p9990128",
                              "<title>Blocked - Driffle</title>")
-        self.assertEqual((res["verdict"], res["reasons"]), ("SUSPECT", ["plateforme : AllKeyShop ea-app, marchand steam"]))
+        self.assertEqual((res["verdict"], res["reasons"]), ("SUSPECT", ["platform: AllKeyShop ea-app, merchant steam"]))
 
     def test_localized_title_gives_manual_check(self):
         url = "https://www.amazon.fr/gp/product/B09XXXXXXX/"
@@ -1118,14 +1118,14 @@ class TestConfirmOnMerchantPage(unittest.TestCase):
                                                             (200, None, "<title>Amazon.fr : Le Jeu Inconnu (Nintendo Switch)</title>")]):
             res = pc.check_offer("Some Game Nintendo Switch", offer(merchantName="Amazon.fr", region="BOX", platform="physical-medium"))
         self.assertEqual(res["verdict"], "À VÉRIFIER")
-        self.assertTrue(res["reasons"][0].startswith("titre du marchand dans une autre langue"))
+        self.assertTrue(res["reasons"][0].startswith("merchant title in another language"))
 
     def test_silent_page_is_not_a_confirmation(self):
         res = self.run_check("Stellaris", offer(edition="Bundle 1", region="GLOBAL", region_filter="STEAM GLOBAL"),
                              "https://kinguin.net/category/172478/stellaris-starter-pack-eu-steam-cd-key",
                              "<title>Stellaris: Starter Pack Bundle 2023 PC Steam CD Key | Buy cheap on Kinguin.net</title>")
         self.assertEqual(res["verdict"], "SUSPECT")
-        self.assertTrue(any(n.startswith("la page ne dit rien sur ce point") for n in res["notes"]))
+        self.assertTrue(any(n.startswith("the page says nothing on this point") for n in res["notes"]))
 
     def test_name_unverifiable_but_wrong_console(self):
         # Elden Ring Xbox Series chez Amazon : nom illisible, mais l'URL dit PlayStation
@@ -1135,7 +1135,7 @@ class TestConfirmOnMerchantPage(unittest.TestCase):
             res = pc.check_offer("Elden Ring Xbox Series", offer(merchantName="Amazon.fr", edition="Launch Edition", region="BOX",
                                                                 region_filter="BOX", platform="physical-medium"))
         title.assert_not_called()
-        self.assertEqual((res["verdict"], res["reasons"]), ("SUSPECT", ["plateforme : page AllKeyShop Xbox, marchand PlayStation"]))
+        self.assertEqual((res["verdict"], res["reasons"]), ("SUSPECT", ["platform: AllKeyShop page Xbox, merchant PlayStation"]))
 
 
 @mock.patch.object(pc, "REQUEST_DELAY", 0)
@@ -1170,7 +1170,7 @@ class TestCheckOffer(unittest.TestCase):
 
         with mock.patch.object(pc, "http_get", side_effect=fake_get):
             res = pc.check_offer("EA SPORTS FC 27", offer(merchantName="Instant Gaming", platform="ea-app"))  # groupe « même offre »
-        self.assertEqual((res["verdict"], res["method"], res["url"]), ("OK", "URL après 301 marchand", full))
+        self.assertEqual((res["verdict"], res["method"], res["url"]), ("OK", "URL after the merchant's 301", full))
 
     def test_page_fallback(self):
         page = self.interstitial("https://store.epicgames.com/p/e149fb")  # URL sans nom : la page tranche
@@ -1185,14 +1185,14 @@ class TestCheckOffer(unittest.TestCase):
              mock.patch.object(pc, "page_title", return_value="Sonic the Hedgehog - Epic Games Store"):
             res = pc.check_offer("Sonic Racing CrossWorlds", offer(platform="epic-store"))
         self.assertEqual((res["verdict"], res["reasons"]),
-                         ("SUSPECT", ["autre produit chez le marchand : « Sonic the Hedgehog » au lieu de « Sonic Racing CrossWorlds » (titre de la page)"]))
+                         ("SUSPECT", ["another product at the merchant: « Sonic the Hedgehog » instead of « Sonic Racing CrossWorlds » (page title)"]))
 
     def test_unreadable_page(self):
         page = self.interstitial("https://store.epicgames.com/p/abc-123")
         with mock.patch.object(pc, "http_get", side_effect=[(200, None, page), (403, None, ""), (403, None, "")]), \
              mock.patch.object(pc, "page_title", return_value=None):
             res = pc.check_offer("EA SPORTS FC 27", offer())
-        self.assertEqual((res["verdict"], res["method"]), ("À VÉRIFIER", "aucune"))
+        self.assertEqual((res["verdict"], res["method"]), ("À VÉRIFIER", "none"))
 
     def test_redirection_failure_is_retryable(self):
         with mock.patch.object(pc, "http_get", return_value=(503, None, "")) as get:
@@ -1221,15 +1221,15 @@ class TestGameCurrency20261002(unittest.TestCase):
     def test_currency_sold_as_the_game(self):
         cod = "Call of Duty Black Ops 6"
         self.assertEqual(self.reasons(cod, "https://shop.example/call-of-duty-black-ops-6-5000-cod-points-xbox-live", platform="xbox", region="XBOX X|S"),
-                         ["monnaie de jeu chez le marchand : cod-points"])
+                         ["in-game currency at the merchant: cod-points"])
         self.assertEqual(self.reasons(cod, "https://shop.example/black-ops-6-2400-points-pc-battle-net", platform="battle-net"),
-                         ["monnaie de jeu chez le marchand : points"])  # mot seul + quantité
+                         ["in-game currency at the merchant: points"])  # mot seul + quantité
         self.assertEqual(self.reasons("Fortnite", "https://shop.example/fortnite-1000-v-bucks-pc", platform="epic-store"),
-                         ["monnaie de jeu chez le marchand : v-bucks"])
+                         ["in-game currency at the merchant: v-bucks"])
         self.assertEqual(self.reasons("EA SPORTS FC 26", "https://shop.example/ea-sports-fc-26-12000-fc-points-pc-ea-app", platform="ea-app"),
-                         ["monnaie de jeu chez le marchand : fc-points"])
+                         ["in-game currency at the merchant: fc-points"])
         self.assertEqual(self.reasons("Elden Ring", "https://shop.example/elden-ring-steam-wallet-code-50-eur"),
-                         ["monnaie de jeu chez le marchand : wallet"])
+                         ["in-game currency at the merchant: wallet"])
 
     def test_currency_that_is_expected(self):
         # l'édition AllKeyShop est la monnaie (GTA 5) ; un bonus promo (G2A : 2 gold coins) ; une offre WALLET (PS Store via recharge)
@@ -1299,8 +1299,8 @@ class TestOfferModes20261001(unittest.TestCase):
         msg = pc.format_alert("Popular", 1, "EA SPORTS FC 27", self.TARGETS[0][3], o,
                               {"verdict": "SUSPECT", "reasons": ["x"], "notes": [], "url": None, "method": "URL"})
         self.assertEqual(msg.splitlines()[0], pc.URGENT_PREFIX)  # un SUSPECT sur le 2e prix : une urgence premier prix
-        self.assertIn("· Standard · 2e prix de l'édition", msg.splitlines()[1])
-        self.assertEqual(pc.rank_label({"edition_rank": 1, "account": True}), "1er prix de l'édition (compte)")
+        self.assertIn("· Standard · 2nd price of the edition", msg.splitlines()[1])
+        self.assertEqual(pc.rank_label({"edition_rank": 1, "account": True}), "1st price of the edition (account)")
         self.assertEqual(pc.rank_label({}), "")
 
     def test_run_cycle_checks_the_offers_of_the_mode(self):
@@ -1418,16 +1418,16 @@ class TestOfferModes20261001(unittest.TestCase):
         offers = pc.page_offers(self.trans, 3)
         fixed_id, still_id, faux_id, nv_id, ok_id = (str(o["id"]) for o in offers[:5])
         flagged = lambda **kw: dict({"verdict": "SUSPECT", "product": "EA SPORTS FC 27", "edition": "Standard", "merchant": "X",
-                                     "reasons": ["région : AllKeyShop GLOBAL, marchand EU"], "page": page, "at": "2026-10-01 10:00",
+                                     "reasons": ["region: AllKeyShop GLOBAL, merchant EU"], "page": page, "at": "2026-10-01 10:00",
                                      "seen": pc.time.time(), "sent_to": "urgent"}, **kw)  # déjà dans le bon salon
         def fresh_state():
             st = pc.load_state("/nonexistent")
             st["checked"] = {fixed_id: flagged(), still_id: flagged(), "999999": flagged(merchant="Retiré"),
                              faux_id: flagged(decision={"decision": "faux", "by": "romain"}),
-                             nv_id: flagged(verdict="NON VÉRIFIABLE", reasons=["nom du produit introuvable dans l'URL, page marchand illisible"]),
+                             nv_id: flagged(verdict="NON VÉRIFIABLE", reasons=["product name not found in the URL, merchant page unreadable"]),
                              ok_id: flagged(verdict="OK", reasons=[])}
             return st
-        suspect = {"verdict": "SUSPECT", "reasons": ["région : AllKeyShop GLOBAL, marchand EU"], "notes": [], "url": "https://x/eu", "method": "URL"}
+        suspect = {"verdict": "SUSPECT", "reasons": ["region: AllKeyShop GLOBAL, merchant EU"], "notes": [], "url": "https://x/eu", "method": "URL"}
         checked = []
 
         def checker(product, o):
@@ -1443,17 +1443,17 @@ class TestOfferModes20261001(unittest.TestCase):
         self.assertEqual(([e["merchant"] for e in outcome["removed"]], [e["fixed_kind"] for e in outcome["rules"]], outcome["checked"]),
                          (["Retiré"], ["rule"], 3))
         self.assertEqual((state["checked"][fixed_id]["fixed_from"], state["checked"][fixed_id]["verdict"]), ("SUSPECT", "OK"))
-        self.assertEqual(state["checked"]["999999"]["fixed_how"], "offre retirée de la page")
+        self.assertEqual(state["checked"]["999999"]["fixed_how"], "offer removed from the page")
         self.assertEqual((len(outcome["still"]), state["checked"][nv_id]["verdict"], outcome["new"]), (2, "SUSPECT", []))
         self.assertTrue(state["checked"][still_id]["still_wrong_at"])
         # alertes : la NON VÉRIFIABLE devenue SUSPECT, plus les 6 offres de la page jamais vues (SUSPECT dans ce test)
         self.assertEqual(len(sent), 1 + 6)
         recap = pc.format_recheck("Price check top", "", outcome)
-        self.assertIn("Recontrôle des offres signalées** · Price check top · 3 offre(s)", recap)
-        self.assertIn("✅ Réparées (1)", recap)
-        self.assertIn("🧹 Anciens faux positifs levés par les règles, rien n'a changé (1)", recap)
-        self.assertIn("🔴 Toujours en erreur (2)", recap)
-        self.assertIn("Retiré — offre retirée de la page", recap)
+        self.assertIn("Re-check of the flagged offers** · Price check top · 3 offer(s)", recap)
+        self.assertIn("✅ Repaired (1)", recap)
+        self.assertIn("🧹 Old false positives cleared by the rules, nothing changed (1)", recap)
+        self.assertIn("🔴 Still wrong (2)", recap)
+        self.assertIn("Retiré — offer removed from the page", recap)
         with tempfile.TemporaryDirectory() as d:
             pc.export_reports(state, d)
             with open(os.path.join(d, "reports.json"), encoding="utf-8") as f:
@@ -1471,8 +1471,8 @@ class TestOfferModes20261001(unittest.TestCase):
         self.assertEqual(state["checked"][ok_id]["at"], state["checked"][ok_id]["last_recheck"])  # nouvelle erreur : date du jour
         self.assertEqual(len(sent), 1 + 1 + 6)  # la nouvelle erreur, la NV devenue SUSPECT, les 6 jamais vues
         recap = pc.format_recheck("Price check top", "romain", outcome, full=True)
-        self.assertIn("Recontrôle de toutes les offres** · Price check top (demandé depuis l'admin par romain) · 4 offre(s)", recap)
-        self.assertIn("🆕 Nouvelles erreurs (1)", recap)
+        self.assertIn("Re-check of every offer** · Price check top (requested from the admin by romain) · 4 offer(s)", recap)
+        self.assertIn("🆕 New errors (1)", recap)
         # 02/10/2026 : « réparée » seulement si l'offre a changé (URL, région, plateforme, édition) ; sinon c'est un
         # ancien faux positif que les règles ont levé (UFC 5 chez Eneba, Onimusha au PS Store US, recontrôle de 18:37)
         state = fresh_state()
@@ -1483,10 +1483,10 @@ class TestOfferModes20261001(unittest.TestCase):
                                    if str(o["id"]) == fixed_id else dict(suspect), per_edition=3, recheck="flagged")
         e = state["checked"][fixed_id]
         self.assertEqual(e["fixed_kind"], "repaired")
-        self.assertTrue(e["fixed_how"].startswith("recontrôle OK, l'offre a changé (URL"), e["fixed_how"])
+        self.assertTrue(e["fixed_how"].startswith("re-check OK, the offer changed (URL"), e["fixed_how"])
         # un recontrôle qui ne conclut pas (page illisible) ne défait pas un OK vérifié (G2A Witcher, 02/10/2026)
         state, sent = fresh_state(), []
-        unverifiable = {"verdict": "À VÉRIFIER", "reasons": ["édition Bundle : nom non contrôlé dans l'URL, page marchand illisible"],
+        unverifiable = {"verdict": "À VÉRIFIER", "reasons": ["edition Bundle: name not checked in the URL, merchant page unreadable"],
                         "notes": [], "url": None, "method": "aucune"}
         with mock.patch.object(pc, "http_get", return_value=(200, None, self.PAGE)), mock.patch.object(pc, "NOTIFY_OK", False):
             outcome = pc.run_cycle(self.TARGETS, sent.append, state, lambda p, o: dict(unverifiable), per_edition=3, recheck="all")
@@ -1496,14 +1496,14 @@ class TestOfferModes20261001(unittest.TestCase):
         self.assertEqual(len(outcome["unknown"]), 4)  # fixed, still, ok, et la NON VÉRIFIABLE, qui le reste
         self.assertEqual(state["checked"][nv_id]["verdict"], "NON VÉRIFIABLE")
         recap = pc.format_recheck("Price check top", "romain", outcome, full=True)
-        self.assertIn("⚪ Recontrôle sans conclusion, verdict inchangé (4)", recap)
+        self.assertIn("⚪ Re-check without a conclusion, verdict unchanged (4)", recap)
         self.assertNotIn("Nouvelles erreurs", recap)
         # 3. sans recontrôle : rien
         with mock.patch.object(pc, "http_get", return_value=(200, None, self.PAGE)), mock.patch.object(pc, "NOTIFY_OK", False):
             outcome = pc.run_cycle(self.TARGETS, lambda m: None, pc.load_state("/nonexistent"), self.ok)
         self.assertEqual({k: v for k, v in outcome.items() if k != "first_checked"},
                          {"checked": 0, "fixed": [], "removed": [], "rules": [], "verified": [], "still": [], "new": [], "unknown": []})
-        self.assertIn("Rien à signaler", pc.format_recheck("Price check top", "", outcome))
+        self.assertIn("Nothing to report", pc.format_recheck("Price check top", "", outcome))
 
     def test_recheck_tells_a_repair_behind_the_same_link(self):
         """02/10/2026 : une fiche Kinguin signalée en rupture puis de nouveau en stock garde le même lien, la même région,
@@ -1524,21 +1524,21 @@ class TestOfferModes20261001(unittest.TestCase):
         nothing = pc.evidence_of(None, None)
         # 1. alerte d'avant le 02/10 (rien gardé de ce qui avait été vu) : seule la raison « en rupture » le dit
         e = recheck(base(), ok(nothing))
-        self.assertEqual((e["fixed_kind"], e["fixed_how"]), ("repaired", "recontrôle OK, l'offre a changé (fiche servie)"))
+        self.assertEqual((e["fixed_kind"], e["fixed_how"]), ("repaired", "re-check OK, the offer changed (page served)"))
         self.assertEqual(e["evidence"], nothing)  # désormais gardé
         # 2. la fiche servie est gardée : elle était une autre, le lien sert de nouveau sa fiche
         served = pc.evidence_of("https://www.kinguin.net/category/55259/rust-de-pc-steam-altergift", None)
         self.assertEqual(recheck(base(evidence=served), ok(nothing))["fixed_kind"], "repaired")
         # 3. même lien, autre titre de page (le marchand a corrigé sa fiche) : réparée
         title = lambda t: pc.evidence_of(None, t)
-        e = recheck(base(reasons=["autre produit chez le marchand : « Nocturne » au lieu de « Rust » (titre de la page)"],
+        e = recheck(base(reasons=["another product at the merchant: « Nocturne » instead of « Rust » (page title)"],
                          evidence=title("Nocturne PC Steam CD Key | Kinguin")), ok(title("Rust EU Steam Altergift | Kinguin")))
-        self.assertEqual((e["fixed_kind"], e["fixed_how"]), ("repaired", "recontrôle OK, l'offre a changé (page marchand)"))
+        self.assertEqual((e["fixed_kind"], e["fixed_how"]), ("repaired", "re-check OK, the offer changed (merchant page)"))
         # 4. rien n'a changé, ni le lien ni ce qui a été vu : une règle a levé un faux positif
-        e = recheck(base(reasons=["région : AllKeyShop GIFT EU, marchand GLOBAL"], evidence=title("Rust | Kinguin")),
+        e = recheck(base(reasons=["region: AllKeyShop GIFT EU, merchant GLOBAL"], evidence=title("Rust | Kinguin")),
                     ok(title("Rust | Kinguin")))
         self.assertEqual(e["fixed_kind"], "rule")
-        e = recheck(base(reasons=["région : AllKeyShop GIFT EU, marchand GLOBAL"]), ok(nothing))  # d'avant le 02/10, sans rupture
+        e = recheck(base(reasons=["region: AllKeyShop GIFT EU, merchant GLOBAL"]), ok(nothing))  # d'avant le 02/10, sans rupture
         self.assertEqual(e["fixed_kind"], "rule")
 
     def test_recap_due(self):
@@ -1586,15 +1586,15 @@ class TestOfferModes20261001(unittest.TestCase):
         first = pc.page_offers(self.trans, 3)[0]
         state, sent = pc.load_state("/nonexistent"), []
         state["checked"][str(first["id"])] = {"verdict": "NON VÉRIFIABLE", "unverifiable": "first-price", "product": "EA SPORTS FC 27",
-                                              "reasons": ["nom du produit introuvable dans l'URL, page marchand illisible"], "notes": [],
+                                              "reasons": ["product name not found in the URL, merchant page unreadable"], "notes": [],
                                               "url": "https://shop.example/dp/B0", "method": "aucune"}
         with mock.patch.object(pc, "http_get", return_value=(200, None, self.PAGE)), mock.patch.object(pc, "NOTIFY_OK", False), \
                 mock.patch.dict(pc.PAGE_LISTS, {page: {"Popular"}}, clear=True):
             pc.run_cycle(self.TARGETS, sent.append, state, self.ok, per_edition=3)
             self.assertEqual(state["checked"][str(first["id"])]["verdict"], "À VÉRIFIER")
             self.assertEqual(len(sent), 1)
-            self.assertIn("🟠 **À VÉRIFIER**", sent[0])
-            self.assertIn("devenue le premier prix de la page", sent[0])
+            self.assertIn("🟠 **TO CHECK**", sent[0])
+            self.assertIn("became the page's first price", sent[0])
             pc.run_cycle(self.TARGETS, sent.append, state, self.ok, per_edition=3)
         self.assertEqual(len(sent), 1)  # une seule fois
         # une entrée d'avant le 01/10/2026, sans politique enregistrée : celle de la config du marchand (aucune : first-price)
@@ -1648,7 +1648,7 @@ class TestLoopAudit20261002(unittest.TestCase):
     @staticmethod
     def flagged(**kw):
         return dict({"verdict": "SUSPECT", "product": "Jeu", "edition": "Standard", "merchant": "Kinguin", "page": TestLoopAudit20261002.PAGE,
-                     "reasons": ["autre produit chez le marchand : « Autre » au lieu de « Jeu » (URL)"], "url": "https://www.kinguin.net/category/1/autre",
+                     "reasons": ["another product at the merchant: « Autre » instead of « Jeu » (URL)"], "url": "https://www.kinguin.net/category/1/autre",
                      "region": "GLOBAL", "region_filter": "STEAM GLOBAL", "platform": "steam", "at": "2026-10-01 10:00", "seen": pc.time.time()}, **kw)
 
     def cycle(self, page_html, state, checker, recheck=False, sent=None):
@@ -1660,19 +1660,19 @@ class TestLoopAudit20261002(unittest.TestCase):
         state = pc.load_state("/nonexistent")
         state["checked"]["1001"] = self.flagged()
         calls = []
-        wrong = lambda product, o: calls.append(o["id"]) or {"verdict": "SUSPECT", "reasons": ["autre produit"], "notes": [],
+        wrong = lambda product, o: calls.append(o["id"]) or {"verdict": "SUSPECT", "reasons": ["another product"], "notes": [],
                                                               "url": "https://www.kinguin.net/category/1/autre", "method": "URL"}
         other = {"id": 1002, "price": 12.0}
         outcome = self.cycle(aks_page([{"id": 1001, "price": 0.02}, other]), state, wrong, recheck="flagged")
         e = state["checked"]["1001"]
         self.assertEqual((e["verdict"], e.get("fixed_at"), outcome["removed"]), ("SUSPECT", None, []))
-        self.assertEqual(outcome["unknown"][0][1], "offre momentanément sans prix sur la page")
+        self.assertEqual(outcome["unknown"][0][1], "offer without a price on the page for now")
         # page servie sans offres : rien n'est « retiré »
         outcome = self.cycle(aks_page([]), state, wrong, recheck="flagged")
         self.assertEqual((state["checked"]["1001"]["verdict"], outcome["removed"]), ("SUSPECT", []))
         # vraiment retirée de la page : réparée, et marquée pour être recontrôlée si elle revient
         outcome = self.cycle(aks_page([other]), state, wrong, recheck="flagged")
-        self.assertEqual((e["verdict"], e["fixed_how"], bool(e.get("removed_at"))), ("OK", "offre retirée de la page", True))
+        self.assertEqual((e["verdict"], e["fixed_how"], bool(e.get("removed_at"))), ("OK", "offer removed from the page", True))
         # elle revient au premier prix : recontrôlée tout de suite, même sans recontrôle prévu, et alertée si elle est fausse
         calls.clear()
         sent = []
@@ -1695,7 +1695,7 @@ class TestLoopAudit20261002(unittest.TestCase):
             return {"verdict": "OK", "reasons": [], "notes": [], "url": "https://x.example/jeu", "method": "URL"}
         outcome = self.cycle(aks_page([{"id": 1001, "price": 9.0}, {"id": 1002, "price": 12.0}]), state, checker, recheck="all")
         self.assertEqual(seen, [1001, 1002])  # la suite du passage a eu lieu
-        self.assertEqual((pc.FAILURES.get("1001"), outcome["unknown"][0][1][:13]), (1, "contrôle raté"))
+        self.assertEqual((pc.FAILURES.get("1001"), outcome["unknown"][0][1][:12]), (1, "check failed"))
         self.assertEqual(state["checked"]["1001"]["verdict"], "SUSPECT")
         with mock.patch.object(pc.urllib.request.OpenerDirector, "open", side_effect=pc.http.client.IncompleteRead(b"x", 10)):
             with self.assertRaises(OSError):
@@ -1769,19 +1769,19 @@ class TestLoopAudit20261002(unittest.TestCase):
         base = dict(self.flagged(), url="https://www.kinguin.net/category/1/jeu")
         # (a) une offre qui n'avait pas pu être vérifiée, trouvée OK : vérifiée, ni « réparée » ni « faux positif levé »
         e, outcome = recheck(dict(base, verdict="NON VÉRIFIABLE"))
-        self.assertEqual((e["fixed_kind"], len(outcome["verified"]), e["fixed_how"]), ("verified", 1, "vérifiée OK au recontrôle"))
+        self.assertEqual((e["fixed_kind"], len(outcome["verified"]), e["fixed_how"]), ("verified", 1, "verified OK at the re-check"))
         # (b) une entrée ancienne sans nom de filtre n'a pas « changé de région »
         e, _ = recheck(dict(base, region_filter=""))
         self.assertEqual(e["fixed_kind"], "rule")
         e, _ = recheck(dict(base, region="EUROPE", region_filter="STEAM EU"))
-        self.assertEqual((e["fixed_kind"], e["fixed_how"]), ("repaired", "recontrôle OK, l'offre a changé (région)"))
+        self.assertEqual((e["fixed_kind"], e["fixed_how"]), ("repaired", "re-check OK, the offer changed (region)"))
         # (c) une offre réparée redevenue fausse perd son classement
-        wrong = dict(ok, verdict="SUSPECT", reasons=["autre produit"])
+        wrong = dict(ok, verdict="SUSPECT", reasons=["another product"])
         e, outcome = recheck(dict(base, verdict="OK", fixed_at="2026-10-02 18:00", fixed_kind="rule", still_wrong_at="2026-10-02 17:00"), wrong)
         self.assertEqual((e.get("fixed_kind"), e.get("still_wrong_at"), len(outcome["new"])), (None, None, 1))
         recap = pc.format_recheck("Price check top", "", {"checked": 2, "fixed": [e], "removed": [], "rules": [], "verified": [],
                                                           "still": [], "new": [e], "unknown": []})
-        self.assertLess(recap.index("🆕 Nouvelles erreurs"), recap.index("✅ Réparées"))  # le plus important d'abord
+        self.assertLess(recap.index("🆕 New errors"), recap.index("✅ Repaired"))  # le plus important d'abord
 
     def test_a_false_positive_decision_is_never_alerted(self):
         # audit des tests : une offre NON VÉRIFIABLE jugée « faux » partait quand même en À VÉRIFIER au premier prix
@@ -1919,27 +1919,27 @@ class TestTopOffersTrueErrors20261001(unittest.TestCase):
         # « IN ENGLISH ONLY » (STEAM ENG ONLY) est une clé mondiale pour AllKeyShop ; Eneba vend une clé EUROPE
         self.assertEqual(self.reasons("Crusader Kings 3", "https://www.eneba.com/steam-crusader-kings-iii-starter-edition-pc-steam-key-europe",
                                       edition="Starter Edition", region="IN ENGLISH ONLY", region_filter="STEAM ENG ONLY"),
-                         ["région : AllKeyShop IN ENGLISH ONLY, marchand EU"])
+                         ["region: AllKeyShop IN ENGLISH ONLY, merchant EU"])
 
     def test_hunt_showdown_gameseal_emea_shown_row(self):
         self.assertEqual(self.reasons("Hunt Showdown", "https://gameseal.com/hunt-showdown-1896-pc-steam-key-emea",
-                                      region="ROW", region_filter="STEAM ROW"), ["région : AllKeyShop ROW, marchand EMEA"])
+                                      region="ROW", region_filter="STEAM ROW"), ["region: AllKeyShop ROW, merchant EMEA"])
 
     def test_black_ops_3_gamivo_eu_gift_shown_row(self):
         self.assertEqual(self.reasons("Call of Duty Black Ops 3", "https://www.gamivo.com/product/call-of-duty-black-ops-iii-zombies-chronicles-edition-eu",
-                                      edition="Limited", region="ROW", region_filter="STEAM ROW"), ["région : AllKeyShop ROW, marchand EU"])
+                                      edition="Limited", region="ROW", region_filter="STEAM ROW"), ["region: AllKeyShop ROW, merchant EU"])
 
     def test_monster_hunter_wilds_g2a_row_shown_europe(self):
         self.assertEqual(self.reasons("Monster Hunter Wilds", "https://www.g2a.com/en/monster-hunter-wilds-deluxe-edition-pc-steam-key-row-i10000507334026",
-                                      edition="Deluxe", region="EUROPE", region_filter="STEAM EU"), ["région : AllKeyShop EUROPE, marchand ROW"])
+                                      edition="Deluxe", region="EUROPE", region_filter="STEAM EU"), ["region: AllKeyShop EUROPE, merchant ROW"])
 
     def test_space_marine_2_anniversary_package_in_gold(self):
         # Steam /sub/997629 : le paquet « 1-Year Anniversary Edition » rangé en Gold, alors que la page a cette édition
         o = offer(edition="Gold", region="GLOBAL", region_filter="STEAM GLOBAL",
                   page_editions=["Standard", "Gold", "1 Year Anniversary Edition", "Ultra"])
         r = pc.analyze("Warhammer 40k Space Marine 2", o, "Warhammer 40,000: Space Marine 2 - 1-Year Anniversary Edition on Steam",
-                       "titre de la page")
-        self.assertEqual(r["reasons"], ["édition : rangée en Gold, le marchand vend anniversary (la page a une édition 1 Year Anniversary Edition)"])
+                       "page title")
+        self.assertEqual(r["reasons"], ["edition: filed under Gold, the merchant sells anniversary (the page has the edition 1 Year Anniversary Edition)"])
 
 
 @mock.patch.object(pc, "REQUEST_DELAY", 0)
@@ -1998,15 +1998,15 @@ class TestDetectionAudit20261002(unittest.TestCase):
         self.assertEqual((r["match"], r["reasons"]), ("exact", []))
         # pas généralisé : le jeu Pokémon Violet n'est pas le jeu Pokémon Scarlet, ni Bouclier l'Épée
         r = pc.analyze("Pokemon Scarlet Nintendo Switch", o, pc.url_text("https://shop.example/pokemon-violet-nintendo-switch-eu"), "URL")
-        self.assertTrue(r["reasons"] and r["reasons"][0].startswith("autre produit chez le marchand : « Pokemon Violet"), r["reasons"])
+        self.assertTrue(r["reasons"] and r["reasons"][0].startswith("another product at the merchant: « Pokemon Violet"), r["reasons"])
         r = pc.analyze("Pokemon Sword Nintendo Switch", o, pc.url_text("https://shop.example/pokemon-shield-nintendo-switch-eu"), "URL")
-        self.assertTrue(r["reasons"] and r["reasons"][0].startswith("autre produit"), r["reasons"])
+        self.assertTrue(r["reasons"] and r["reasons"][0].startswith("another product"), r["reasons"])
 
     def test_short_page_title_only_the_end_of_the_name(self):
         o = offer(platform="playstation-store", region="PS5")
-        self.assertIsNone(pc.analyze("God of War Ragnarok PS5", o, "God of War | Standard Edition", "titre de la page")["match"])
-        self.assertIsNone(pc.analyze("Call of Duty Black Ops 7", offer(), "Call of Duty: Black Ops | Steam", "titre de la page")["match"])
-        self.assertEqual(pc.analyze("Ace Combat 8 Wings of Theve", offer(), "Wings of Theve | Steam", "titre de la page")["match"], "partial")
+        self.assertIsNone(pc.analyze("God of War Ragnarok PS5", o, "God of War | Standard Edition", "page title")["match"])
+        self.assertIsNone(pc.analyze("Call of Duty Black Ops 7", offer(), "Call of Duty: Black Ops | Steam", "page title")["match"])
+        self.assertEqual(pc.analyze("Ace Combat 8 Wings of Theve", offer(), "Wings of Theve | Steam", "page title")["match"], "partial")
 
     def test_straight_apostrophe(self):
         # AllKeyShop écrit « Marvel's » : norm donnait « marvel-s », et le préfixe facultatif « marvels » ne s'appliquait pas
@@ -2031,9 +2031,9 @@ class TestDetectionAudit20261002(unittest.TestCase):
         r = lambda url, **kw: pc.analyze("EA SPORTS FC 27 PS5", offer(platform="playstation", **kw), pc.url_text(url), "URL")["reasons"]
         cjs = "https://www.cjs-cdkeys.com/products/EA-SPORTS-FC-27-Standard-Edition-PSN-Download-Key-%28Playstation%29-UNITED-STATES.html"
         self.assertEqual(r(cjs, region="USA", region_filter="USA"), [])  # clé US affichée USA : rien
-        self.assertEqual(r(cjs, region="EUROPE", region_filter="PSN EU"), ["région : AllKeyShop EUROPE, marchand US"])
+        self.assertEqual(r(cjs, region="EUROPE", region_filter="PSN EU"), ["region: AllKeyShop EUROPE, merchant US"])
         self.assertEqual(r("https://shop.example/ea-sports-fc-27-ps5-united-kingdom", region="GLOBAL", region_filter="PSN GLOBAL"),
-                         ["région : AllKeyShop GLOBAL, marchand UK"])
+                         ["region: AllKeyShop GLOBAL, merchant UK"])
         self.assertEqual(pc.analyze("Among Us VR", offer(), pc.url_text("https://www.loaded.com/among-us-3d-vr-pc-steam"), "URL")["reasons"], [])
 
     def test_dlc_page_or_game_page_with_a_dlc_edition(self):
@@ -2052,23 +2052,23 @@ class TestDetectionAudit20261002(unittest.TestCase):
         self.assertFalse(pc.offer_on_dlc_page("edition", {"edition": "Standard"}))  # un DLC rangé en Standard : alerte
         url = "https://www.eneba.com/steam-hearts-of-iron-iv-no-step-back-dlc-pc-steam-key-global"
         o = offer(page_dlc=pc.offer_on_dlc_page("edition", {"edition": "Standard"}))
-        self.assertEqual(pc.analyze("Hearts of Iron 4", o, pc.url_text(url), "URL")["reasons"], ["contenu additionnel : dlc"])
+        self.assertEqual(pc.analyze("Hearts of Iron 4", o, pc.url_text(url), "URL")["reasons"], ["additional content: dlc"])
 
     def test_pass_and_add_on_are_extra_content(self):
         # le Booster Course Pass vendu sur la page du jeu de base, sans le mot « dlc »
         r = pc.analyze("Mario Kart 8 Deluxe Nintendo Switch", offer(platform="nintendo-eshop", region="EUROPE"),
                        pc.url_text("https://www.g2a.com/mario-kart-8-deluxe-booster-course-pass-nintendo-switch-nintendo-eshop-key-europe-i1"), "URL")
-        self.assertEqual(r["reasons"], ["contenu additionnel : pass"])
+        self.assertEqual(r["reasons"], ["additional content: pass"])
         r = pc.analyze("Cities Skylines 2", offer(), pc.url_text("https://shop.example/cities-skylines-2-beach-properties-add-on-pc-steam"), "URL")
-        self.assertEqual(r["reasons"], ["contenu additionnel : add-on"])
+        self.assertEqual(r["reasons"], ["additional content: add-on"])
         # « season-pass » ne compte qu'une fois ; le season pass de l'édition « Year 1 » reste le jeu (arbitrage du 01/10)
         r = pc.analyze("Farming Simulator 25", offer(), pc.url_text("https://shop.example/farming-simulator-25-season-pass-pc-steam"), "URL")
-        self.assertEqual(r["reasons"], ["contenu additionnel : season-pass"])
+        self.assertEqual(r["reasons"], ["additional content: season-pass"])
 
     def test_currency_quantity_that_looks_like_a_year_and_awin_links(self):
         r = lambda product, url: pc.analyze(product, offer(), pc.url_text(url), "URL")["reasons"]
-        self.assertEqual(r("Apex Legends", "https://shop.example/apex-legends-2000-coins-pc"), ["monnaie de jeu chez le marchand : coins"])
-        self.assertEqual(r("War Thunder", "https://shop.example/war-thunder-2500-golden-eagles-pc"), ["monnaie de jeu chez le marchand : golden-eagles"])
+        self.assertEqual(r("Apex Legends", "https://shop.example/apex-legends-2000-coins-pc"), ["in-game currency at the merchant: coins"])
+        self.assertEqual(r("War Thunder", "https://shop.example/war-thunder-2500-golden-eagles-pc"), ["in-game currency at the merchant: golden-eagles"])
         self.assertEqual(r("Football Manager 2024", "https://shop.example/football-manager-2024-pc-steam"), [])  # l'année du nom
         awin = "https://www.awin1.com/cread.php?awinmid=1&awinaffid=2&ued=https%3A%2F%2Fwww.example-shop.com%2Fcrimson-desert-pc-steam"
         self.assertEqual(pc.unwrap_affiliate(awin), "https://www.example-shop.com/crimson-desert-pc-steam")
@@ -2083,7 +2083,7 @@ class TestDetectionAudit20261002(unittest.TestCase):
                 return pc.check_offer("NBA 2K26", o)
         xbox = "https://www.eneba.com/steam-nba-2k26-superstar-edition-xbox-series-x-s-xbox-live-key-europe"
         res = check(xbox, edition="Superstar Edition", region="EUROPE", region_filter="STEAM EU", platform="steam")
-        self.assertEqual((res["verdict"], res["reasons"]), ("SUSPECT", ["plateforme : AllKeyShop steam, marchand xbox"]))
+        self.assertEqual((res["verdict"], res["reasons"]), ("SUSPECT", ["platform: AllKeyShop steam, merchant xbox"]))
         res = check(xbox, edition="Superstar Edition", region="EUROPE", region_filter="XBOX X|S EUROPE", platform="xbox")
         self.assertEqual(res["verdict"], "OK")  # la clé Xbox affichée Xbox
         res = check("https://www.eneba.com/steam-nba-2k26-pc-steam-key-europe", region="EUROPE", region_filter="STEAM EU", platform="steam")
@@ -2169,10 +2169,10 @@ class TestReportModes20261003(unittest.TestCase):
         dans le bon chan discord au prochain passage »."""
         page = "https://www.allkeyshop.com/blog/jeu/"
         html = aks_page([{"id": n, "price": 5.0 + n} for n in (1001, 1002, 1003, 1004, 1005)])
-        still = lambda product, o: {"verdict": "SUSPECT", "reasons": ["région : AllKeyShop GLOBAL, marchand EU"], "notes": [],
+        still = lambda product, o: {"verdict": "SUSPECT", "reasons": ["region: AllKeyShop GLOBAL, merchant EU"], "notes": [],
                                     "url": "https://shop.example/jeu-eu", "method": "URL"}
         old = lambda **kw: dict({"verdict": "SUSPECT", "product": "Jeu", "edition": "Standard", "merchant": "Kinguin", "page": page,
-                                 "reasons": ["région : AllKeyShop GLOBAL, marchand EU"], "url": "https://shop.example/jeu-eu",
+                                 "reasons": ["region: AllKeyShop GLOBAL, merchant EU"], "url": "https://shop.example/jeu-eu",
                                  "method": "URL", "at": "2026-09-30 15:54", "seen": pc.time.time()}, **kw)
         state = pc.load_state("/nonexistent")
         state["checked"] = {
@@ -2191,7 +2191,7 @@ class TestReportModes20261003(unittest.TestCase):
         cycle("top-games", sent)
         urgent = [m for m in sent if m.startswith(pc.URGENT_PREFIX)]
         self.assertEqual(len(urgent), 2, sent)
-        self.assertTrue(all("📌 **Rappel** · report existant (signalé le " in m and "renvoyé dans le salon des urgences premiers prix" in m.splitlines()[1]
+        self.assertTrue(all("📌 **Reminder** · existing report (flagged on " in m and "sent again to the first price emergency channel" in m.splitlines()[1]
                             for m in urgent), urgent)
         self.assertEqual(len(sent), 2)  # l'offre 1005 attend un passage homepage
         self.assertEqual([state["checked"][k].get("sent_to") for k in ("1001", "1002", "1003")], ["urgent", "urgent", "urgent"])
@@ -2199,7 +2199,7 @@ class TestReportModes20261003(unittest.TestCase):
         sent = []
         cycle("homepage", sent)
         self.assertEqual(len(sent), 1, sent)
-        self.assertTrue(sent[0].startswith("📌 **Rappel** · report existant (signalé le 2026-09-30 15:54), renvoyé dans le salon de son mode"), sent[0])
+        self.assertTrue(sent[0].startswith("📌 **Reminder** · existing report (flagged on 2026-09-30 15:54), sent again to its mode's channel"), sent[0])
         self.assertEqual(state["checked"]["1005"]["sent_to"], "homepage")
         # une seule fois
         sent = []
@@ -2229,9 +2229,9 @@ class TestReportModes20261003(unittest.TestCase):
         ouvre un fil par alerte (bot/feedback.py, threads.json), le moniteur y poste les suites et l'admin en a le lien."""
         import tempfile
         state = pc.load_state("/nonexistent")
-        fixed = {"verdict": "OK", "fixed_at": "2026-10-03 11:20", "fixed_how": "recontrôle OK, l'offre a changé (URL)"}
+        fixed = {"verdict": "OK", "fixed_at": "2026-10-03 11:20", "fixed_how": "re-check OK, the offer changed (URL)"}
         rule = {"verdict": "OK", "fixed_at": "2026-10-03 11:21"}
-        new = {"verdict": "SUSPECT", "at": "2026-10-03 11:22", "reasons": ["autre produit chez le marchand : « Sonic »"]}
+        new = {"verdict": "SUSPECT", "at": "2026-10-03 11:22", "reasons": ["another product at the merchant: « Sonic »"]}
         lone = {"verdict": "OK", "fixed_at": "2026-10-03 11:23"}
         state["checked"] = {"1": fixed, "2": rule, "3": new, "4": lone}
         threads = {"1": {"thread": 901, "guild": 77, "mode": "urgent"}, "2": {"thread": 902, "guild": 77, "mode": "homepage"},
@@ -2240,9 +2240,9 @@ class TestReportModes20261003(unittest.TestCase):
         sent = []
         self.assertEqual(pc.post_follow_ups(state, outcome, threads, lambda info, msg: sent.append((info["thread"], msg))), 3)
         self.assertEqual(sent, [
-            (901, "✅ **Réparée** au recontrôle du 2026-10-03 11:20 : recontrôle OK, l'offre a changé (URL)"),
-            (902, "🧹 **Faux positif levé par une règle** au recontrôle du 2026-10-03 11:21 : rien n'a changé dans l'offre"),
-            (903, "🆕 **De nouveau en erreur** au recontrôle du 2026-10-03 11:22 : autre produit chez le marchand : « Sonic »"),
+            (901, "✅ **Repaired** at the re-check of 2026-10-03 11:20: re-check OK, the offer changed (URL)"),
+            (902, "🧹 **False positive cleared by a rule** at the re-check of 2026-10-03 11:21: nothing changed in the offer"),
+            (903, "🆕 **Wrong again** at the re-check of 2026-10-03 11:22: another product at the merchant: « Sonic »"),
         ])  # l'offre 4 n'a pas de fil : rien
         # un envoi raté n'arrête rien
         self.assertEqual(pc.post_follow_ups(state, outcome, threads, lambda info, msg: (_ for _ in ()).throw(OSError("503"))), 0)
@@ -2251,7 +2251,7 @@ class TestReportModes20261003(unittest.TestCase):
         state["checked"]["2"]["decision"] = {"decision": "vrai", "note": "", "by": "Rémi (Discord)"}
         sent.clear()
         pc.post_admin_decisions(state, ["1", "2"], threads, lambda info, msg: sent.append((info["thread"], msg)))
-        self.assertEqual(sent, [(901, "📝 Décision prise dans l'admin : **Faux positif** — « bonne édition » — par romain")])
+        self.assertEqual(sent, [(901, "📝 Decision taken in the admin: **False positive** — « bonne édition » — by romain")])
         # le webhook du salon du fil, avec thread_id
         with mock.patch.dict(os.environ, {"DISCORD_WEBHOOK_URL": "https://hook/top", "DISCORD_WEBHOOK_URL_URGENT": "https://hook/urgent"}), \
                 mock.patch.object(pc, "send_discord") as send:
@@ -2288,24 +2288,24 @@ class TestLoopBanner20261003(unittest.TestCase):
         banner = pc.loop_banner(self.loop(recheck="flagged"), "top-games")
         lines = banner.splitlines()
         self.assertEqual(lines[0], pc.BANNER_RULE)
-        self.assertEqual(lines[1], "# 🔄 Nouvelle boucle · Price check top")  # un titre Discord : le plus visible
-        self.assertEqual(lines[2], "-# 03/10/2026 13:20 · les tops : 10 premiers Popular, 5 premiers Coming soon PC · "
-                                   "avec le recontrôle horaire des offres signalées")
-        for legend in ("🔴 🟠 nouveau report", "📌 rappel d'un report existant", "🔁 bilan du recontrôle", "**vrai**"):
+        self.assertEqual(lines[1], "# 🔄 New loop · Price check top")  # un titre Discord : le plus visible
+        self.assertEqual(lines[2], "-# 03/10/2026 13:20 · the tops: first 10 Popular, first 5 Coming soon PC · "
+                                   "with the hourly re-check of the flagged offers")
+        for legend in ("🔴 🟠 new report", "📌 reminder of an existing report", "🔁 re-check summary", "**true**"):
             self.assertIn(legend, banner)
-        self.assertEqual(lines[-1], "📘 Guide de l'équipe : <https://169.58.5.63.sslip.io/executor/price-check-guide>")
+        self.assertEqual(lines[-1], "📘 Team guide: <https://169.58.5.63.sslip.io/executor/price-check-guide>")
         self.assertLess(len(banner), pc.DISCORD_LIMIT)
 
     def test_each_channel_its_banner(self):
         urgent = pc.loop_banner(self.loop("homepage"), "urgent")
-        self.assertEqual(urgent.splitlines()[1], "# 🚨 Nouvelle boucle · Price check homepage")
-        self.assertIn("3 offres les moins chères d'une édition. À traiter en premier.", urgent)
+        self.assertEqual(urgent.splitlines()[1], "# 🚨 New loop · Price check homepage")
+        self.assertIn("3 cheapest offers of an edition. Handle them first.", urgent)
         self.assertNotIn("🔁", urgent)  # les bilans du recontrôle partent sur le salon du mode
         requested = pc.loop_banner(self.loop("homepage", recheck="all", requested="romain"), "homepage")
-        self.assertIn("toute la homepage : widgets de la home, TOP 50 de chaque plateforme · passage demandé depuis "
-                      "l'admin par romain : toutes les offres recontrôlées", requested)
+        self.assertIn("the whole homepage: home widgets, TOP 50 of every platform · pass requested from "
+                      "the admin by romain: every offer re-checked", requested)
         self.assertEqual(pc.loop_banner(self.loop("homepage"), "urgent", resumed=True),
-                         pc.BANNER_RULE + "\n### ↪️ Suite de la boucle · Price check homepage, commencée le 03/10/2026 13:20")
+                         pc.BANNER_RULE + "\n### ↪️ Loop continued · Price check homepage, started 03/10/2026 13:20")
 
     def test_the_bot_opens_no_feedback_thread_on_a_banner(self):
         import importlib.util
@@ -2329,10 +2329,10 @@ class TestLoopBanner20261003(unittest.TestCase):
         announce(home, "homepage", to("homepage"), "🔁 bilan")  # un autre salon : son propre bandeau
         pc.new_loop("top-games")  # une boucle qui ne poste rien : pas de bandeau
         self.assertEqual(sent, [
-            ("urgent", "# 🚨 Nouvelle boucle · Price check homepage"), ("urgent", "🚨 alerte 1"), ("urgent", "🚨 alerte 2"),
-            ("urgent", "# 🚨 Nouvelle boucle · Price check top"), ("urgent", "🚨 alerte 3"),
-            ("urgent", "### ↪️ Suite de la boucle · Price check homepage, commencée le 03/10/2026 13:20"), ("urgent", "🚨 alerte 4"),
-            ("homepage", "# 🔄 Nouvelle boucle · Price check homepage"), ("homepage", "🔁 bilan")])
+            ("urgent", "# 🚨 New loop · Price check homepage"), ("urgent", "🚨 alerte 1"), ("urgent", "🚨 alerte 2"),
+            ("urgent", "# 🚨 New loop · Price check top"), ("urgent", "🚨 alerte 3"),
+            ("urgent", "### ↪️ Loop continued · Price check homepage, started 03/10/2026 13:20"), ("urgent", "🚨 alerte 4"),
+            ("homepage", "# 🔄 New loop · Price check homepage"), ("homepage", "🔁 bilan")])
 
     def test_a_shared_webhook_is_one_channel(self):
         """Sans webhook homepage, ses alertes partent sur celui des top games : un seul salon, une boucle chasse l'autre."""
@@ -2343,8 +2343,8 @@ class TestLoopBanner20261003(unittest.TestCase):
         announce(home, "homepage", sent.append, "b")
         announce(top, "top-games", sent.append, "c")
         titles = [m.splitlines()[1] for m in sent if m.startswith(pc.BANNER_RULE)]
-        self.assertEqual(titles, ["# 🔄 Nouvelle boucle · Price check top", "# 🔄 Nouvelle boucle · Price check homepage",
-                                  "### ↪️ Suite de la boucle · Price check top, commencée le 03/10/2026 13:20"])
+        self.assertEqual(titles, ["# 🔄 New loop · Price check top", "# 🔄 New loop · Price check homepage",
+                                  "### ↪️ Loop continued · Price check top, started 03/10/2026 13:20"])
 
     def test_a_banner_not_sent_goes_with_the_next_message(self):
         sent, fail = [], [True]
@@ -2360,7 +2360,7 @@ class TestLoopBanner20261003(unittest.TestCase):
             announce(loop, "top-games", send, "🔴 alerte 1")  # l'appelant journalise, l'alerte repart au passage suivant
         announce(loop, "top-games", send, "🔴 alerte 1")
         self.assertEqual([m.splitlines()[1] if m.startswith(pc.BANNER_RULE) else m for m in sent],
-                         ["# 🔄 Nouvelle boucle · Price check top", "🔴 alerte 1"])
+                         ["# 🔄 New loop · Price check top", "🔴 alerte 1"])
 
     def test_the_main_loop_heads_each_loop_in_each_channel(self):
         """La boucle principale, de bout en bout (Discord simulé) : une boucle des tops, puis une de la homepage."""
@@ -2375,7 +2375,7 @@ class TestLoopBanner20261003(unittest.TestCase):
 
         def run_cycle(targets, notify, state, checker=None, **kw):
             if kw["mode"] == "top-games":
-                notify("🟠 **À VÉRIFIER** · **Jeu** (Popular #1) · Standard")
+                notify("🟠 **TO CHECK** · **Jeu** (Popular #1) · Standard")
                 notify(pc.URGENT_PREFIX + "\n🔴 **SUSPECT** · **Jeu** (Popular #1) · Standard")
             else:
                 notify("🔴 **SUSPECT** · **Autre jeu** (Home · RPG #2) · Standard · 5e prix de l'édition")
@@ -2388,11 +2388,11 @@ class TestLoopBanner20261003(unittest.TestCase):
                 mock.patch.object(sys, "argv", ["price_check.py", "--once", "--state", os.path.join(d, "state.json")]):
             pc.main()
         self.assertEqual([(c, m.splitlines()[1] if m.startswith(pc.BANNER_RULE) else m.splitlines()[0]) for c, m in sent], [
-            ("top", "# 🔄 Nouvelle boucle · Price check top"), ("top", "🟠 **À VÉRIFIER** · **Jeu** (Popular #1) · Standard"),
-            ("urgent", "# 🚨 Nouvelle boucle · Price check top"), ("urgent", pc.URGENT_PREFIX + " · Price check top"),
-            ("home", "# 🔄 Nouvelle boucle · Price check homepage"),
+            ("top", "# 🔄 New loop · Price check top"), ("top", "🟠 **TO CHECK** · **Jeu** (Popular #1) · Standard"),
+            ("urgent", "# 🚨 New loop · Price check top"), ("urgent", pc.URGENT_PREFIX + " · Price check top"),
+            ("home", "# 🔄 New loop · Price check homepage"),
             ("home", "🔴 **SUSPECT** · **Autre jeu** (Home · RPG #2) · Standard · 5e prix de l'édition")])
-        self.assertIn("avec le recontrôle horaire des offres signalées", sent[0][1])  # la première boucle d'un mode recontrôle
+        self.assertIn("with the hourly re-check of the flagged offers", sent[0][1])  # la première boucle d'un mode recontrôle
 
     def test_during_a_discord_pause_banner_and_alert_wait_together(self):
         state = {"queued": []}
@@ -2400,7 +2400,7 @@ class TestLoopBanner20261003(unittest.TestCase):
             notify = pc.make_notifier("https://discord.invalid/api/webhooks/1/x", state, "top-games")
             pc.make_announcer(key_of=lambda channel: channel)(self.loop(), "top-games", notify, "🔴 alerte")
         self.assertEqual([c for c, m in state["queued"]], ["top-games", "top-games"])
-        self.assertEqual(state["queued"][0][1].splitlines()[1], "# 🔄 Nouvelle boucle · Price check top")
+        self.assertEqual(state["queued"][0][1].splitlines()[1], "# 🔄 New loop · Price check top")
         self.assertEqual(state["queued"][1][1], "🔴 alerte")
 
 
@@ -2432,7 +2432,7 @@ class TestDecisions20261005(unittest.TestCase):
                            ("https://www.g2a.com/star-wars-galactic-racer-pc-steam-key-row-i10000", "ROW")):
             with self.subTest(found):
                 self.assertEqual(self.reasons("STAR WARS Galactic Racer", url, region="GLOBAL", region_filter="STEAM GLOBAL"),
-                                 ["région : AllKeyShop GLOBAL, marchand %s" % found])
+                                 ["region: AllKeyShop GLOBAL, merchant %s" % found])
 
     def test_the_region_of_a_list_of_activation_countries(self):
         everywhere_but_japan = set(self.EU27) | {"us", "gb", "br", "cn", "in"}
@@ -2473,31 +2473,31 @@ class TestDecisions20261005(unittest.TestCase):
     def test_gameboost_row_key_activable_in_europe_and_the_us_is_global(self):
         res = self.check(set(self.EU27) | {"us", "gb", "br", "cn", "in"})
         self.assertEqual((res["verdict"], res["reasons"]), ("OK", []))
-        self.assertTrue(res["method"].startswith("URL et pays d'activation de la page"), res["method"])
-        self.assertIn("région lue sur la page, d'après les pays d'activation de la clé : eu-us", res["notes"])
+        self.assertTrue(res["method"].startswith("URL and the page's activation countries"), res["method"])
+        self.assertIn("region read on the page, from the key's activation countries: eu-us", res["notes"])
 
     def test_gameboost_key_without_europe_still_alerts(self):
         res = self.check({"us", "br", "in"})
-        self.assertEqual((res["verdict"], res["reasons"]), ("SUSPECT", ["région : AllKeyShop GLOBAL, marchand US"]))
+        self.assertEqual((res["verdict"], res["reasons"]), ("SUSPECT", ["region: AllKeyShop GLOBAL, merchant US"]))
 
     # -- Les vrais positifs de Rémy : le moniteur doit continuer d'alerter
     def test_the_true_positives_of_05_10_still_alert(self):
         cases = [
             ("EA SPORTS FC 27 Xbox Series", "https://www.hrkgame.com/en/product/ea-sports-fc-27-xbox-one-xbox-series-x-row", "HRK",
              dict(region="EU XBOX X|S", region_filter="XBOX X|S EUROPE", platform="xbox"),
-             ["région : AllKeyShop EU XBOX X|S, marchand ROW"]),
+             ["region: AllKeyShop EU XBOX X|S, merchant ROW"]),
             ("Call of Duty Black Ops 3", "https://www.gamivo.com/product/call-of-duty-black-ops-iii-zombies-chronicles-edition-eu", "GAMIVO",
-             dict(region="ROW", region_filter="STEAM ROW", edition="Limited"), ["région : AllKeyShop ROW, marchand EU"]),
+             dict(region="ROW", region_filter="STEAM ROW", edition="Limited"), ["region: AllKeyShop ROW, merchant EU"]),
             ("Assassin’s Creed Black Flag Resynced",
              "https://royalcdkeys.com/products/assassins-creed-black-flag-resynced-deluxe-edition-eu-pc-steam-altergift", "Royal CD Keys",
-             dict(region="EUROPE", region_filter="STEAM EU", edition="Deluxe"), ["gift chez le marchand, affiché en clé EUROPE"]),
+             dict(region="EUROPE", region_filter="STEAM EU", edition="Deluxe"), ["gift at the merchant, shown as a key EUROPE"]),
             ("Crusader Kings 3", "https://www.eneba.com/steam-crusader-kings-iii-starter-edition-pc-steam-key-europe", "Eneba",
              dict(region="IN ENGLISH ONLY", region_filter="STEAM ENG ONLY", edition="Starter Edition"),
-             ["région : AllKeyShop IN ENGLISH ONLY, marchand EU"]),
+             ["region: AllKeyShop IN ENGLISH ONLY, merchant EU"]),
             ("TCG Card Shop Simulator Nintendo Switch 2",
              "https://www.nintendo.com/en-gb/Games/Nintendo-Switch-download-software/Horse-Spirit-Valley-2-3173803.html", "Nintendo eShop IT",
              dict(region="GLOBAL", region_filter="GLOBAL", platform="nintendo-eshop"),
-             ["autre produit chez le marchand : « Horse Spirit Valley 2 » au lieu de « TCG Card Shop Simulator Nintendo Switch 2 » (URL)"]),
+             ["another product at the merchant: « Horse Spirit Valley 2 » instead of « TCG Card Shop Simulator Nintendo Switch 2 » (URL)"]),
         ]
         for product, url, merchant, kw, expected in cases:
             with self.subTest(merchant):
@@ -2538,11 +2538,11 @@ class TestReview20261005(unittest.TestCase):
         o = offer(merchantName="Instant Gaming")
         first = pc.apply_tail_words(self.ok(url), state, self.PAGE, "1001", "2026-10-05 17:00", "Ace Combat 8", o)
         self.assertEqual((first["verdict"], first["reasons"], first.get("quiet")),
-                         ("À VÉRIFIER", ["en doute : mots en plus après le nom : « theve wings »"], None))
+                         ("À VÉRIFIER", ["in doubt: extra words after the name : « theve wings »"], None))
         self.assertEqual(first["unverifiable"], "report")  # envoyée quel que soit le rang de l'offre
         second = pc.apply_tail_words(self.ok(url), state, self.PAGE, "1002", "2026-10-05 17:00", "Ace Combat 8", o)
         self.assertEqual((second["verdict"], second.get("quiet")), ("À VÉRIFIER", True))
-        self.assertIn("même doute que l'offre 1001 : une seule alerte par page et par mots", second["notes"])
+        self.assertIn("same doubt as offer 1001: one alert per page and per words", second["notes"])
         other_page = pc.apply_tail_words(self.ok(url), state, self.PAGE + "x", "1003", "2026-10-05 17:00", "Ace Combat 8", o)
         self.assertIsNone(other_page.get("quiet"))  # une autre page : sa propre alerte
         # la décision sur la première offre (lue dans decisions.jsonl) apprend les mots pour la page
@@ -2559,7 +2559,7 @@ class TestReview20261005(unittest.TestCase):
         state["tail_words"][self.PAGE]["theve wings"]["decision"] = "vrai"
         wrong = pc.apply_tail_words(self.ok(url), state, self.PAGE, "1002", "2026-10-05 18:00", "Ace Combat 8", o)
         self.assertEqual((wrong["verdict"], wrong["reasons"]),
-                         ("SUSPECT", ["mots en plus déjà jugés comme une erreur sur cette page : « theve wings » (offre 1001)"]))
+                         ("SUSPECT", ["extra words already judged an error on this page: « theve wings » (offer 1001)"]))
         # une offre jugée sur sa page (pas sur son URL) n'est pas concernée
         page_ok = dict(self.ok(url), method="page (Chromium)")
         self.assertIs(pc.apply_tail_words(page_ok, state, self.PAGE, "1004", "x", "Ace Combat 8", o), page_ok)
@@ -2572,7 +2572,7 @@ class TestReview20261005(unittest.TestCase):
             pc.run_cycle([("Popular", 1, "Ace Combat 8", self.PAGE)], sent.append, state, lambda product, o: self.ok(url),
                          per_edition=3, mode="top-games")
         self.assertEqual(len(sent), 1, sent)
-        self.assertIn("en doute : mots en plus après le nom : « theve wings »", sent[0])
+        self.assertIn("in doubt: extra words after the name : « theve wings »", sent[0])
         self.assertEqual([state["checked"][k]["verdict"] for k in ("2001", "2002")], ["À VÉRIFIER", "À VÉRIFIER"])
 
     # -- « Même si un opérateur est passé et a traité l'offre, si, au prochain passage, l'offre est toujours en erreur,
@@ -2580,12 +2580,12 @@ class TestReview20261005(unittest.TestCase):
     def entry(self, decided_ago, decision="vrai"):
         at = datetime.datetime.fromtimestamp(time.time() - decided_ago).astimezone().isoformat(timespec="seconds")
         return {"verdict": "SUSPECT", "product": "Jeu", "edition": "Standard", "merchant": "Kinguin", "page": self.PAGE,
-                "reasons": ["région : AllKeyShop GLOBAL, marchand EU"], "url": "https://shop.example/jeu-eu", "method": "URL",
+                "reasons": ["region: AllKeyShop GLOBAL, merchant EU"], "url": "https://shop.example/jeu-eu", "method": "URL",
                 "at": "2026-10-05 09:00", "decision": {"decision": decision, "note": "", "by": "remy", "at": at}}
 
     def recheck(self, entry):
         sent, outcome = [], {"checked": 0, "fixed": [], "removed": [], "rules": [], "verified": [], "still": [], "new": [], "unknown": []}
-        res = {"verdict": "SUSPECT", "reasons": ["région : AllKeyShop GLOBAL, marchand EU"], "notes": [],
+        res = {"verdict": "SUSPECT", "reasons": ["region: AllKeyShop GLOBAL, merchant EU"], "notes": [],
                "url": "https://shop.example/jeu-eu", "method": "URL"}
         pc.apply_recheck(entry, "Popular", 1, "Jeu", self.PAGE, offer(id=3001, edition_rank=4), res, sent.append,
                          "2026-10-05 18:00", time.time(), outcome)
@@ -2595,7 +2595,7 @@ class TestReview20261005(unittest.TestCase):
         e = self.entry(decided_ago=3600)
         sent = self.recheck(e)
         self.assertEqual(len(sent), 1)
-        self.assertTrue(sent[0].startswith("📌 **Rappel** · toujours en erreur après traitement par remy (Vrai positif le "), sent[0])
+        self.assertTrue(sent[0].startswith("📌 **Reminder** · still wrong after being handled by remy (True positive on "), sent[0])
         self.assertEqual(self.recheck(e), [], "the reminder comes back at every re-check")
         e["decision"] = dict(e["decision"], at=datetime.datetime.now().astimezone().isoformat(timespec="seconds"), by="garance")
         self.assertEqual(self.recheck(e), [], "no time to fix the offer after the decision")
@@ -2608,7 +2608,7 @@ class TestReview20261005(unittest.TestCase):
         self.assertEqual(self.recheck(e), [])
         self.assertFalse(pc.rereport_due(e))
         reminder = pc.format_daily_reminder({"checked": {"3001": dict(e, edition_rank=1)}}, {})[0]
-        self.assertIn("· À discuter (remy) ·", reminder)
+        self.assertIn("· To discuss (remy) ·", reminder)
 
     def test_a_handled_offer_gets_time_to_be_fixed(self):
         self.assertEqual(self.recheck(self.entry(decided_ago=300)), [])  # moins de 15 min après la décision
@@ -2625,7 +2625,7 @@ class TestReview20261005(unittest.TestCase):
         self.assertIn("stock", moved["kinds"])
         renamed = flag("https://www.kinguin.net/category/111/stellaris-eu-steam-cd-key")
         self.assertNotIn("stock", renamed["kinds"])
-        self.assertIn("fiche renommée chez le marchand : https://www.kinguin.net/category/111/stellaris-eu-steam-cd-key", renamed["notes"])
+        self.assertIn("page renamed at the merchant: https://www.kinguin.net/category/111/stellaris-eu-steam-cd-key", renamed["notes"])
 
     # -- Le rappel du matin dans le salon des urgences
     def test_the_morning_reminder(self):
@@ -2647,14 +2647,14 @@ class TestReview20261005(unittest.TestCase):
             parts = pc.format_daily_reminder(state, decisions, now=now)
         self.assertEqual(len(parts), 1)
         lines = parts[0].splitlines()
-        self.assertEqual(lines[0], "📋 **Rappel du matin · urgences premiers prix** · 06/10/2026")
-        self.assertEqual(lines[1], "**2 premiers prix en erreur, pas encore corrigés** (les plus anciens d'abord) :")
-        self.assertEqual(lines[2], "• **Ancien** · Standard · G2A · 1er prix de l'édition · depuis 4 j · à traiter · <https://admin.example/price-check#offer-1>")
-        self.assertTrue(lines[3].startswith("• **Tranché** · Standard · G2A · 2e prix de l'édition · depuis 13 h · Vrai positif (remy) · "), lines[3])
-        self.assertEqual(lines[4], "… et 1 autre report ouvert dans l'admin (hors urgences).")
+        self.assertEqual(lines[0], "📋 **Morning reminder · first price emergencies** · 06/10/2026")
+        self.assertEqual(lines[1], "**2 first prices wrong, not fixed yet** (oldest first):")
+        self.assertEqual(lines[2], "• **Ancien** · Standard · G2A · 1st price of the edition · for 4 d · to handle · <https://admin.example/price-check#offer-1>")
+        self.assertTrue(lines[3].startswith("• **Tranché** · Standard · G2A · 2nd price of the edition · for 13 h · True positive (remy) · "), lines[3])
+        self.assertEqual(lines[4], "… and 1 other open report in the admin (emergencies aside).")
         # 3 nouveaux reports en 24 h, dont celui jugé faux ensuite : il a bien été signalé
-        self.assertEqual(lines[5], "**Bilan des dernières 24 h** : 3 nouveaux reports · 1 réparé · 0 faux positif levé par une règle · "
-                                   "2 décisions (remy 2)")
+        self.assertEqual(lines[5], "**Last 24 hours**: 3 new reports · 1 repaired · 0 false positive cleared by a rule · "
+                                   "2 decisions (remy 2)")
         import importlib.util
         spec = importlib.util.spec_from_file_location("feedback", os.path.join(os.path.dirname(__file__), "bot", "feedback.py"))
         fb = importlib.util.module_from_spec(spec)
@@ -2680,8 +2680,8 @@ class TestReview20261005(unittest.TestCase):
         to_urgent("📋 rappel du matin")
         announce.forget("urgent")
         announce(home, "urgent", to_urgent, "🚨 alerte 2")
-        self.assertEqual(sent, ["# 🚨 Nouvelle boucle · Price check homepage", "🚨 alerte 1", "📋 rappel du matin",
-                                "### ↪️ Suite de la boucle · Price check homepage, commencée le 06/10/2026 08:40", "🚨 alerte 2"])
+        self.assertEqual(sent, ["# 🚨 New loop · Price check homepage", "🚨 alerte 1", "📋 rappel du matin",
+                                "### ↪️ Loop continued · Price check homepage, started 06/10/2026 08:40", "🚨 alerte 2"])
 
 
 class TestReview20261006(unittest.TestCase):
@@ -2698,9 +2698,9 @@ class TestReview20261006(unittest.TestCase):
 
     def test_a_g2a_row_key_shown_europe_is_a_doubt(self):
         result, doubt = self.doubt(self.G2A, "EUROPE", "STEAM EU")
-        self.assertEqual(result["reasons"], ["région : AllKeyShop EUROPE, marchand ROW"])
-        self.assertEqual(doubt, ["en doute : région : AllKeyShop EUROPE, marchand ROW ; chez G2A, une clé ROW peut s'activer en "
-                                 "EUROPE : vérifier les pays d'activation sur la page du marchand"])
+        self.assertEqual(result["reasons"], ["region: AllKeyShop EUROPE, merchant ROW"])
+        self.assertEqual(doubt, ["in doubt: region: AllKeyShop EUROPE, merchant ROW; at G2A, a ROW key can activate in "
+                                 "EUROPE: check the activation countries on the merchant's page"])
 
     def test_the_doubt_stays_narrow(self):
         # une clé ROW de G2A affichée GLOBAL reste une erreur : sans les États-Unis, ce n'est pas GLOBAL
@@ -2727,7 +2727,7 @@ class TestReview20261006(unittest.TestCase):
             res = pc.check_offer("Monster Hunter Wilds", offer(merchantName="G2A", edition="Deluxe", region="EUROPE",
                                                                region_filter="STEAM EU"))
         self.assertEqual((res["verdict"], res["unverifiable"]), ("À VÉRIFIER", "report"), res)
-        self.assertTrue(res["reasons"][0].startswith("en doute : région : AllKeyShop EUROPE, marchand ROW ; chez G2A"), res["reasons"])
+        self.assertTrue(res["reasons"][0].startswith("in doubt: region: AllKeyShop EUROPE, merchant ROW; at G2A"), res["reasons"])
         self.assertEqual(pc.unverifiable_verdict(offer(edition_rank=9), "TOP 50", "https://x", res["unverifiable"]), "À VÉRIFIER")
 
     def test_a_top_report_stays_in_the_tops_until_it_is_handled(self):
@@ -2847,7 +2847,7 @@ class TestTailWordsReview20261006(unittest.TestCase):
         res = {"verdict": "OK", "method": "URL", "url": url, "notes": [], "reasons": []}
         out = pc.apply_tail_words(res, state, xbox_page, "2", "2026-10-06 15:00", "Ace Combat 8 Xbox Series", offer(edition="Deluxe", url=url))
         self.assertEqual(out["verdict"], "OK", out)
-        self.assertIn("mots en plus acceptés pour ce jeu : « theve wings » (offre 1 jugée faux positif)", out["notes"])
+        self.assertIn("extra words accepted for this game: « theve wings » (offer 1 judged a false positive)", out["notes"])
         other = pc.apply_tail_words(dict(res), state, "https://www.allkeyshop.com/blog/buy-ace-combat-7-cd-key-compare-prices/", "3",
                                     "2026-10-06 15:00", "Ace Combat 7", offer(edition="Deluxe", url=url.replace("8", "7")))
         self.assertEqual(other["verdict"], "À VÉRIFIER", "another game learns nothing")
@@ -2897,7 +2897,7 @@ class TestOrphanPages20261006(unittest.TestCase):
                                          checker=ok)
         gta, toro = state["checked"]["80523"], state["checked"]["140421891"]
         self.assertEqual((gta["verdict"], gta["fixed_kind"]), ("OK", "repaired"))
-        self.assertIn("édition", gta["fixed_how"])
+        self.assertIn("edition", gta["fixed_how"])
         self.assertEqual((toro["verdict"], toro["fixed_how"], toro["page"]), ("OK", pc.REMOVED_HOW, self.TORO))
         self.assertEqual(state["checked"]["1"]["verdict"], "SUSPECT", "a followed page is the passes' job")
         self.assertNotIn("fixed_at", state["checked"]["2"])
@@ -2920,7 +2920,7 @@ class TestStillWrongAfterAFix20261006(unittest.TestCase):
         entry["rereported_at"] = t + 1000
         self.assertFalse(pc.rereport_due(entry, now=t + 1000 + 1800), "twice within the hour")
         self.assertTrue(pc.rereport_due(entry, now=t + 1000 + 3600), "the next hourly re-check still sees it")
-        self.assertIn("vider le cache de son URL sur AllKeyShop (gardée 24 h)", pc.rereport_note(entry["decision"]))
+        self.assertIn("clear the cache of its URL on AllKeyShop (kept 24 h)", pc.rereport_note(entry["decision"]))
         entry["decision"]["decision"] = "a_discuter"
         self.assertFalse(pc.rereport_due(entry, now=t + 99999))
 
@@ -2972,9 +2972,9 @@ class TestPriceGap20261006(unittest.TestCase):
         ok = {"verdict": "OK", "reasons": [], "notes": [], "url": "https://www.kinguin.net/x", "method": "URL"}
         res = pc.apply_price_gap(ok, o[0], o)
         self.assertEqual(res["verdict"], "SUSPECT")
-        self.assertEqual(res["reasons"], ["premier prix anormalement bas : 2.96 €, 9 % du deuxième prix de la page (33.03 €, Kinguin, Standard)"])
+        self.assertEqual(res["reasons"], ["abnormally low first price: 2.96 €, 9 % of the page's second price (33.03 €, Kinguin, Standard)"])
         self.assertTrue(pc.is_urgent(o[0], res), "not sent to the emergencies")
-        doubt = {"verdict": "À VÉRIFIER", "reasons": ["en doute : mots en plus après le nom : « by mystery or »"], "notes": [],
+        doubt = {"verdict": "À VÉRIFIER", "reasons": ["in doubt: extra words after the name : « by mystery or »"], "notes": [],
                  "quiet": True}
         both = pc.apply_price_gap(doubt, o[0], o)
         self.assertEqual((both["verdict"], len(both["reasons"]), both["quiet"]), ("SUSPECT", 2, False))
@@ -3003,7 +3003,7 @@ class TestPageEditions20261006(unittest.TestCase):
     def test_another_edition_named_by_the_url(self):
         stellaris = ["Standard", "Deluxe", "Nova Edition", "Galaxy Edition", "Limited", "Explorer", "Bonus"]
         self.assertEqual(self.reason("Stellaris", "Deluxe", "https://www.gamingdragons.com/en/game/buy-stellaris-nova-steam-key.html", stellaris),
-                         "édition : rangée en Deluxe, le marchand vend nova (la page a une édition Nova Edition)")
+                         "edition: filed under Deluxe, the merchant sells nova (the page has the edition Nova Edition)")
         self.assertIsNotNone(self.reason("Stellaris", "Limited", "https://www.g2a.com/stellaris-galaxy-edition-steam-key-global-i1", stellaris))
         self.assertIsNotNone(self.reason("F1 25", "Standard", "https://www.hrkgame.com/en/product/f1-25-iconic-edition-xbox-series-x-europe",
                                          ["Standard", "Iconic Edition", "2026 Season Edition"]))
@@ -3077,7 +3077,7 @@ class TestSingleProductShop20261006(unittest.TestCase):
     def test_the_publisher_shop_sells_only_its_game(self):
         res, calls = self.check("Escape from Tarkov", self.TARKOV)
         self.assertEqual(res["verdict"], "OK", res)
-        self.assertIn("boutique qui ne vend que Escape from Tarkov (config marchand)", res["notes"])
+        self.assertIn("shop that sells only Escape from Tarkov (merchant config)", res["notes"])
         self.assertEqual(calls, 1, "the merchant page is not needed")
 
     def test_only_for_that_product(self):
@@ -3237,8 +3237,8 @@ class TestGgDealsApi20261006(unittest.TestCase):
             prices = pc.ggdeals_prices(["2001", "2002", "2003", "2004"], "secret-key")
         self.assertEqual(prices["2001"], {"url": "https://gg.deals/game/star-wars-galactic-racer/", "name": "STAR WARS Galactic Racer",
                                           "price": 29.1, "seller": "keyshops", "offers": [
-                                              {"price": 29.1, "seller": "keyshops"}, {"price": 39.99, "seller": "boutiques officielles"}]})
-        self.assertEqual((prices["2002"]["price"], prices["2002"]["seller"], prices["2002"]["url"]), (12.49, "boutiques officielles", "https://gg.deals/"))
+                                              {"price": 29.1, "seller": "keyshops"}, {"price": 39.99, "seller": "official stores"}]})
+        self.assertEqual((prices["2002"]["price"], prices["2002"]["seller"], prices["2002"]["url"]), (12.49, "official stores", "https://gg.deals/"))
         self.assertNotIn("2003", prices, "a price in dollars is not compared")
         self.assertNotIn("2004", prices)
         url = get.call_args[0][0]
@@ -3250,7 +3250,7 @@ class TestGgDealsApi20261006(unittest.TestCase):
         with mock.patch.object(pc, "http_get", return_value=(400, None, refused)), mock.patch.object(pc, "REQUEST_DELAY", 0):
             with self.assertRaises(pc.CompetitorBlocked) as e:
                 pc.ggdeals_prices(["2001"], "secret-key")
-        self.assertEqual(str(e.exception), "clé de l'API gg.deals pas encore active : confirmer l'adresse e-mail du compte gg.deals")
+        self.assertEqual(str(e.exception), "gg.deals API key not active yet: confirm the email address of the gg.deals account")
         with mock.patch.object(pc, "http_get", side_effect=OSError("timed out https://api.gg.deals/?key=secret-key")), \
              mock.patch.object(pc, "REQUEST_DELAY", 0):
             with self.assertRaises(pc.CompetitorBlocked) as e:
@@ -3283,6 +3283,28 @@ class TestGgDealsApi20261006(unittest.TestCase):
             self.assertEqual(pc.steam_app_id("STAR WARS Galactic Racer"), "2001")
         with mock.patch.object(pc, "competitor_get", return_value=None):
             self.assertIsNone(pc.steam_app_id("STAR WARS Galactic Racer"))
+
+
+class TestEnglish20261007(unittest.TestCase):
+    """Romain, 07/10/2026 : « tout l'outil en anglais ». The codes stay (verdicts À VÉRIFIER, NON VÉRIFIABLE; decisions vrai,
+    faux, a_discuter); what the monitor writes is English, and what it re-reads on an older entry is known in French too."""
+
+    def test_the_alert_shows_english_labels_over_the_codes(self):
+        res = {"verdict": "À VÉRIFIER", "reasons": ["in doubt: extra words after the name: « remastered »"], "notes": [],
+               "method": "URL", "url": "https://x/witcher-3-remastered"}
+        msg = pc.format_alert("Popular", 2, "The Witcher 3 Wild Hunt", "https://aks/x", offer(edition_rank=1), res)
+        self.assertIn("🟠 **TO CHECK** · **The Witcher 3 Wild Hunt** (Popular #2) · Standard · 1st price of the edition", msg)
+        self.assertIn(" · offer 1 · check: URL", msg)
+        self.assertNotIn("offre", msg)
+        self.assertEqual(pc.ordinal(2), "2nd")
+        self.assertEqual(pc.ordinal(11), "11th")
+        self.assertEqual(pc.ordinal(23), "23rd")
+
+    def test_an_older_french_stock_reason_is_still_recognized(self):
+        # an entry written before 07/10/2026 keeps its French reason: the out-of-stock follow-up must still see it
+        old = "offre en rupture chez le marchand : le lien redirige vers une autre fiche (https://k/1), mais le prix reste dans le feed"
+        self.assertTrue(old.startswith(pc.STOCK_REASON_STARTS))
+        self.assertEqual(pc.seen_changes({"reasons": [old]}, {"reasons": []}), ["page served"])
 
 
 class TestSecurityAudit20261002(unittest.TestCase):
@@ -3423,8 +3445,8 @@ class TestCycle(unittest.TestCase):
             pc.run_cycle(self.TARGETS, sent.append, state, suspect)
         self.assertEqual(len(sent), 4)
         self.assertIn("🔴 **SUSPECT**", sent[0])
-        self.assertIn("Raison : nom du produit absent (URL)", sent[0])
-        self.assertIn("Marchand : <https://shop.example/sonic>", sent[0])
+        self.assertIn("Reason: nom du produit absent (URL)", sent[0])
+        self.assertIn("Merchant: <https://shop.example/sonic>", sent[0])
 
     def test_check_failures_then_manual(self):
         def failing(product, o):
@@ -3437,8 +3459,8 @@ class TestCycle(unittest.TestCase):
         pc.run_cycle(self.TARGETS, sent.append, state, failing)
         # seul le premier prix de la page (page d'un top « Popular ») part en À VÉRIFIER ; les autres éditions sont notées
         self.assertEqual(len(sent), 1)
-        self.assertIn("🟠 **À VÉRIFIER**", sent[0])
-        self.assertIn("contrôle impossible : redirection AllKeyShop HTTP 503", sent[0])
+        self.assertIn("🟠 **TO CHECK**", sent[0])
+        self.assertIn("check impossible: redirection AllKeyShop HTTP 503", sent[0])
         self.assertEqual(sorted(v["verdict"] for v in state["checked"].values()), ["NON VÉRIFIABLE"] * 3 + ["À VÉRIFIER"])
         self.assertIn("| EA SPORTS FC 27 |", pc.unverified_table(state))
 
@@ -3520,7 +3542,7 @@ class TestCycle(unittest.TestCase):
         state = pc.load_state("/nonexistent")
         state["checked"] = {
             "1": {"verdict": "SUSPECT", "product": "TORO 2 Nintendo Switch", "edition": "Standard", "merchant": "Nintendo eShop FR",
-                  "price": 5.99, "reasons": ["autre produit chez le marchand : « Metal Garden » au lieu de « TORO 2 Nintendo Switch » (URL)"],
+                  "price": 5.99, "reasons": ["another product at the merchant: « Metal Garden » instead of « TORO 2 Nintendo Switch » (URL)"],
                   "url": "https://www.nintendo.com/fr-fr/Metal-Garden-3177422.html", "at": "2026-09-30 16:15"},
             "2": {"verdict": "OK", "product": "Valheim", "edition": "Standard", "at": "2026-09-30 14:00"},
             "3": {"verdict": "NON VÉRIFIABLE", "product": "Mario Kart 8 Deluxe Nintendo Switch", "at": "2026-09-30 16:13"},
