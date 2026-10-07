@@ -1,6 +1,6 @@
 # Price check — team guide
 
-As of 03/10/2026. For the team, this guide is a page of the admin, "📘 Guide équipe" on the Price check page
+As of 07/10/2026. For the team, this guide is a page of the admin, "📘 Team guide" on the Price check page
 (`/executor/price-check-guide`), generated from this file by `tools/guide_html.py`, and a shared doc (Claude Docs,
 Français and English tabs): <https://claude.ai/code/artifact/2c890bc0-9b6c-42e9-b0dc-298c0e11ac84>. All three are kept in step. Version française :
 [guide-equipe.md](guide-equipe.md).
@@ -30,73 +30,73 @@ Each alert goes to one channel only: emergencies first, then the tops, then the 
 | Channel | What lands there | Priority |
 | --- | --- | --- |
 | #aks_price_emergencies | First-price emergencies: a confirmed problem (SUSPECT) on one of the 3 cheapest offers of an edition, whether the page is in the tops or the homepage. The header says where the alert comes from. | Handle first |
-| #aks_price_checker | The other top alerts (À VÉRIFIER, offers lower in the edition) and the tops' re-check recaps. It is also the bot's channel. | Next |
+| #aks_price_checker | The other top alerts (TO CHECK, offers lower in the edition) and the tops' re-check recaps. It is also the bot's channel. | Next |
 | #aks_top_price_checker | The other homepage alerts and their recaps. | Next |
 
-Each loop starts, in every channel it posts to, with a very visible banner: "🔄 Nouvelle boucle · Price check top" (new loop; 🚨 in the emergencies channel), with the time, what the loop checks, the legend of the messages and the link to this guide. A loop with no alert posts nothing.
+Each loop starts, in every channel it posts to, with a very visible banner: "🔄 New loop · Price check top" (🚨 in the emergencies channel), with the time, what the loop checks, the legend of the messages and the link to this guide. A loop with no alert posts nothing.
 
 | Message starts with | What it is |
 | --- | --- |
-| 🔄 Nouvelle boucle (🚨 in emergencies) | The banner: a loop starts |
-| ↪️ Suite de la boucle | The same loop resumes after another loop's messages |
-| 🚨 URGENCE PREMIER PRIX, 🔴 SUSPECT, 🟠 À VÉRIFIER | A new report |
-| 📌 Rappel · report existant | An older report sent again to its right channel (reminder): not a new detection |
-| 📌 Rappel · toujours en erreur après traitement | An offer already decided "vrai", still wrong at the re-check (still wrong after being handled): the fix did not take |
-| 🔁 Recontrôle | The re-check recap: repaired, still wrong, new errors |
-| 📋 Rappel du matin | Every day at 9 am, in emergencies (morning reminder): the first prices still wrong and the last 24 hours' summary |
+| 🔄 New loop (🚨 in emergencies) | The banner: a loop starts |
+| ↪️ Loop continued | The same loop resumes after another loop's messages |
+| 🚨 FIRST PRICE EMERGENCY, 🔴 SUSPECT, 🟠 TO CHECK | A new report |
+| 📌 Reminder · existing report | An older report sent again to its right channel: not a new detection |
+| 📌 Reminder · still wrong after being handled | An offer already decided "true", still wrong at the re-check: the fix did not take |
+| 🔁 Re-check | The re-check recap: repaired, still wrong, new errors |
+| 📋 Morning reminder | Every day at 9 am, in emergencies: the first prices still wrong and the last 24 hours' summary |
 
 ## Reading an alert
 
-An alert says which offer is at stake, where it shows, and why the monitor thinks it is wrong. Alerts are written in French; a real one, received in #aks_price_emergencies on 03/10:
+An alert says which offer is at stake, where it shows, and why the monitor thinks it is wrong. Alerts are written in English since 07/10/2026 (French before); an example, in #aks_price_emergencies:
 
 ```
-🚨 URGENCE PREMIER PRIX · Price check homepage
-📌 Rappel · report existant (signalé le 2026-10-01 14:58), renvoyé dans le salon des urgences premiers prix
-🔴 SUSPECT · Monster Hunter Wilds (Home · RPG #8) · Deluxe · 2e prix de l'édition
-G2A · EUROPE (STEAM EU) · steam · 44.10 € · offre 136209040 · contrôle : URL
-Raison : région : AllKeyShop EUROPE, marchand ROW
-Marchand : <link to the offer at G2A>
-Page : <link to the AllKeyShop page>
+🚨 FIRST PRICE EMERGENCY · Price check homepage
+📌 Reminder · existing report (flagged on 2026-10-01 14:58), sent again to the first price emergency channel
+🔴 SUSPECT · Monster Hunter Wilds (Home · RPG #8) · Deluxe · 2nd price of the edition
+G2A · EUROPE (STEAM EU) · steam · 44.10 € · offer 136209040 · check: URL
+Reason: region: AllKeyShop EUROPE, merchant ROW
+Merchant: <link to the offer at G2A>
+Page: <link to the AllKeyShop page>
 ```
 
 | Line | What it says |
 | --- | --- |
-| URGENCE PREMIER PRIX | First-price emergency: a confirmed problem on one of the edition's 3 first prices, and the mode that found it (top or homepage) |
-| Rappel · report existant | An older alert (reminder), sent once again to its right channel (absent from a new alert) |
-| Verdict · game (list #rank) · edition · rank | The verdict, the page, the list it appears in, the edition the offer is filed under, and its rank in that edition ("2e prix de l'édition" = 2nd price of the edition) |
-| Merchant · region · platform · price | What AllKeyShop shows: the region with its filter name in brackets (the region's real meaning), the price with card fees, the offer id, and how the monitor checked (contrôle : URL, page) |
-| Raison | What is wrong (reason): here, AllKeyShop shows a EUROPE key, the merchant sells a ROW key (rest of world, without Europe) |
+| FIRST PRICE EMERGENCY | A confirmed problem on one of the edition's 3 first prices, and the mode that found it (top or homepage) |
+| Reminder · existing report | An older alert, sent once again to its right channel (absent from a new alert) |
+| Verdict · game (list #rank) · edition · rank | The verdict, the page, the list it appears in, the edition the offer is filed under, and its rank in that edition |
+| Merchant · region · platform · price | What AllKeyShop shows: the region with its filter name in brackets (the region's real meaning), the price with card fees, the offer id, and how the monitor checked (check: URL, page) |
+| Reason | What is wrong: here, AllKeyShop shows a EUROPE key, the merchant sells a ROW key (rest of world, without Europe) |
 | Note | When present: what the merchant's page confirmed or contradicted |
-| Marchand, Page | The two links to check: merchant offer, AllKeyShop page |
+| Merchant, Page | The two links to check: merchant offer, AllKeyShop page |
 
 The verdicts:
 
 - **SUSPECT**: a problem was found, the alert goes out.
-- **À VÉRIFIER** (to check): no conclusion possible (merchant page unreadable), on the first price of a top or coming-soon page. A person checks.
-- **SUSPECT, "premier prix anormalement bas : … % du deuxième prix de la page"** (first price abnormally low): the page's cheapest offer costs less than 70 % of the next one (Transport Fever 3: a "mystery" key at 2.96 € against 33 €). An emergency, even when the URL looks right: check that the merchant really sells this game, edition and region; a genuine good price is decided Faux positif.
-- **À VÉRIFIER, "en doute : région …"** (in doubt: region): at G2A, a ROW key shown EUROPE. G2A's "row" does not say which countries the key covers: read the activation countries on the G2A page; Europe is covered: Faux positif.
-- **À VÉRIFIER, "en doute : mots en plus après le nom"** (in doubt: extra words after the name): the offer's URL adds words after the game's name that the monitor does not know (Minecraft ← "minecraft-dungeons-2", Control ← "control-resonant"): another game, or just a subtitle? Whatever the offer's rank, a single alert per page and per words; the decision applies to every offer of the page with those words, and "faux" to every page of the game (PC, Xbox, PS5).
-- **NON VÉRIFIABLE** (not verifiable): the same case elsewhere. Noted in the admin, no alert.
+- **TO CHECK**: no conclusion possible (merchant page unreadable), on the first price of a top or coming-soon page. A person checks.
+- **SUSPECT, "abnormally low first price: … % of the page's second price"**: the page's cheapest offer costs less than 70 % of the next one (Transport Fever 3: a "mystery" key at 2.96 € against 33 €). An emergency, even when the URL looks right: check that the merchant really sells this game, edition and region; a genuine good price is decided False positive.
+- **TO CHECK, "in doubt: region …"**: at G2A, a ROW key shown EUROPE. G2A's "row" does not say which countries the key covers: read the activation countries on the G2A page; Europe is covered: False positive.
+- **TO CHECK, "in doubt: extra words after the name"**: the offer's URL adds words after the game's name that the monitor does not know (Minecraft ← "minecraft-dungeons-2", Control ← "control-resonant"): another game, or just a subtitle? Whatever the offer's rank, a single alert per page and per words; the decision applies to every offer of the page with those words, and "false" to every page of the game (PC, Xbox, PS5).
+- **UNVERIFIABLE**: the same case elsewhere. Noted in the admin, no alert.
 
-"Recontrôle …" messages are re-check recaps: offers still wrong, repaired, false positives cleared by a rule.
+"Re-check …" messages are re-check recaps: offers still wrong, repaired, false positives cleared by a rule.
 
 ## Giving feedback in the alert's thread
 
-Each alert has its thread "Feedback · game · offre id": you decide there in one line, and the decision shows up in the admin at once.
+Each alert has its thread "Feedback · game · offer id": you decide there in one line, and the decision shows up in the admin at once.
 
 1. Open the thread under the alert.
-2. Reply starting with one of these words (the bot reads French keywords; the emoji work in any language):
-    - `vrai` (or `vp`, ✅): true positive, the error is real.
-    - `faux` (or `fp`, ❌): false positive, the offer is correct and the alert should not have gone out.
-    - `à discuter` (or 💬): to discuss before deciding.
-3. Only if needed, add a note after the word saying why, for example `❌ the AllKeyShop page really is a DLC`. You agree with the error described on the report: `vrai` is enough, there is nothing to comment.
-4. The bot confirms in the thread: "Décision enregistrée : Faux positif — par …" (decision recorded).
+2. Reply starting with one of these words (the French ones work too: `vrai`, `faux`, `à discuter`):
+    - `true` (or `tp`, ✅): true positive, the error is real.
+    - `false` (or `fp`, ❌): false positive, the offer is correct and the alert should not have gone out.
+    - `discuss` (or `to discuss`, 💬): to discuss before deciding.
+3. Only if needed, add a note after the word saying why, for example `false: the AllKeyShop page really is a DLC`. You agree with the error described on the report: `true` is enough, there is nothing to comment.
+4. The bot confirms in the thread: "Decision saved: False positive — by …".
 
 - **Who can decide**: the people authorised on the bot. Romain adds them with `!allow @name` in #aks_price_checker. Others get a reminder, and their message stays in the thread.
 - **Discussing without deciding**: a message that does not start with one of these words decides nothing.
-- **What "faux" does**: the offer is no longer re-checked or alerted. The note is used to fix the monitor's rules, for every merchant. On an "en doute : mots en plus" alert, "faux" teaches those words for the game, on all its platforms (a subtitle, for example): the other offers with them pass.
-- **What "à discuter" does**: the offer waits for the discussion. It is not reported again: it moves to the top of the admin, in the "💬 À discuter" part (to discuss), with the note as its comment, and stays in the morning reminder until the final decision (vrai or faux). To close it, decide on the offer, not on the comment: `vrai` if the error is real, `faux` if the offer is correct. Agreeing with a comment that shows the offer is right means `faux`.
-- **What "vrai" does**: the offer is still re-checked every hour. Still wrong at least a quarter of an hour after the decision, it goes out again, then at every re-check that still sees it wrong (at most once an hour), with "📌 Rappel · toujours en erreur après traitement par …": deciding is not enough, the offer has to be fixed. Fixed but still reported? The offer's URL stays 24 h in AllKeyShop's cache: clear that cache. On an "en doute : mots en plus" alert, "vrai" makes it an error for every offer of the page with those words.
+- **What "false" does**: the offer is no longer re-checked or alerted. The note is used to fix the monitor's rules, for every merchant. On an "in doubt: extra words" alert, "false" teaches those words for the game, on all its platforms (a subtitle, for example): the other offers with them pass.
+- **What "discuss" does**: the offer waits for the discussion. It is not reported again: it moves to the top of the admin, in the "💬 To discuss" part, with the note as its comment, and stays in the morning reminder until the final decision (true or false). To close it, decide on the offer, not on the comment: `true` if the error is real, `false` if the offer is correct. Agreeing with a comment that shows the offer is right means `false`.
+- **What "true" does**: the offer is still re-checked every hour. Still wrong at least a quarter of an hour after the decision, it goes out again, then at every re-check that still sees it wrong (at most once an hour), with "📌 Reminder · still wrong after being handled by …": deciding is not enough, the offer has to be fixed. Fixed but still reported? The offer's URL stays 24 h in AllKeyShop's cache: clear that cache. On an "in doubt: extra words" alert, "true" makes it an error for every offer of the page with those words.
 - **What the thread gets next**: the offer's follow-ups (repaired, false positive cleared by a rule, wrong again) and the decisions taken in the admin.
 
 ## What to do with an alert
@@ -105,9 +105,9 @@ Check both pages, decide in the thread, then get the offer fixed if the error is
 
 1. **Emergencies first** (#aks_price_emergencies): a wrong first price is what visitors see.
 2. **On the AllKeyShop page** ("Page" link): the edition the offer is filed under, the page's other editions, the region's filter name (STEAM EU, STEAM GLOBAL, XBOX X|S EUROPE…), the platform.
-3. **At the merchant** ("Marchand" link): the product, edition, region and platform actually sold.
-4. **Decide in the thread**: vrai, faux or à discuter. You agree with the error described: no note; otherwise, a note saying why.
-5. **If it is true**: get the offer fixed on AllKeyShop (edition, region, platform, page it is attached to) or removed; for an out-of-stock offer at Kinguin, the merchant has to take it out of its feed. At the next re-check (within the hour), the monitor marks the offer "repaired" and writes it in the thread. If it is still wrong, the alert comes back at every re-check (at most once an hour), with "📌 Rappel · toujours en erreur après traitement par …": the fix did not take, or the old URL is still in AllKeyShop's cache (24 h): clear it.
+3. **At the merchant** ("Merchant" link): the product, edition, region and platform actually sold.
+4. **Decide in the thread**: true, false or discuss. You agree with the error described: no note; otherwise, a note saying why.
+5. **If it is true**: get the offer fixed on AllKeyShop (edition, region, platform, page it is attached to) or removed; for an out-of-stock offer at Kinguin, the merchant has to take it out of its feed. At the next re-check (within the hour), the monitor marks the offer "repaired" and writes it in the thread. If it is still wrong, the alert comes back at every re-check (at most once an hour), with "📌 Reminder · still wrong after being handled by …": the fix did not take, or the old URL is still in AllKeyShop's cache (24 h): clear it.
 
 Not an error:
 
@@ -120,39 +120,39 @@ Not an error:
 
 The admin shows every report in one place, with the same decisions as the Discord threads: <https://169.58.5.63.sslip.io/executor/price-check> (admin login).
 
-- **One card per report**: the verdict, "✔ Traité par <operator>" (handled by; or "À traiter", to handle, or "💬 À discuter", to discuss), the TOP or HOMEPAGE badge (where the problem comes from) and PREMIER PRIX (first price: one of the edition's 3 cheapest offers), the game, edition, rank, merchant, price, reason, and three links: AllKeyShop page, merchant offer, Discord thread.
-- **Two tabs**: **"En cours"** (in progress), what is left to do (to handle, to discuss, to fix), and **"Archives"**, the settled reports: repaired, false positives cleared by a rule, verified OK, false positives judged. A **true positive** whose offer has not changed yet stays in progress, marked "🔧 À corriger" (to fix): the error is confirmed, it still has to be fixed on AllKeyShop; it moves to the archives when the re-check finds it repaired. Put "À discuter", an archived report comes back in progress, at the top. A link to a report (morning reminder, Discord) opens the tab it is in.
-- **Three parts in "En cours"** (the archives keep the tops and the homepage): first, **"💬 À discuter"** (to discuss, orange title): the reports put to discussion, with the comment of whoever put them there, until the final decision (Vrai positif or Faux positif, which archives it). On these cards, the buttons say what they mean: "Vrai positif : l'erreur est réelle" (the error is real), "Faux positif : l'offre est correcte" (the offer is correct). It always shows: a report to discuss hidden by the filters is counted there ("1 masqué par les filtres", 1 hidden by the filters). Then the tops' reports (title "Price check top", blue TOP band and badge): a report found on a top page stays there until it is decided when the page leaves the tops, marked "sortie des tops le …" (left the tops on …). Then the homepage's; an empty part says so ("Aucun report à discuter", "Aucun report sur les tops"). The "Mode" filter keeps only the tops or the homepage.
-- **Deciding**: each card reads in two steps, ① Pourquoi ? (why: the note, only if needed) on the left and ② Ta décision (your decision: Vrai positif, Faux positif, À discuter) on the right. You agree with the error described on the report: click Vrai positif, no note, there is nothing to comment. Otherwise, write the note then click your decision: both leave together; a note changed afterwards is saved with "Mettre à jour la note" (or Enter), and a note not saved yet is flagged in orange. A "Comment trancher un report" box at the top of the list says so. A report just decided stays in place a few seconds, outlined in green ("✔ Décision enregistrée"), then moves to the archives or to its new part, or fades out if it no longer matches the filters (the banner says where it goes): the next card does not slide under the cursor. Same effect as a reply in the thread; a decision taken on Discord shows signed "(Discord)".
-- **Filters**: verdict (including Réparées = repaired, Faux positifs levés par une règle = false positives cleared by a rule, Vérifiées OK = verified OK), mode (Price check top or homepage), decision, "Traité par" (one operator, or nobody: to handle), free search, "encore en tête seulement" (still leading only), "premiers prix seulement" (first prices only).
+- **One card per report**: the verdict, "✔ Handled by <operator>" (or "To handle", or "💬 To discuss"), the TOP or HOMEPAGE badge (where the problem comes from) and FIRST PRICE (one of the edition's 3 cheapest offers), the game, edition, rank, merchant, price, reason, and three links: AllKeyShop page, merchant offer, Discord thread.
+- **Two tabs**: **"In progress"**, what is left to do (to handle, to discuss, to fix), and **"Archive"**, the settled reports: repaired, false positives cleared by a rule, verified OK, false positives judged. A **true positive** whose offer has not changed yet stays in progress, marked "🔧 To fix": the error is confirmed, it still has to be fixed on AllKeyShop; it moves to the archive when the re-check finds it repaired. Put "To discuss", an archived report comes back in progress, at the top. A link to a report (morning reminder, Discord) opens the tab it is in.
+- **Three parts in "In progress"** (the archive keeps the tops and the homepage): first, **"💬 To discuss"** (orange title): the reports put to discussion, with the comment of whoever put them there, until the final decision (True positive or False positive, which archives it). On these cards, the buttons say what they mean: "True positive: the error is real", "False positive: the offer is right". It always shows: a report to discuss hidden by the filters is counted there ("1 hidden by the filters"). Then the tops' reports (title "Price check top", blue TOP band and badge): a report found on a top page stays there until it is decided when the page leaves the tops, marked "left the tops on …". Then the homepage's; an empty part says so ("No report to discuss.", "No report on the tops for these filters."). The "Mode" filter keeps only the tops or the homepage.
+- **Deciding**: each card reads in two steps, ① Why? (the note, only if needed) on the left and ② Your decision (True positive, False positive, To discuss) on the right. You agree with the error described on the report: click True positive, no note, there is nothing to comment. Otherwise, write the note then click your decision: both leave together; a note changed afterwards is saved with "Update the note" (or Enter), and a note not saved yet is flagged in orange. A "How to decide a report" box at the top of the list says so. A report just decided stays in place a few seconds, outlined in green ("✔ Decision saved"), then moves to the archive or to its new part, or fades out if it no longer matches the filters (the banner says where it goes): the next card does not slide under the cursor. Same effect as a reply in the thread; a decision taken on Discord shows signed "(Discord)".
+- **Filters**: verdict (including Repaired, False positives cleared by a rule, Verified OK), mode (Price check top or homepage), decision, "Handled by" (one operator, or nobody: to handle), free search, "still first only", "first prices only".
 - **Counters**: at the top of the list, then the number of reports handled by each operator; the details are just below.
-- **Running a pass**: the buttons "Lancer le price check top" and "Lancer le price check homepage" re-check every offer of their pages right away. Allow a few minutes for the tops, about 2 h 30 for the homepage.
-- **Competitors** (above the reports): one widget per competitor (gg.deals, dlcompare.fr, gocdkeys.fr), for the top pages, checked every 30 min. **Key against key, account against account, never mixed**: AllKeyShop's cheapest key, card fees included (the first price the page shows), against the competitor's best key; accounts in a second table, when the competitor sells them (gocdkeys). The competitor's price is **in green** when AllKeyShop is cheaper, **in orange** at the same price, **in red** when the competitor is cheaper, and right beside it AllKeyShop's first price. "Introuvable" (not found): the game was not found at that competitor. Console pages (EA SPORTS FC 27 PS5) are not compared: the competitors give no price per console. gg.deals goes through its official API (games not on Steam, like Minecraft, are not found there); while it refuses the key, its widget says "bloqué" (blocked) and why.
+- **Running a pass**: the buttons "Run the price check top" and "Run the price check homepage" re-check every offer of their pages right away. Allow a few minutes for the tops, about 2 h 30 for the homepage.
+- **Competitors** (above the reports): one widget per competitor (gg.deals, dlcompare.fr, gocdkeys.fr), for the top pages, checked every 30 min. **Key against key, account against account, never mixed**: AllKeyShop's cheapest key, card fees included (the first price the page shows), against the competitor's best key; accounts in a second table, when the competitor sells them (gocdkeys). The competitor's price is **in green** when AllKeyShop is cheaper, **in orange** at the same price, **in red** when the competitor is cheaper, and right beside it AllKeyShop's first price. "not found": the game was not found at that competitor. Console pages (EA SPORTS FC 27 PS5) are not compared: the competitors give no price per console. gg.deals goes through its official API (games not on Steam, like Minecraft, are not found there); while it refuses the key, its widget says "blocked" and why.
 - **Fee / error**: on a row where the competitor is cheaper, put its offer in your cart. If there are fees, or if the displayed price is wrong, type the amount in the box, in euros, plus or minus ("1,50", "-0,80"), then Enter: it counts for that seller; if its offer becomes dearer, the competitor's next offer takes its place right away, in green, orange or red against AllKeyShop. Empty box: the entry is cleared. For monitoring only, the monitor does not use it.
-- **Console · Claude** (Romain, Rémy, Garance and Lionel): ask Claude about an alert, a report, a rule ("why did Minecraft Deluxe Collection go out as an emergency?"). Enter sends, Shift+Enter starts a new line. Claude answers, but changes nothing for you: changes go through Romain. When a question needs his decision, Claude sends it to the Romain tab ("→ Q13 : question pour Romain"). Everyone sees the whole conversation. Romain also has "Récolter les décisions" (harvest the decisions: Claude reviews them and proposes an action for each) and "Nouvelle session" (new session).
-- **Romain tab**: every open question for Romain (asked in the console or from the harvest of the decisions) and the reports "à discuter" (to discuss). Everyone can read it; only Romain settles a question, with his answer, which goes to Claude.
-- **Français / English**: the EN (or FR) button at the top of the Price check and Romain tabs switches the interface's language, kept by your browser; the reports (the monitor's reasons, the notes) and Claude's answers stay in their language.
+- **Console · Claude** (Romain, Rémy, Garance and Lionel): ask Claude about an alert, a report, a rule ("why did Minecraft Deluxe Collection go out as an emergency?"). Enter sends, Shift+Enter starts a new line. Claude answers, but changes nothing for you: changes go through Romain. When a question needs his decision, Claude sends it to the Romain tab ("→ Q13: question for Romain, in the tab Romain"). Everyone sees the whole conversation. Romain also has "Harvest the decisions" (Claude reviews them and proposes an action for each) and "New session".
+- **Romain tab**: every open question for Romain (asked in the console or from the harvest of the decisions) and the reports "to discuss". Everyone can read it; only Romain settles a question, with his answer, which goes to Claude.
+- **English / Français**: the admin opens in English (since 07/10/2026). The FR button at the top of the Price check and Romain tabs switches the interface to French (EN switches back), kept by your browser. The monitor writes its reasons in English since 07/10/2026 (the older French ones are translated in the English interface); the notes and Claude's answers stay in their language.
 
 ### The counters
 
-Each report has **a single state**, and the counters add up: nothing is counted twice. The first four and the next two say what is left to do ("En cours" tab); the last four, what is settled ("Archives" tab).
+Each report has **a single state**, and the counters add up: nothing is counted twice. The first four and the next two say what is left to do ("In progress" tab); the last four, what is settled ("Archive" tab).
 
 | Counter | What it counts |
 | --- | --- |
-| à traiter (to handle) | Reports with no decision, not repaired: to decide (Vrai positif, Faux positif or À discuter) |
-| à discuter (to discuss) | Reports put "À discuter", waiting for the final decision; outlined in orange while there are some |
-| à corriger (to fix) | True positives whose offer has not changed yet: the error is confirmed, it has to be fixed on AllKeyShop |
-| premiers prix en erreur (first prices in error) | Among the reports in progress (to handle, to discuss, to fix), the SUSPECT ones on one of their edition's 3 first prices: what visitors see, the priority. Same definition as the morning reminder |
-| tops à trancher, homepage à trancher (tops / homepage to decide) | The reports "to handle", split between the tops and the homepage |
-| réparées (repaired) | The offer changed (URL, region, platform, edition) or left its page: the re-check found it OK |
-| faux positifs levés (false positives cleared) | Nothing changed in the offer, but a rule added since clears it: the alert was a false positive |
-| vérifiées OK (verified OK) | The offer could not be verified (unreadable page), a re-check verified it OK |
-| faux positifs jugés (false positives judged) | Reports decided "Faux positif": the offer is correct, it is no longer re-checked |
+| to handle | Reports with no decision, not repaired: to decide (True positive, False positive or To discuss) |
+| to discuss | Reports put "To discuss", waiting for the final decision; outlined in orange while there are some |
+| to fix | True positives whose offer has not changed yet: the error is confirmed, it has to be fixed on AllKeyShop |
+| first prices wrong | Among the reports in progress (to handle, to discuss, to fix), the SUSPECT ones on one of their edition's 3 first prices: what visitors see, the priority. Same definition as the morning reminder |
+| tops to decide, homepage to decide | The reports "to handle", split between the tops and the homepage |
+| repaired | The offer changed (URL, region, platform, edition) or left its page: the re-check found it OK |
+| false positives cleared | Nothing changed in the offer, but a rule added since clears it: the alert was a false positive |
+| verified OK | The offer could not be verified (unreadable page), a re-check verified it OK |
+| false positives judged | Reports decided "False positive": the offer is correct, it is no longer re-checked |
 | reports | The total: in progress + archives |
 
 In progress = to handle + to discuss + to fix; archives = repaired + false positives cleared + verified OK + false positives judged. On 06/10/2026, for example: 69 reports = 7 in progress (0 to handle, 0 to discuss, 7 to fix, including 4 first prices in error: The Witcher 3 at Instant Gaming, Warhammer 40k Space Marine 2 and GTA 4 at Steam, The Blood of Dawnwalker at Eneba) + 62 archived (27 repaired, 8 false positives cleared, 6 verified OK, 21 false positives judged).
 
-The monitor's verdict (SUSPECT, À VÉRIFIER, NON VÉRIFIABLE) is shown on each card and can be filtered ("Verdict"); it no longer has its own counter, because it mixed the states: a SUSPECT judged a false positive was still counted as SUSPECT.
+The monitor's verdict (SUSPECT, TO CHECK, UNVERIFIABLE) is shown on each card and can be filtered ("Verdict"); it no longer has its own counter, because it mixed the states: a SUSPECT judged a false positive was still counted as SUSPECT.
 
 ## What the monitor does on its own
 
@@ -162,25 +162,25 @@ A flagged offer is re-checked every hour until it is fixed, and each follow-up i
 flowchart LR
     D["Detection<br/>tops: every 2 min 30<br/>homepage: 15 min"] --> A["Alert<br/>emergencies, tops<br/>or homepage"]
     A --> F["Feedback thread<br/>opened by the bot"]
-    F --> C["Decision<br/>vrai, faux or<br/>à discuter + note"]
+    F --> C["Decision<br/>true, false or<br/>discuss + note"]
     A -- flagged offer --> R["Re-check<br/>every hour<br/>while still wrong"]
     R -- OK --> P["Repaired<br/>the offer changed<br/>or left the page"]
     P -- written in the thread --> F
-    C -- faux --> X["False positive<br/>no more re-checks,<br/>the rule is fixed"]
+    C -- false --> X["False positive<br/>no more re-checks,<br/>the rule is fixed"]
 ```
 
 | Re-check result | What it means |
 | --- | --- |
-| Repaired (Réparée) | The offer changed (URL, region, platform, edition) or left the page |
+| Repaired | The offer changed (URL, region, platform, edition) or left the page |
 | False positive cleared by a rule | Nothing changed: a rule added since clears it |
 | Verified OK | It could not be verified before, now it is |
 | Still wrong | Nothing moved: re-checked the next hour |
-| Still wrong after a "vrai" decision | Reported again, at least 15 min after the decision, then at every re-check while it is wrong (at most once an hour): "📌 Rappel · toujours en erreur après traitement par …" |
+| Still wrong after a "true" decision | Reported again, at least 15 min after the decision, then at every re-check while it is wrong (at most once an hour): "📌 Reminder · still wrong after being handled by …" |
 | Wrong again | An OK offer became wrong: a new alert |
 
 An offer decided as a false positive is no longer re-checked. The admin's buttons start a full re-check without waiting for the hour.
 
-**The morning reminder**: every day at 9 am, #aks_price_emergencies gets "📋 Rappel du matin · urgences premiers prix". It lists the first prices still wrong (even those decided "vrai" or "à discuter"), oldest first, with their age, their status (to handle, or the decision and who took it) and the link to their card in the admin. Then the last 24 hours' summary: new reports, repaired, false positives cleared by a rule, decisions per operator.
+**The morning reminder**: every day at 9 am, #aks_price_emergencies gets "📋 Morning reminder · first price emergencies". It lists the first prices still wrong (even those decided "true" or "to discuss"), oldest first, with their age, their status (to handle, or the decision and who took it) and the link to their card in the admin. Then the last 24 hours' summary: new reports, repaired, false positives cleared by a rule, decisions per operator.
 
 ## Cases already decided, to calibrate
 
@@ -204,10 +204,10 @@ These decisions set the precedent: the monitor has already been fixed for the fa
 
 ## FAQ and contacts
 
-- **The bot does not take my decision.** You need to be authorised: ask Romain for a `!allow @you`. Also check that the message starts with `vrai`, `faux`, `à discuter` or one of the emoji ✅ ❌ 💬.
-- **I cannot decide.** Reply `à discuter` (or 💬) with what you see on both pages.
+- **The bot does not take my decision.** You need to be authorised: ask Romain for a `!allow @you`. Also check that the message starts with `true`, `false`, `discuss` (or `vrai`, `faux`, `à discuter`) or one of the emoji ✅ ❌ 💬.
+- **I cannot decide.** Reply `discuss` (or 💬) with what you see on both pages.
 - **The offer has been fixed.** Nothing to do: the hourly re-check marks it "repaired" and writes it in its thread.
 - **An alert comes back after being settled.** The offer became wrong again (new entry, merchant listing changed): it is a new alert, to decide like the others.
-- **I want to check an offer right now.** The admin's "Lancer le price check top" button re-checks the tops in a few minutes.
+- **I want to check an offer right now.** The admin's "Run the price check top" button re-checks the tops in a few minutes.
 - **Talking to the bot.** In #aks_price_checker, by mentioning it (authorised people only); `!help` lists the commands. Note: an authorised person also gets access to Claude on the monitor's server.
 - **Contact**: Romain, for access, rules and any case that fits none of the above.

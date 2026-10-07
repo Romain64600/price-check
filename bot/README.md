@@ -78,11 +78,12 @@ Depuis le 03/10/2026 (Romain : « envoyer le feedback sur un thread du report su
 l'admin) :
 
 - Chaque alerte des webhooks du moniteur (salons des top games, de la homepage, des urgences premiers prix) reçoit un fil
-  **« Feedback · <jeu> · offre <id> »**, avec la consigne. Au démarrage, le bot ouvre aussi un fil sur les alertes récentes
+  **« Feedback · <jeu> · offer <id> »** (« offre <id> » avant le 07/10/2026 ; les deux sont reconnus), avec la consigne. Au démarrage, le bot ouvre aussi un fil sur les alertes récentes
   (150 derniers messages par salon) dont l'offre est encore signalée, sans décision, sur l'alerte la plus récente.
-- Dans le fil, une personne **autorisée** (le propriétaire, ou ajoutée par `!allow`) répond **vrai** (`vp`, ✅),
-  **faux** (`fp`, ❌) ou **à discuter** (💬), suivi si besoin d'une note : « faux : la page AllKeyShop est bien un DLC »
-  (d'accord avec l'erreur décrite sur le report : **vrai** suffit, il n'y a rien à commenter). Le bot
+- Dans le fil, une personne **autorisée** (le propriétaire, ou ajoutée par `!allow`) répond **true** / **vrai** (`tp`,
+  `vp`, ✅), **false** / **faux** (`fp`, ❌) ou **discuss** / **to discuss** / **à discuter** (💬), suivi si besoin d'une
+  note : « false: the AllKeyShop page really is a DLC » (d'accord avec l'erreur décrite sur le report : **true** suffit, il
+  n'y a rien à commenter). Les messages du bot sont en anglais depuis le 07/10/2026 (« Decision saved: … »). Le bot
   ajoute la décision à `/var/lib/price-check/decisions.jsonl` (le fichier de l'admin, signée « <nom> (Discord) ») et
   confirme dans le fil. Un autre membre reçoit un rappel ; une discussion sans mot-clé en tête ne tranche rien.
 - Le moniteur poste dans le même fil les suites de l'offre (réparée, faux positif levé par une règle, vérifiée, de

@@ -20,7 +20,8 @@ import sys
 import unicodedata
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-SOURCES = (("fr", "docs/guide-equipe.md"), ("en", "docs/team-guide.md"))
+# English first since 07/10/2026 (Romain : « tout l'outil en anglais »), French one click away
+SOURCES = (("en", "docs/team-guide.md"), ("fr", "docs/guide-equipe.md"))
 ADMIN_PAGE = "https://169.58.5.63.sslip.io/executor/price-check"  # dans l'admin : un lien relatif
 LIST_RE = re.compile(r"^(\d+\.|-) ")
 
@@ -203,14 +204,14 @@ def page():
         nav = '<nav class="guide-toc" aria-label="%s"><ol>%s</ol></nav>' % (
             "Sommaire" if lang == "fr" else "Contents", "".join('<li><a href="#%s">%s</a></li>' % (a, inline(t)) for a, t in toc))
         articles.append('<article id="guide-%s" lang="%s" class="guide%s"><h2 class="guide-title">%s</h2>%s%s</article>' % (
-            lang, lang, "" if lang == "fr" else " hidden", inline(title), nav, body))
+            lang, lang, "" if lang == "en" else " hidden", inline(title), nav, body))
     return """<!DOCTYPE html>
 <!-- Généré par price-check/tools/guide_html.py depuis docs/guide-equipe.md et docs/team-guide.md : ne pas modifier à la main. -->
-<html lang="fr">
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>AKS Executor — Price check, guide de l'équipe</title>
+  <title>AKS Executor — Price check, team guide</title>
   <link rel="stylesheet" href="auto.css">
   <link rel="stylesheet" href="pricecheck.css">
   <link rel="stylesheet" href="pricecheck-guide.css">
@@ -219,14 +220,14 @@ def page():
   <header class="topbar">
     <div class="brand">
       <span class="dot"></span>
-      <h1>Price check <span class="sub">— guide de l'équipe · team guide</span></h1>
+      <h1>Price check <span class="sub">— team guide · guide de l'équipe</span></h1>
     </div>
 %s
     <div class="topbar-right">
-      <a class="topbar-link" href="price-check" title="Les reports à trancher">← Reports</a>
-      <button id="lang-fr" type="button" aria-pressed="true" title="Français">FR</button>
-      <button id="lang-en" type="button" aria-pressed="false" title="English">EN</button>
-      <button id="theme" type="button" title="Basculer le thème">◐</button>
+      <a class="topbar-link" href="price-check" title="The reports to decide">← Reports</a>
+      <button id="lang-en" type="button" aria-pressed="true" title="English">EN</button>
+      <button id="lang-fr" type="button" aria-pressed="false" title="Français">FR</button>
+      <button id="theme" type="button" title="Switch the theme">◐</button>
     </div>
   </header>
   <main class="guide-main">

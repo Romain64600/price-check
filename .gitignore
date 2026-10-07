@@ -8,3 +8,5 @@ bot/state.json.tmp
 bot/__pycache__/
 state.json.bak
 state.json.bak.tmp
+bot/console-state.json
+bot/console-state.json.tmp

@@ -114,14 +114,14 @@ Toutes ces règles et leurs cas réels sont dans le [registre des précédents](
 
 **Les reports existants rejoignent leur bon salon** (Romain, 03/10/2026 : « si tu passes sur les offres qui ont déjà été reportées, il faudra les reporter ce coup-ci dans le bon chan discord au prochain passage ») : chaque offre garde le salon où son alerte est partie (`sent_to` ; avant le 03/10, il se déduit : le salon des top games jusqu'au 01/10/2026 14:55, un seul webhook, puis celui du mode). Quand un passage revoit une offre signalée encore en erreur dont l'alerte n'est pas dans le bon salon (un SUSPECT sur l'un des 3 premiers prix : les urgences ; sinon le salon de son mode), elle y est signalée **une fois**, marquée « 📌 Rappel · report existant (signalé le …) » ; une alerte de mode attend un passage de son mode (une page des tops est aussi dans la homepage). Au déploiement : 18 urgences et 3 alertes homepage du 30/09.
 
-Format d'une alerte :
+Format d'une alerte (en anglais depuis le 07/10/2026, Romain : « tout l'outil en anglais » ; les codes des verdicts restent en français, `À VÉRIFIER` s'affiche TO CHECK et `NON VÉRIFIABLE` UNVERIFIABLE) :
 
 ```
-🔴 SUSPECT · Sonic Racing CrossWorlds (Popular #3) · Standard · 2e prix de l'édition
-Kinguin · GLOBAL · steam · 2.99 € · offre 140380343 · contrôle : URL
-Raison : autre produit chez le marchand : « sonic the hedgehog pc steam » au lieu de « Sonic Racing CrossWorlds » (URL)
-Marchand : <https://www.kinguin.net/category/1/sonic-the-hedgehog-pc-steam>
-Page : <https://www.allkeyshop.com/blog/buy-sonic-racing-crossworlds-cd-key-compare-prices/>
+🔴 SUSPECT · Sonic Racing CrossWorlds (Popular #3) · Standard · 2nd price of the edition
+Kinguin · GLOBAL · steam · 2.99 € · offer 140380343 · check: URL
+Reason: another product at the merchant: « sonic the hedgehog pc steam » instead of « Sonic Racing CrossWorlds » (URL)
+Merchant: <https://www.kinguin.net/category/1/sonic-the-hedgehog-pc-steam>
+Page: <https://www.allkeyshop.com/blog/buy-sonic-racing-crossworlds-cd-key-compare-prices/>
 ```
 
 Un contrôle ou un envoi Discord raté est retenté au passage suivant ; rien n'est marqué contrôlé tant que l'alerte n'est pas partie.
