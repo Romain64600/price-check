@@ -3099,8 +3099,9 @@ class TestCompetitors20261006(unittest.TestCase):
 
     def test_the_best_displayed_price_of_a_competitor_page(self):
         self.assertEqual(pc.competitor_offer(self.DL), {"name": "STAR WARS: Galactic Racer", "price": 32.48, "seller": "GAMESEAL",
-                                                        "account": None})
+                                                        "offers": [{"price": 32.48, "seller": "GAMESEAL"}], "account": None})
         self.assertEqual(pc.competitor_offer(self.GO), {"name": "STAR WARS Galactic Racer™", "price": 22.67, "seller": "Difmark",
+                                                        "offers": [{"price": 22.67, "seller": "Difmark"}, {"price": 33.69, "seller": "Instant Gaming"}],
                                                         "account": None})
         self.assertIsNone(pc.competitor_offer("<html>Access Denied</html>"))
         self.assertTrue(pc.same_product("STAR WARS Galactic Racer", "STAR WARS: Galactic Racer"))
@@ -3119,11 +3120,23 @@ class TestCompetitors20261006(unittest.TestCase):
         page = ('<script type="application/ld+json">' + json.dumps({"@type": "Product", "name": "STAR WARS Galactic Racer", "offers": {
             "@type": "AggregateOffer", "priceCurrency": "EUR", "lowPrice": "27.10", "offers": [
                 {"@type": "Offer", "url": u, "price": p, "seller": {"name": s}} for u, p, s in offers]}}) + "</script>")
-        self.assertEqual(pc.competitor_offer(page), {"name": "STAR WARS Galactic Racer", "price": 33.69, "seller": "Instant Gaming",
-                                                     "account": {"price": 27.1, "seller": "GAMESEAL"}})
+        self.assertEqual(pc.competitor_offer(page), {
+            "name": "STAR WARS Galactic Racer", "price": 33.69, "seller": "Instant Gaming",
+            "offers": [{"price": 33.69, "seller": "Instant Gaming"}, {"price": 36.51, "seller": "GAMESEAL"}],
+            "account": {"price": 27.1, "seller": "GAMESEAL", "offers": [{"price": 27.1, "seller": "GAMESEAL"},
+                                                                       {"price": 28.93, "seller": "Driffle"}, {"price": 31.07, "seller": "Difmark"}]}})
         only_accounts = page.replace("https://www.instant-gaming.com/en/22527-/", "https://x.com/star-wars-galactic-racer-steam-account").replace(
             "pc-steam-gift-global", "pc-steam-account-global")
         self.assertIsNone(pc.competitor_offer(only_accounts)["price"], "an account became the key price")
+
+    def test_the_cheapest_offer_of_each_seller_for_the_fee_to_move_to_the_next(self):
+        # Romain, 06/10/2026 : « pourquoi Instant Gaming reste premier prix alors que j'y ai rajouté 20 € ? » : le fee
+        # s'applique au marchand ; l'offre suivante du concurrent (Kinguin à 36,40 €) doit être connue
+        offers = [{"price": "37.31", "seller": {"name": "K4G"}}, {"price": "33.69", "seller": {"name": "Instant Gaming"}},
+                  {"price": "37.02", "seller": {"name": "K4G"}}, {"price": "36.40", "seller": {"name": "Kinguin"}}]
+        self.assertEqual(pc.best_offers(offers), {"price": 33.69, "seller": "Instant Gaming", "offers": [
+            {"price": 33.69, "seller": "Instant Gaming"}, {"price": 36.4, "seller": "Kinguin"}, {"price": 37.02, "seller": "K4G"}]})
+        self.assertIsNone(pc.best_offers([]))
 
     def test_dlcompare_search_picks_the_product_page_named_like_the_game(self):
         search = ('<a href="https://www.dlcompare.fr/actualites-gaming/star-wars-galactic-racer-mise-tout-sur-la-vitesse-85034">'
@@ -3219,7 +3232,8 @@ class TestGgDealsApi20261006(unittest.TestCase):
         with mock.patch.object(pc, "http_get", return_value=(200, None, self.OK.encode())) as get, mock.patch.object(pc, "REQUEST_DELAY", 0):
             prices = pc.ggdeals_prices(["2001", "2002", "2003", "2004"], "secret-key")
         self.assertEqual(prices["2001"], {"url": "https://gg.deals/game/star-wars-galactic-racer/", "name": "STAR WARS Galactic Racer",
-                                          "price": 29.1, "seller": "keyshops"})
+                                          "price": 29.1, "seller": "keyshops", "offers": [
+                                              {"price": 29.1, "seller": "keyshops"}, {"price": 39.99, "seller": "boutiques officielles"}]})
         self.assertEqual((prices["2002"]["price"], prices["2002"]["seller"], prices["2002"]["url"]), (12.49, "boutiques officielles", "https://gg.deals/"))
         self.assertNotIn("2003", prices, "a price in dollars is not compared")
         self.assertNotIn("2004", prices)

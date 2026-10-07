@@ -3229,22 +3229,34 @@ def competitor_offer(body):
         name = html.unescape(item.get("name") or "")
         subs = [o for o in offers.get("offers") or [] if isinstance(o, dict) and as_price(o.get("price")) is not None]
         if subs:  # gocdkeys : chaque offre et l'adresse de son marchand
-            def best(group):
-                if not group:
-                    return None
-                o = min(group, key=lambda o: as_price(o["price"]))
-                seller = o.get("seller") if isinstance(o.get("seller"), dict) else {}
-                return {"price": round(as_price(o["price"]), 2), "seller": seller.get("name")}
-            key = best([o for o in subs if not is_account_url(o.get("url"))])
-            account = best([o for o in subs if is_account_url(o.get("url"))])
+            key = best_offers([o for o in subs if not is_account_url(o.get("url"))])
+            account = best_offers([o for o in subs if is_account_url(o.get("url"))])
             return {"name": name, "price": key["price"] if key else None, "seller": key["seller"] if key else None,
-                    "account": account}
+                    "offers": key["offers"] if key else [], "account": account}
         low = as_price(offers.get("lowPrice") if offers.get("lowPrice") is not None else offers.get("price"))
         if low is None:
             continue
         seller = offers.get("seller") if isinstance(offers.get("seller"), dict) else {}
-        return {"name": name, "price": round(low, 2), "seller": seller.get("name"), "account": None}
+        return {"name": name, "price": round(low, 2), "seller": seller.get("name"),
+                "offers": [{"price": round(low, 2), "seller": seller.get("name")}], "account": None}
     return None
+
+
+COMPETITOR_OFFERS = 10  # offres gardées par concurrent, page et genre : la moins chère de chaque marchand
+
+
+def best_offers(group):
+    """La meilleure offre d'un concurrent ({"price", "seller", "offers"}), avec la moins chère de chaque marchand, de la
+    moins chère à la plus chère : un fee / error saisi par l'opérateur s'applique au marchand, et l'offre suivante prend
+    la place (Romain, 06/10/2026 : « pourquoi Instant Gaming reste premier prix alors que j'y ai rajouté 20 € ? »)."""
+    cheapest = {}
+    for o in group:
+        seller = (o.get("seller") if isinstance(o.get("seller"), dict) else {}).get("name") or "?"
+        price = round(as_price(o["price"]), 2)
+        if seller not in cheapest or price < cheapest[seller]:
+            cheapest[seller] = price
+    offers = [{"price": p, "seller": s} for s, p in sorted(cheapest.items(), key=lambda kv: (kv[1], kv[0]))][:COMPETITOR_OFFERS]
+    return dict(offers[0], offers=offers) if offers else None
 
 
 def same_product(product, name):
@@ -3350,12 +3362,14 @@ def ggdeals_prices(app_ids, key):
         prices = (game or {}).get("prices") if isinstance(game, dict) else None
         if not isinstance(prices, dict) or (prices.get("currency") or "EUR") != "EUR":
             continue
-        found = [(p, seller) for p, seller in ((as_price(prices.get("currentKeyshops")), "keyshops"),
-                                               (as_price(prices.get("currentRetail")), "boutiques officielles")) if p is not None]
+        found = sorted((round(p, 2), seller) for p, seller in ((as_price(prices.get("currentKeyshops")), "keyshops"),
+                                                               (as_price(prices.get("currentRetail")), "boutiques officielles"))
+                       if p is not None)
         if found:
-            price, seller = min(found)
+            price, seller = found[0]
             link = game.get("url") if re.match(r"https://gg\.deals/", str(game.get("url") or "")) else "https://gg.deals/"
-            out[str(app_id)] = {"url": link, "name": html.unescape(str(game.get("title") or "")), "price": round(price, 2), "seller": seller}
+            out[str(app_id)] = {"url": link, "name": html.unescape(str(game.get("title") or "")), "price": price, "seller": seller,
+                                "offers": [{"price": p, "seller": s} for p, s in found]}
     return out
 
 
@@ -3458,7 +3472,8 @@ def check_competitors(targets, state, now=None):
             memo.setdefault(row["page_url"], {})[site["id"]] = {"url": found["url"] if found else None,
                                                                  "at": time.strftime("%Y-%m-%d %H:%M", time.localtime(now))}
             # clé contre clé ; compte contre compte, dans la table des comptes, quand le concurrent en vend
-            key = ({"url": found["url"], "name": found["name"], "price": found["price"], "seller": found["seller"]}
+            key = ({"url": found["url"], "name": found["name"], "price": found["price"], "seller": found["seller"],
+                    "offers": found.get("offers") or [{"price": found["price"], "seller": found["seller"]}]}
                    if found and found.get("price") is not None else None)
             out.append(comparison(row, row["aks"], key))
             if found and found.get("account"):
