@@ -33,3 +33,9 @@
 # rares, spécifique à Pokémon, donc vraiment, vraiment pas généraliser » : un alias pour ce seul produit ; la règle
 # « un autre mot à la place d'un mot du nom = un autre produit » reste (le jeu Pokémon Violet n'est pas Scarlet).
 "Pokemon Scarlet The Hidden Treasure of Area Zero" = ["Pokemon Violet The Hidden Treasure of Area Zero"]
+# Steam nomme le jeu « The Witcher 3: Wild Hunt — Remastered » (app 292030), et Instant Gaming le vend sous ce nom
+# (« …-the-witcher-3-wild-hunt-remastered-pc-gog-com », offre 140642796, jugée faux par Rémy le 06/10/2026) ; sans cet
+# alias, gg.deals ne trouve pas le jeu. Romain, 07/10/2026 (Q5 de la récolte) : « Oui, les 2 alias ».
+"The Witcher 3 Wild Hunt" = ["The Witcher 3 Wild Hunt Remastered"]
+# Le titre complet d'Ace Combat 8 sur Steam : « ACE COMBAT 8: WINGS OF THEVE » (app 2288340) ; même décision.
+"Ace Combat 8" = ["Ace Combat 8 Wings of Theve"]

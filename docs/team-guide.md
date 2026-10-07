@@ -86,7 +86,7 @@ Each alert has its thread "Feedback · game · offer id": you decide there in on
 
 1. Open the thread under the alert.
 2. Reply starting with one of these words (the French ones work too: `vrai`, `faux`, `à discuter`):
-    - `true` (or `tp`, ✅): true positive, the error is real.
+    - `true` (or `tp`, ✅): the error is real.
     - `false` (or `fp`, ❌): false positive, the offer is correct and the alert should not have gone out.
     - `discuss` (or `to discuss`, 💬): to discuss before deciding.
 3. Only if needed, add a note after the word saying why, for example `false: the AllKeyShop page really is a DLC`. You agree with the error described on the report: `true` is enough, there is nothing to comment.
@@ -121,9 +121,9 @@ Not an error:
 The admin shows every report in one place, with the same decisions as the Discord threads: <https://169.58.5.63.sslip.io/executor/price-check> (admin login).
 
 - **One card per report**: the verdict, "✔ Handled by <operator>" (or "To handle", or "💬 To discuss"), the TOP or HOMEPAGE badge (where the problem comes from) and FIRST PRICE (one of the edition's 3 cheapest offers), the game, edition, rank, merchant, price, reason, and three links: AllKeyShop page, merchant offer, Discord thread.
-- **Two tabs**: **"In progress"**, what is left to do (to handle, to discuss, to fix), and **"Archive"**, the settled reports: repaired, false positives cleared by a rule, verified OK, false positives judged. A **true positive** whose offer has not changed yet stays in progress, marked "🔧 To fix": the error is confirmed, it still has to be fixed on AllKeyShop; it moves to the archive when the re-check finds it repaired. Put "To discuss", an archived report comes back in progress, at the top. A link to a report (morning reminder, Discord) opens the tab it is in.
-- **Three parts in "In progress"** (the archive keeps the tops and the homepage): first, **"💬 To discuss"** (orange title): the reports put to discussion, with the comment of whoever put them there, until the final decision (True positive or False positive, which archives it). On these cards, the buttons say what they mean: "True positive: the error is real", "False positive: the offer is right". It always shows: a report to discuss hidden by the filters is counted there ("1 hidden by the filters"). Then the tops' reports (title "Price check top", blue TOP band and badge): a report found on a top page stays there until it is decided when the page leaves the tops, marked "left the tops on …". Then the homepage's; an empty part says so ("No report to discuss.", "No report on the tops for these filters."). The "Mode" filter keeps only the tops or the homepage.
-- **Deciding**: each card reads in two steps, ① Why? (the note, only if needed) on the left and ② Your decision (True positive, False positive, To discuss) on the right. You agree with the error described on the report: click True positive, no note, there is nothing to comment. Otherwise, write the note then click your decision: both leave together; a note changed afterwards is saved with "Update the note" (or Enter), and a note not saved yet is flagged in orange. A "How to decide a report" box at the top of the list says so. A report just decided stays in place a few seconds, outlined in green ("✔ Decision saved"), then moves to the archive or to its new part, or fades out if it no longer matches the filters (the banner says where it goes): the next card does not slide under the cursor. Same effect as a reply in the thread; a decision taken on Discord shows signed "(Discord)".
+- **Two tabs**: **"In progress"**, what is left to do (to handle, to discuss, to fix), and **"Archive"**, the settled reports: repaired, false positives cleared by a rule, verified OK, false positives judged. A report decided **true** whose offer has not changed yet stays in progress, marked "🔧 To fix": the error is confirmed, it still has to be fixed on AllKeyShop; it moves to the archive when the re-check finds it repaired. Put "To discuss", an archived report comes back in progress, at the top. A link to a report (morning reminder, Discord) opens the tab it is in.
+- **Three parts in "In progress"** (the archive keeps the tops and the homepage): first, **"💬 To discuss"** (orange title): the reports put to discussion, with the comment of whoever put them there, until the final decision (True or False positive, which archives it). On these cards, the buttons say what they mean: "True: the error is real", "False positive: the offer is right". It always shows: a report to discuss hidden by the filters is counted there ("1 hidden by the filters"). Then the tops' reports (title "Price check top", blue TOP band and badge): a report found on a top page stays there until it is decided when the page leaves the tops, marked "left the tops on …". Then the homepage's; an empty part says so ("No report to discuss.", "No report on the tops for these filters."). The "Mode" filter keeps only the tops or the homepage.
+- **Deciding**: each card reads in two steps, ① Why? (the note, only if needed) on the left and ② Your decision (True, False positive, To discuss) on the right. You agree with the error described on the report: click True, no note, there is nothing to comment. Otherwise, write the note then click your decision: both leave together; a note changed afterwards is saved with "Update the note" (or Enter), and a note not saved yet is flagged in orange. A "How to decide a report" box at the top of the list says so. A report just decided stays in place a few seconds, outlined in green ("✔ Decision saved"), then moves to the archive or to its new part, or fades out if it no longer matches the filters (the banner says where it goes): the next card does not slide under the cursor. Same effect as a reply in the thread; a decision taken on Discord shows signed "(Discord)".
 - **Filters**: verdict (including Repaired, False positives cleared by a rule, Verified OK), mode (Price check top or homepage), decision, "Handled by" (one operator, or nobody: to handle), free search, "still first only", "first prices only".
 - **Counters**: at the top of the list, then the number of reports handled by each operator; the details are just below.
 - **Running a pass**: the buttons "Run the price check top" and "Run the price check homepage" re-check every offer of their pages right away. Allow a few minutes for the tops, about 2 h 30 for the homepage.
@@ -139,9 +139,9 @@ Each report has **a single state**, and the counters add up: nothing is counted 
 
 | Counter | What it counts |
 | --- | --- |
-| to handle | Reports with no decision, not repaired: to decide (True positive, False positive or To discuss) |
+| to handle | Reports with no decision, not repaired: to decide (True, False positive or To discuss) |
 | to discuss | Reports put "To discuss", waiting for the final decision; outlined in orange while there are some |
-| to fix | True positives whose offer has not changed yet: the error is confirmed, it has to be fixed on AllKeyShop |
+| to fix | Reports decided true whose offer has not changed yet: the error is confirmed, it has to be fixed on AllKeyShop |
 | first prices wrong | Among the reports in progress (to handle, to discuss, to fix), the SUSPECT ones on one of their edition's 3 first prices: what visitors see, the priority. Same definition as the morning reminder |
 | tops to decide, homepage to decide | The reports "to handle", split between the tops and the homepage |
 | repaired | The offer changed (URL, region, platform, edition) or left its page: the re-check found it OK |
@@ -188,12 +188,12 @@ These decisions set the precedent: the monitor has already been fixed for the fa
 
 | Case | Decision | Why |
 | --- | --- | --- |
-| Titanfall 2 Deluxe, Kinguin sells the first Titanfall | True positive | Another game of the series is never the game |
+| Titanfall 2 Deluxe, Kinguin sells the first Titanfall | True | Another game of the series is never the game |
 | Monster Hunter Wilds Deluxe, G2A sells a ROW key shown EUROPE | False positive | Rémy checked: the key activates in Europe, only the United States are excluded. At G2A, a ROW key shown EUROPE now goes out "to check": look at the activation countries on the G2A page |
 | Minecraft, "Java & Bedrock Edition Deluxe Collection" (G2A, Eneba, Driffle) filed under Deluxe Collection Edition | False positive | The product's full name contains the page's main edition (Java & Bedrock Edition); the Deluxe Collection edition is named |
 | Escape from Tarkov, the publisher's shop (escapefromtarkov.com) does not name the game in its link | False positive | This shop only sells this game |
-| GTA 4, Steam's Complete Edition filed under Standard | True positive | Wrong edition, even if the buyer gets more: the page has a Complete edition |
-| STAR WARS Zero Company Xbox, a Deluxe filed under "Standard + DLC" | True positive | The page has a Deluxe edition |
+| GTA 4, Steam's Complete Edition filed under Standard | True | Wrong edition, even if the buyer gets more: the page has a Complete edition |
+| STAR WARS Zero Company Xbox, a Deluxe filed under "Standard + DLC" | True | The page has a Deluxe edition |
 | Stellaris Bundle 1, Kinguin redirects the link to another listing | Out of stock, to report | The link's listing is out of stock, the price stays in the feed |
 | Pokémon Scarlet, DLC "The Hidden Treasure of Area Zero", GameBoost sells the Violet version | False positive | This page covers the DLC of both versions; specific to Pokémon, not generalised |
 | Minecraft Dungeons Triple Bundle, CJS CDKeys "Argentina region" | False positive | The link picks the Europe variant; the page shows Argentina by default |

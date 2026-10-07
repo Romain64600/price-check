@@ -290,7 +290,8 @@ class TestAnalyzeSuspects(unittest.TestCase):
                     "https://www.yuplay.com/product/minecraft-dungeons-ii-xbox-series-xs-and-xbox-on-pc/?partner=2334725"):
             self.assertEqual(self.reasons("Minecraft Dungeons 2", url, region="XBOX/PC", platform="xbox-play-anywhere"), [])
         self.assertEqual(self.reasons("Final Fantasy VII Rebirth", "https://shop.example/final-fantasy-7-rebirth-pc-steam"), [])
-        self.assertEqual(pc.name_variants("Ace Combat 8"), ("Ace Combat 8", "ace combat viii"))
+        with mock.patch.object(pc, "product_aliases", lambda: {}):  # sans l'alias du titre Steam complet (07/10)
+            self.assertEqual(pc.name_variants("Ace Combat 8"), ("Ace Combat 8", "ace combat viii"))
 
     def test_platform_suffix_of_the_product_name(self):
         # PS Store US, 30/09/2026 : « GTA 6 PS5 », URL EP1004-PPSA01547_00-GTAVIULTIMATE001, titre sans « PS5 »
@@ -2511,6 +2512,9 @@ class TestReview20261005(unittest.TestCase):
     PAGE = "https://www.allkeyshop.com/blog/buy-jeu-cd-key-compare-prices/"
 
     # -- « Le nom suivi de mots en plus » : « alerter tous ces cas », « une alerte par page et par mots »
+    # Ace Combat 8 « Wings of Theve », l'exemple du 05/10 : depuis le 07/10, le titre complet est un alias (titre Steam,
+    # Q5 de l'onglet Romain) ; le mécanisme des mots en plus se teste sans les alias
+    @mock.patch.object(pc, "product_aliases", lambda: {})
     def test_the_words_after_the_name(self):
         tail = lambda product, url, **kw: pc.tail_words(product, offer(**kw), pc.norm(pc.url_text(url)))
         self.assertEqual(tail("Minecraft", "https://shop.example/minecraft-dungeons-2-pc-key"), ["dungeons"])
@@ -2532,6 +2536,9 @@ class TestReview20261005(unittest.TestCase):
     def ok(url):
         return {"verdict": "OK", "reasons": [], "notes": [], "url": url, "method": "URL"}
 
+    # Ace Combat 8 « Wings of Theve », l'exemple du 05/10 : depuis le 07/10, le titre complet est un alias (titre Steam,
+    # Q5 de l'onglet Romain) ; le mécanisme des mots en plus se teste sans les alias
+    @mock.patch.object(pc, "product_aliases", lambda: {})
     def test_one_alert_per_page_and_words_then_the_decision_teaches(self):
         state = pc.load_state("/nonexistent")
         url = "https://www.instant-gaming.com/en/9408-buy-ace-combat-8-wings-of-theve-pc-steam/"
@@ -2564,6 +2571,9 @@ class TestReview20261005(unittest.TestCase):
         page_ok = dict(self.ok(url), method="page (Chromium)")
         self.assertIs(pc.apply_tail_words(page_ok, state, self.PAGE, "1004", "x", "Ace Combat 8", o), page_ok)
 
+    # Ace Combat 8 « Wings of Theve », l'exemple du 05/10 : depuis le 07/10, le titre complet est un alias (titre Steam,
+    # Q5 de l'onglet Romain) ; le mécanisme des mots en plus se teste sans les alias
+    @mock.patch.object(pc, "product_aliases", lambda: {})
     def test_the_loop_sends_one_alert_per_page_and_words(self):
         html = aks_page([{"id": 2001, "price": 5.0}, {"id": 2002, "price": 6.0}], product="Ace Combat 8")
         url = "https://www.instant-gaming.com/en/9408-buy-ace-combat-8-wings-of-theve-pc-steam/"
@@ -2595,7 +2605,7 @@ class TestReview20261005(unittest.TestCase):
         e = self.entry(decided_ago=3600)
         sent = self.recheck(e)
         self.assertEqual(len(sent), 1)
-        self.assertTrue(sent[0].startswith("📌 **Reminder** · still wrong after being handled by remy (True positive on "), sent[0])
+        self.assertTrue(sent[0].startswith("📌 **Reminder** · still wrong after being handled by remy (True on "), sent[0])
         self.assertEqual(self.recheck(e), [], "the reminder comes back at every re-check")
         e["decision"] = dict(e["decision"], at=datetime.datetime.now().astimezone().isoformat(timespec="seconds"), by="garance")
         self.assertEqual(self.recheck(e), [], "no time to fix the offer after the decision")
@@ -2650,7 +2660,7 @@ class TestReview20261005(unittest.TestCase):
         self.assertEqual(lines[0], "📋 **Morning reminder · first price emergencies** · 06/10/2026")
         self.assertEqual(lines[1], "**2 first prices wrong, not fixed yet** (oldest first):")
         self.assertEqual(lines[2], "• **Ancien** · Standard · G2A · 1st price of the edition · for 4 d · to handle · <https://admin.example/price-check#offer-1>")
-        self.assertTrue(lines[3].startswith("• **Tranché** · Standard · G2A · 2nd price of the edition · for 13 h · True positive (remy) · "), lines[3])
+        self.assertTrue(lines[3].startswith("• **Tranché** · Standard · G2A · 2nd price of the edition · for 13 h · True (remy) · "), lines[3])
         self.assertEqual(lines[4], "… and 1 other open report in the admin (emergencies aside).")
         # 3 nouveaux reports en 24 h, dont celui jugé faux ensuite : il a bien été signalé
         self.assertEqual(lines[5], "**Last 24 hours**: 3 new reports · 1 repaired · 0 false positive cleared by a rule · "
@@ -2838,6 +2848,9 @@ class TestTailWordsReview20261006(unittest.TestCase):
         url = "https://www.nintendo.com/fr-fr/Jeux/Jeux-Nintendo-Switch/Sesame-Street-Amis-et-Fun-3147246.html"
         self.assertEqual(self.tail("Sesame Street Friends & Fun Nintendo Switch", "Standard", url, merchant="Nintendo eShop FR"), [])
 
+    # Ace Combat 8 « Wings of Theve », l'exemple du 05/10 : depuis le 07/10, le titre complet est un alias (titre Steam,
+    # Q5 de l'onglet Romain) ; le mécanisme des mots en plus se teste sans les alias
+    @mock.patch.object(pc, "product_aliases", lambda: {})
     def test_a_faux_teaches_the_words_for_every_platform_of_the_game(self):
         """Ace Combat 8 « Wings of Theve » : 45 offres sur les pages PC, Xbox et PS5 ; un « faux » suffit pour les trois."""
         pc_page, xbox_page = ("https://www.allkeyshop.com/blog/buy-ace-combat-8-%scompare-prices/" % x for x in ("cd-key-", "xbox-series-"))
@@ -3034,7 +3047,7 @@ class TestPageEditions20261006(unittest.TestCase):
                                          mc, main="Java & Bedrock Edition"))
         # une édition à part, pas l'édition principale de la page, nommée avec l'édition de l'offre : l'alerte reste (inspiré
         # de The Blood of Dawnwalker chez Eneba, 140458058 : « Eclipse Edition (Deluxe) » seule en Deluxe, 77 offres en
-        # Eclipse Edition, Standard 95 ; le vrai cas est une égalité, « eclipse » contre « deluxe », à trancher avec Romain)
+        # Eclipse Edition, Standard 95 ; le vrai cas, une égalité, « eclipse » contre « deluxe », tranché par Romain le 07/10 : c'est la Deluxe, TestRomainTab20261007)
         self.assertIsNotNone(self.reason("Game", "Deluxe", "https://x.com/game-eclipse-moon-edition-deluxe-steam-key",
                                          ["Standard", "Eclipse Moon Edition", "Deluxe"], main="Standard"))
         # une autre édition supérieure nommée reste une erreur (cas inventé : « Nova Deluxe Edition » rangée en Deluxe)
@@ -3305,6 +3318,95 @@ class TestEnglish20261007(unittest.TestCase):
         old = "offre en rupture chez le marchand : le lien redirige vers une autre fiche (https://k/1), mais le prix reste dans le feed"
         self.assertTrue(old.startswith(pc.STOCK_REASON_STARTS))
         self.assertEqual(pc.seen_changes({"reasons": [old]}, {"reasons": []}), ["page served"])
+
+
+class TestRomainTab20261007(unittest.TestCase):
+    """Les questions de l'onglet Romain (récolte du 06/10/2026), réglées avec Romain le 07/10/2026. Sa consigne du jour :
+    « il ne faut pas hésiter à faire des reports, même si c'est des faux positifs ; je veux pas qu'on fasse des règles
+    bizarres qui cassent tout » : un seul changement de règle (Q7, déjà validé), deux alias (Q5), le reste reporté."""
+
+    def reason(self, product, edition, url, editions, main=None):
+        return pc.page_edition_reason({"edition": edition, "page_editions": editions, "page_main_edition": main},
+                                      pc.norm(pc.url_text(url)), product)
+
+    def check(self, product, url, page="", **kw):
+        interstitial = TestCheckOffer.INTERSTITIAL.replace(TestRedirection.KINGUIN, url).replace(
+            TestRedirection.KINGUIN.replace("/", "\\/"), url.replace("/", "\\/"))
+        def get(u, ua, follow=True, timeout=30):
+            return (200, None, interstitial) if "allkeyshop" in u else (403, None, page)
+        with mock.patch.object(pc, "http_get", side_effect=get), mock.patch.object(pc, "page_title", return_value=None), \
+             mock.patch.object(pc, "chromium_dom", return_value=None), mock.patch.object(pc, "REQUEST_DELAY", 0):
+            return pc.check_offer(product, offer(**kw))
+
+    def test_q7_digital_deluxe_is_the_deluxe_edition(self):
+        # Romain : « Digital deluxe edition = Deluxe edition » (Eneba 137662983, Driffle 140438327), « a good rule » :
+        # les synonymes d'édition valent aussi pour « une autre édition de la page nommée par l'URL »
+        wukong = ["Standard", "Deluxe", "Digital Deluxe Edition"]
+        for url in ("https://www.eneba.com/xbox-black-myth-wukong-digital-deluxe-edition-xbox-series-x-s-xbox-live-key-europe",
+                    "https://www.driffle.com/black-myth-wukong-digital-deluxe-edition-europe-xbox-series-xs-xbox-live-digital-key-p10001019"):
+            with self.subTest(url=url):
+                self.assertIsNone(self.reason("Black Myth Wu Kong Xbox Series", "Deluxe", url, wukong))
+                # la Digital Deluxe rangée en Standard reste une erreur
+                self.assertEqual(self.reason("Black Myth Wu Kong Xbox Series", "Standard", url, wukong),
+                                 "edition: filed under Standard, the merchant sells digital (the page has the edition Digital Deluxe Edition)")
+        self.assertTrue(pc.same_edition("Digital Deluxe Edition", "Deluxe"))
+        self.assertTrue(pc.same_edition("Game of the Year Edition", "GOTY"))
+        self.assertFalse(pc.same_edition("Eclipse Edition", "Deluxe"))
+        # les autres éditions nommées par l'URL restent des erreurs (les vrais positifs du 07/10)
+        stellaris = ["Standard", "Deluxe", "Nova Edition", "Galaxy Edition", "Limited", "Explorer", "Bonus"]
+        self.assertIsNotNone(self.reason("Stellaris", "Deluxe", "https://www.gamingdragons.com/en/game/buy-stellaris-nova-steam-key.html", stellaris))
+        self.assertIsNotNone(self.reason("Gran Turismo 7 PS5", "Deluxe", "https://store.playstation.com/fr-fr/product/x-gran-turismo-7-25th-anniversary-edition",
+                                         ["Standard", "Deluxe", "25th Anniversary Edition"]))
+
+    def test_q9_dawnwalker_eclipse_edition_deluxe_is_the_deluxe(self):
+        # Romain : « eclipse-edition-deluxe = deluxe », « C est bien une edition deluxe » (Eneba 140458058) : à égalité
+        # (« eclipse » contre « deluxe »), pas d'alerte depuis la correction GTA 5 du 06/10 ; éditions réelles de la page
+        dawnwalker = ["Standard", "Standard + Bonus", "Eclipse Edition", "Bonus", "Deluxe", "Eclipse Edition + Bonus"]
+        self.assertIsNone(self.reason("The Blood Of Dawnwalker", "Deluxe",
+                                      "https://www.eneba.com/steam-the-blood-of-dawnwalker-eclipse-edition-deluxe-steam-key-pc-europe",
+                                      dawnwalker, main="Standard"))
+
+    def test_q5_the_steam_names_of_two_top_games(self):
+        # Romain : « Oui, les 2 alias » : gg.deals cherche le jeu par son nom Steam (identifiant Steam)
+        self.assertTrue(pc.same_product("The Witcher 3 Wild Hunt", "The Witcher 3: Wild Hunt — Remastered"))
+        self.assertTrue(pc.same_product("Ace Combat 8", "ACE COMBAT 8: WINGS OF THEVE"))
+        self.assertFalse(pc.same_product("The Witcher 3 Wild Hunt", "The Witcher 3: Wild Hunt — Remastered Soundtrack"))
+        self.assertFalse(pc.same_product("Ace Combat 8", "ACE COMBAT 8 - Playable Aircraft: F-14A"))
+
+    def test_q1_wow_forever_heroic_pack_at_driffle(self):
+        # Romain : « Heroic pack est une edition pour ce DLC, battlenet Gift est correct » (Driffle 140501637)
+        res = self.check("World of Warcraft: Forever",
+                         "https://www.driffle.com/warcraft-forever-skyborne-heroic-pack-dlc-global-pc-mac-battlenet-gift-p10001673",
+                         merchantName="Driffle", edition="Heroic Pack", region="BATTLENET GIFT", region_filter="BATTLENET GIFT",
+                         platform="battle-net")
+        self.assertEqual(res["verdict"], "OK", res)
+
+    def test_q2_a_doubt_is_still_reported(self):
+        # Romain : « still report if we have a doubt » (PS Store 135588553 : un code produit sans le nom du jeu, page
+        # illisible ; jugée faux par Rémy) : jamais d'OK, et une alerte quand c'est le premier prix d'une page des tops
+        res = self.check("Cyberpunk 2077 PS5", "https://store.playstation.com/fr-fr/product/EP4497-PPSA04029_00-EXPANSION1B00000",
+                         merchantName="PS Store FR", edition="Ultimate", region="PS5", region_filter="PS5", platform="playstation-store")
+        self.assertIn(res["verdict"], ("NON VÉRIFIABLE", "À VÉRIFIER"), res)
+        self.assertEqual(pc.unverifiable_verdict(offer(page_first=True), "Popular",
+                                                 "https://www.allkeyshop.com/blog/buy-cyberpunk-2077-ps5-compare-prices/",
+                                                 res.get("unverifiable") or "first-price"), "À VÉRIFIER")
+
+    def test_q4_gamivo_row_key_shown_europe_stays_an_error(self):
+        # Romain : « Rien, reste SUSPECT » (GAMIVO 136411763, jugée faux par Rémy) : la page GAMIVO exclut 209 pays, dont
+        # l'Estonie, la Lettonie et la Lituanie ; pas de doute comme chez G2A
+        res = self.check("The Last of Us Part II Remastered",
+                         "https://www.gamivo.com/product/the-last-of-us-part-ii-remastered-pc-steam-row-standard",
+                         merchantName="GAMIVO", edition="Standard", region="EUROPE", region_filter="STEAM EU")
+        self.assertEqual(res["verdict"], "SUSPECT", res)
+        self.assertIn("region: AllKeyShop EUROPE, merchant ROW", res["reasons"])
+
+    def test_q6_the_70_percent_rule_stays(self):
+        # Romain : « We keep the 70% rules, we will forever need to double check manually » (Lootbar 140375811, 64 %)
+        o = [offer(id=1, price=11.85, page_first=True, edition_rank=1, merchantName="Lootbar"),
+             offer(id=2, price=18.39, edition_rank=2, merchantName="Instant Gaming")]
+        res = pc.apply_price_gap({"verdict": "OK", "reasons": [], "notes": []}, o[0], o)
+        self.assertEqual(res["verdict"], "SUSPECT")
+        self.assertIn("64 %", res["reasons"][0])
 
 
 class TestSecurityAudit20261002(unittest.TestCase):

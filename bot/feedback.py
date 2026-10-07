@@ -16,7 +16,7 @@ import re
 import stat
 import time
 
-DECISIONS = {"vrai": "True positive", "faux": "False positive", "a_discuter": "To discuss"}  # mêmes clés que l'admin
+DECISIONS = {"vrai": "True", "faux": "False positive", "a_discuter": "To discuss"}  # mêmes clés que l'admin ; « true », pas « true positive » (Romain, 07/10/2026)
 NOTE_MAX = 1000
 THREAD_PREFIX = "Feedback · "
 THREADS_FILE = "threads.json"  # offre -> dernier fil ouvert (pour les suites que poste le moniteur), dossier partagé
@@ -85,7 +85,7 @@ def parse_decision(text):
 
 
 # La note est facultative (Romain, 05/10/2026 : « si on est d'accord avec l'erreur décrite sur le report, il n'y a pas de raison de commenter »).
-INSTRUCTIONS = ("Feedback on this report: answer **true** (true positive), **false** (false positive) or **discuss**. "
+INSTRUCTIONS = ("Feedback on this report: answer **true** (the error is real), **false** (false positive) or **discuss**. "
                 "Agree with the error described: **true** is enough, no note. Otherwise, add a note after the word "
                 "(« false: the AllKeyShop page is a DLC »). The French words (vrai, faux, à discuter) work too. Only the "
                 "people allowed on the bot can decide. The decision is saved in the Price check admin; the monitor takes "

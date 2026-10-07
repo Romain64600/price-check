@@ -1206,6 +1206,15 @@ def is_base_edition(edition_name):
     return not any(canonical_edition(w) in aks for w in EDITION_WORDS if w != "standard")
 
 
+def same_edition(a, b):
+    """Deux noms de la même édition, synonymes d'édition compris, sans le mot « edition » (Romain, 07/10/2026, Q7 de la
+    récolte : « Digital deluxe edition = Deluxe edition », « a good rule ») : Black Myth Wu Kong Xbox Series chez Eneba et
+    Driffle, « digital-deluxe-edition » rangée en Deluxe sur une page qui a aussi « Digital Deluxe Edition »."""
+    def core(edition):
+        return canonical_edition(" ".join(t for t in norm(edition).split("-") if t and t != "edition"))
+    return core(a) == core(b)
+
+
 def page_edition_reason(offer, words, product=""):
     """Romain, 06/10/2026 (revue des doutes : Stellaris Nova Edition rangée en Deluxe, Galaxy Edition en Limited, Explorer
     en Bonus ; Black Ops 3 Zombies Chronicles en Limited ; F1 25 Iconic Edition en Standard) : l'URL nomme une autre
@@ -1221,7 +1230,7 @@ def page_edition_reason(offer, words, product=""):
     own_score = named(aks)
     found = []
     for other in offer.get("page_editions") or []:
-        if other == aks or named(other) <= own_score:
+        if other == aks or same_edition(other, aks) or named(other) <= own_score:
             # l'URL ne nomme pas mieux cette édition que celle de l'offre (GTA 5 : « premium online edition … great white
             # shark card » rangée en « Premium + Great White Card », pas en « Enhanced + Great White Shark Card »)
             continue
@@ -2963,7 +2972,8 @@ def write_status(directory, status):
         write_shared(os.path.join(directory, STATUS_FILE), dict(status, updated_at=time.strftime("%Y-%m-%dT%H:%M:%S%z")))
     except OSError as e:
         log.warning("status.json non écrit : %s", e)
-DECISIONS = {"vrai": "True positive: alert", "faux": "False positive: do not alert", "a_discuter": "To discuss"}
+# « true », pas « true positive » (Romain, 07/10/2026 : « ça ne se dit pas true positive »)
+DECISIONS = {"vrai": "True: alert", "faux": "False positive: do not alert", "a_discuter": "To discuss"}
 
 
 def read_decisions(directory):
@@ -2988,7 +2998,7 @@ def read_decisions(directory):
 # aussi) : le bot ouvre un fil sur chaque alerte et note dans threads.json, par offre, le dernier fil ouvert (salon,
 # mode du webhook, serveur). Le moniteur y poste les suites de l'offre et en donne le lien à l'admin.
 THREADS_FILE = "threads.json"
-DECISION_LABELS = {"vrai": "True positive", "faux": "False positive", "a_discuter": "To discuss"}
+DECISION_LABELS = {"vrai": "True", "faux": "False positive", "a_discuter": "To discuss"}
 
 
 def read_threads(directory):
