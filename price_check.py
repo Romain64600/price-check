@@ -3406,16 +3406,19 @@ def ggdeals_rows(rows, memo, now):
 
 def aks_best_price(trans, account=False):
     """Le premier prix AllKeyShop de la page, comparé au « meilleur prix affiché » des concurrents : l'offre en vente la
-    moins chère, toutes éditions, au prix sans frais (« price », pas « priceCard »), parmi les clés, ou parmi les comptes
-    (account=True) : clé contre clé, compte contre compte (Romain, 06/10/2026 : « on ne mélange pas »). STAR WARS
-    Galactic Racer, 06/10/2026 : clé Kinguin 35,59 € (39,95 € avec les frais de carte), compte Kinguin 30,87 €."""
+    moins chère, toutes éditions, **frais de carte compris** (« priceCard », le prix que montre la page et que compte le
+    reste du moniteur ; Romain, 07/10/2026 : « le premier prix AKS n'est pas à jour », le widget montrait le prix sans
+    frais), parmi les clés, ou parmi les comptes (account=True) : clé contre clé, compte contre compte (Romain,
+    06/10/2026 : « on ne mélange pas »). Les frais du concurrent s'ajoutent à la main (fee / error). STAR WARS Galactic
+    Racer, 07/10/2026 : clé Driffle 39,70 € avec frais de carte (36,99 € sans), Kinguin 39,95 € (35,59 € sans)."""
     editions = trans.get("editions") or {}
     offers = [p for p in trans.get("prices") or [] if p.get("dispo") and p.get("price") not in (None, NO_PRICE)
               and bool(p.get("account")) == account]
     if not offers:
         return None
-    best = min(offers, key=lambda p: (p["price"], str(p.get("id"))))
-    return {"price": round(best["price"], 2), "merchant": best.get("merchantName"), "account": bool(best.get("account")),
+    card = lambda p: p.get("priceCard") if isinstance(p.get("priceCard"), (int, float)) else p["price"]
+    best = min(offers, key=lambda p: (card(p), str(p.get("id"))))
+    return {"price": round(card(best), 2), "merchant": best.get("merchantName"), "account": bool(best.get("account")),
             "edition": (editions.get(str(best.get("edition"))) or {}).get("name", str(best.get("edition")))}
 
 

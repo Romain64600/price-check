@@ -3154,9 +3154,13 @@ class TestCompetitors20261006(unittest.TestCase):
             {"id": 2, "price": 35.59, "priceCard": 39.95, "dispo": 1, "edition": "1", "merchantName": "Kinguin"},
             {"id": 3, "price": 30.87, "priceCard": 34.70, "dispo": 1, "edition": "1", "merchantName": "Kinguin", "account": True},
             {"id": 4, "price": 20.00, "priceCard": 20.00, "dispo": 0, "edition": "1", "merchantName": "Épuisé"}]}
-        # clé contre clé, compte contre compte (Romain, 06/10/2026)
-        self.assertEqual(pc.aks_best_price(trans), {"price": 35.59, "merchant": "Kinguin", "account": False, "edition": "Standard"})
-        self.assertEqual(pc.aks_best_price(trans, account=True), {"price": 30.87, "merchant": "Kinguin", "account": True, "edition": "Standard"})
+        # clé contre clé, compte contre compte (Romain, 06/10/2026) ; frais de carte compris, comme la page (07/10/2026)
+        self.assertEqual(pc.aks_best_price(trans), {"price": 39.95, "merchant": "Kinguin", "account": False, "edition": "Standard"})
+        self.assertEqual(pc.aks_best_price(trans, account=True), {"price": 34.7, "merchant": "Kinguin", "account": True, "edition": "Standard"})
+        # le premier prix de la page avec les frais de carte n'est pas forcément le moins cher sans frais (STAR WARS, 07/10)
+        driffle = dict(trans, prices=[{"id": 5, "price": 35.59, "priceCard": 39.95, "dispo": 1, "edition": "1", "merchantName": "Kinguin"},
+                                      {"id": 6, "price": 36.99, "priceCard": 39.70, "dispo": 1, "edition": "1", "merchantName": "Driffle"}])
+        self.assertEqual(pc.aks_best_price(driffle)["merchant"], "Driffle")
         self.assertEqual(pc.compare_prices({"price": 30.87}, {"price": 32.48}), "aks")
         # Romain, 06/10/2026 : « couleur orange quand on est au même prix que le concurrent » (au centime près)
         self.assertEqual(pc.compare_prices({"price": 32.48}, {"price": 32.48}), "same")
