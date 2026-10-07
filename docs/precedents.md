@@ -188,7 +188,7 @@ Les points de la récolte des décisions du 06/10, réglés par Romain dans l'on
 | Question | Cas | Décision de Romain | Effet dans le moniteur |
 |---|---|---|---|
 | Q1 | World of Warcraft: Forever · Heroic Pack chez Driffle (140501637), jugée faux | « Yes please » : précédent avec un test | aucun changement (déjà OK) |
-| Q2 | Cyberpunk 2077 PS5 · Ultimate au PS Store (135588553) : code produit `EXPANSION1B00000` sans le nom du jeu, page illisible ; jugée faux par Rémy | « still report if we have a doubt » | aucun changement : un doute part toujours (principe 8) |
+| Q2 | Cyberpunk 2077 PS5 · Ultimate au PS Store (135588553) : code produit `EXPANSION1B00000` sans le nom du jeu, page illisible ; jugée faux par Rémy | « still report if we have a doubt » | aucun changement : un doute part toujours (principe 8). Le doute est levé : la fiche française, lue avec Camoufox le 07/10, est « Cyberpunk 2077 : Édition Ultime (PS5) », 69,99 € ; la version en-gb que lit le moniteur n'existe pas (produit absent de la boutique britannique) |
 | Q4 | The Last of Us Part II Remastered chez GAMIVO, clé ROW affichée EUROPE (136411763), jugée faux par Rémy | « Rien, reste SUSPECT » | aucun changement (principe 18) |
 | Q5 | The Witcher 3 Wild Hunt et Ace Combat 8 introuvables chez gg.deals : Steam les nomme « The Witcher 3: Wild Hunt — Remastered » (292030) et « ACE COMBAT 8: WINGS OF THEVE » (2288340) | « Oui, les 2 alias » | `aliases.toml` |
 | Q6 | EA SPORTS FC 26 Xbox chez Lootbar à 64 % du deuxième prix (140375811), vérifiée à la main | « We keep the 70% rules » | aucun changement (principe 20) |
@@ -196,7 +196,7 @@ Les points de la récolte des décisions du 06/10, réglés par Romain dans l'on
 | Q8 | Escape from Tarkov, la boutique de l'éditeur (135633063) | « Keep it » | `merchants/battlestategames.toml` gardé |
 | Q9 | The Blood of Dawnwalker · Deluxe chez Eneba, « eclipse-edition-deluxe » (140458058) | « eclipse-edition-deluxe = deluxe » | aucun changement : à égalité, pas d'alerte depuis le 06/10 (principe 19) |
 | Q10 | Les vrais positifs confirmés : 20 à la récolte, 55 au 07/10, tous réparés depuis | « No change » | aucun changement de règle |
-| Q12 | Camoufox, pour les versions d'AllKeyShop qui refusent l'UA AKS/Staff et pour les pentests | « Prends Camoufox, on fera n'importe quel domaine » ; d'abord pour les pages marchands que Chromium ne lit pas | voir [detection.md](detection.md) |
+| Q12 | Camoufox, pour les versions d'AllKeyShop qui refusent l'UA AKS/Staff et pour les pentests | « Prends Camoufox, on fera n'importe quel domaine » ; d'abord pour les pages marchands que Chromium ne lit pas | installé (`/opt/camoufox`, `tools/camoufox_dom.py`), pas branché : il lit G2A et le PS Store, pas Driffle ni Loaded, et l'URL suffit presque toujours chez eux (voir [exploitation.md](exploitation.md)) |
 
 Q3 (The Last of Us Part II Remastered chez G2A, le doute G2A jugé faux) : pas de précédent, à la demande de Romain.
 

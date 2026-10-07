@@ -169,8 +169,8 @@ Testé sur les pages EA SPORTS FC 27 (Popular #1) et Dynasty Warriors 3 Complete
 
 - **PlanetPlay** : URL = identifiant (`/store/games/6a6cb903…`), la page s'ouvre avec Chromium ; 3 contrôles, OK.
 - **Steam `/sub/` et `/bundle/`** (packs) : URL = numéro, la page donne le titre (Chromium ou HTTP).
-- **PS Store** : URL = code produit, page lue en HTTP (JSON : nom et édition), en en-gb pour les boutiques européennes.
-- **Driffle, Loaded, Wyrel** : pages illisibles (anti-robot), l'URL fait foi : elle nomme presque toujours le produit. Une URL Driffle sans nom (code seul) sortirait en NON VÉRIFIABLE.
+- **PS Store** : URL = code produit, page lue en HTTP (JSON : nom et édition), en en-gb pour les boutiques européennes. Un produit absent de la boutique britannique reste illisible : la version en-gb répond « This probably isn't what you're looking for » (Cyberpunk 2077 PS5, `EXPANSION1B00000` ; la fiche française, lue avec Camoufox le 07/10/2026 : « Cyberpunk 2077 : Édition Ultime (PS5) », 69,99 €).
+- **Driffle, Loaded, Wyrel** : pages illisibles (anti-robot), l'URL fait foi : elle nomme presque toujours le produit. Driffle et Loaded refusent aussi Camoufox (essai du 07/10/2026) : l'adresse du serveur est bloquée. G2A, « Access Denied » pour Chromium, se lit avec Camoufox (pas branché : l'URL G2A suffit presque toujours). Une URL Driffle sans nom (code seul) sortirait en NON VÉRIFIABLE.
 - **EA.com** : `…/ea-sports-fc/fc-27/buy/checkout` ; le nom est reconnu en entier depuis le 01/10/2026 (`fc-27`, le préfixe « EA Sports » est facultatif).
 - **Amazon** : ignoré (`skip = true`) depuis l'arbitrage du 01/10/2026.
 
