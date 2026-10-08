@@ -214,6 +214,27 @@ class TestAnalyzeSuspects(unittest.TestCase):
         self.assertEqual(self.reasons("EA SPORTS FC 27", "https://shop.example/ea-sports-fc-27-steam-key-global", region="EUROPE"), [])
         self.assertEqual(self.reasons("EA SPORTS FC 27", "https://shop.example/ea-sports-fc-27-steam-key-europe", region="GIFT EU"), [])
 
+    def test_us_key_allowed_global_everywhere_europe_on_console(self):
+        # Romain, 08/10/2026 : « same for the US. It's allowed on AllKeyShop.com EU and US », « if you have a US offer on an
+        # EURO page for PC it's not okay, but for console, it's okay to be displayed »
+        pc_us = "https://shop.example/ea-sports-fc-27-pc-steam-key-united-states"
+        self.assertEqual(self.reasons("EA SPORTS FC 27", pc_us, region="GLOBAL"), [])
+        self.assertEqual(self.reasons("EA SPORTS FC 27", pc_us, region="EUROPE", region_filter="STEAM EU"),
+                         ["region: AllKeyShop EUROPE, merchant US"])
+        self.assertEqual(self.reasons("EA SPORTS FC 27", pc_us, region="GERMANY", region_filter="STEAM GERMANY"),
+                         ["region: AllKeyShop GERMANY, merchant US"])
+        console_us = "https://shop.example/ea-sports-fc-27-xbox-series-x-s-key-united-states"
+        self.assertEqual(self.reasons("EA SPORTS FC 27 Xbox Series", console_us, region="EUROPE", region_filter="XBOX EU", platform="xbox"), [])
+        self.assertEqual(self.reasons("EA SPORTS FC 27 Xbox Series", console_us, region="GLOBAL", platform="xbox"), [])
+        self.assertEqual(self.reasons("EA SPORTS FC 27 PS5", "https://shop.example/ea-sports-fc-27-ps5-usa",
+                                      region="EUROPE", region_filter="PSN EU", platform="playstation-store"), [])
+        # un pays d'Europe affiché sur console : toujours comparé
+        self.assertEqual(self.reasons("EA SPORTS FC 27 Xbox Series", console_us, region="GERMANY", region_filter="XBOX GERMANY CODE", platform="xbox"),
+                         ["region: AllKeyShop GERMANY, merchant US"])
+        # une clé Europe seule affichée GLOBAL : inchangé (Stellaris, formation du 30/09/2026)
+        self.assertEqual(self.reasons("EA SPORTS FC 27", "https://shop.example/ea-sports-fc-27-steam-key-europe", region="GLOBAL"),
+                         ["region: AllKeyShop GLOBAL, merchant EU"])
+
     def test_gift_region_has_no_geography(self):
         # Faux positif du 30/09/2026 : Screamer 2026 Deluxe chez K4G, « steam-europe-instant-altergift » affiché GIFT
         url = "https://k4g.com/product/screamer-steam-europe-instant-altergift-digital-deluxe-edition-alter-gift-X9G4J5WN?r=aks"
@@ -3500,6 +3521,27 @@ class TestCurrencyQuantities20261008(unittest.TestCase):
         ow = "Overwatch 2 Coins Xbox Series"
         self.assertEqual(reasons("2000 Coins + 200", "https://k4g.com/product/overwatch-coins-xbox-live-xbox-global-instant-cd-key-2000-cd-key-885C4C67", ow), [])
         self.assertEqual(reasons("10000 Coins", "https://www.instant-gaming.com/en/12995-buy-overwatch-10000-overwatch-coins-xbox-series-x-s-xbox-one-microsoft-store/", ow), [])
+
+    def test_a_wallet_card_is_for_one_country(self):
+        # Romain, 08/10/2026 : « ajoute le contrôle du pays pour les wallets » (une carte PSN est liée au pays du compte)
+        def reasons(region, url, edition="1050 FC Points", product="EA Sports FC 27 Points PS5"):
+            o = {"edition": edition, "region": "WALLET " + region, "region_filter": "PSN WALLET " + region,
+                 "platform": "playstation-store", "merchantName": "Vidaplayer", "account": False}
+            return pc.analyze(product, o, pc.url_text(url), "URL")["reasons"]
+        vida = "https://www.vidaplayer.com/en/product/dlc-playstation-4-5-%s/ea-sports-fc-27-1050-fc-points"
+        self.assertEqual(reasons("DE", vida % "germany"), [])
+        self.assertEqual(reasons("SP", vida % "spain"), [])
+        self.assertEqual(reasons("IT", vida % "italy"), [])
+        self.assertEqual(reasons("DE", "https://x.com/ea-sports-fc-27-1050-fc-points-ps5"), [], "no country named: nothing to compare")
+        self.assertEqual(reasons("DE", vida % "spain"), ["region: AllKeyShop WALLET DE, merchant spain"])
+        self.assertEqual(reasons("IT", vida % "germany"), ["region: AllKeyShop WALLET IT, merchant germany"])
+        # « united-kingdom » est déjà un mot de zone : une seule raison de région
+        uk = [r for r in reasons("US", vida % "united-kingdom") if r.startswith("region")]
+        self.assertEqual(len(uk), 1, uk)
+        # hors recharge, un nom de pays n'est pas une zone (« Vive la France! », DLC d'Euro Truck Simulator 2)
+        o = {"edition": "DLC", "region": "GLOBAL", "region_filter": "STEAM GLOBAL", "platform": "steam", "merchantName": "x", "account": False}
+        self.assertFalse(any("merchant france" in r for r in pc.analyze(
+            "Euro Truck Simulator 2", o, pc.url_text("https://x.com/euro-truck-simulator-2-vive-la-france-dlc-steam-key"), "URL")["reasons"]))
 
     def test_the_other_pages_keep_the_page_s_second_price(self):
         # Resident Evil 4 PS5 chez GAMESEAL (vrai positif du 07/10) : le DLC à 7,79 €, 49 % de la Gold du PS Store UK

@@ -1100,6 +1100,20 @@ def japan_allowed(product, offer):
     return "playstation" in aks_platform_groups(offer) or page_console(product) == "playstation"
 
 
+US_OK_ZONES_PC = ("GLOBAL",)
+US_OK_ZONES_CONSOLE = ("GLOBAL", "EU", "EUUS", "EMEA")
+
+
+def us_key_allowed(product, offer, zone, found):
+    """Une clé des seuls États-Unis est admise affichée GLOBAL (AllKeyShop.com vend en Europe et aux États-Unis), et sur
+    console aussi affichée EUROPE ; sur PC, une clé US affichée EUROPE reste une erreur (Romain, 08/10/2026 : « if you
+    have a US offer on an EURO page for PC it's not okay, but for console, it's okay to be displayed »)."""
+    if found != {"US"}:
+        return False
+    console = bool(aks_platform_groups(offer) & set(CONSOLE_GROUPS)) or page_console(product) is not None
+    return zone in (US_OK_ZONES_CONSOLE if console else US_OK_ZONES_PC)
+
+
 def aks_zone(offer):
     """Zone de la région AllKeyShop, d'après son nom de filtre (« STEAM EU », « XBOX GERMANY CODE »...).
     Un gift n'a pas de zone comparée (formation du 30/09/2026, K4G Screamer 2026). None = inconnue."""
@@ -1384,8 +1398,11 @@ def analyze(product, offer, text, source, region=None):
         reason("zone", "forbidden region: " + ", ".join(forbidden))
     zone = aks_zone(offer)
     found = merchant_zones(region_words)
-    if zone and found and not ZONE_COVERAGE[zone] <= zone_coverage(found):
+    if zone and found and not ZONE_COVERAGE[zone] <= zone_coverage(found) and not us_key_allowed(product, offer, zone, found):
         reason("zone", "region: AllKeyShop %s, merchant %s" % (offer["region"], "/".join(sorted(found))))
+    wallet = wallet_country_reason(offer, region_words)
+    if wallet and "zone" not in kinds:  # « united-kingdom », « usa » : déjà des mots de zone, une seule raison
+        reason("zone", wallet)
     if any(has(w) for w in GIFT_WORDS) and not is_gift_region(offer):
         reason("gift", "gift at the merchant, shown as a key %s" % offer["region"])
     # plateforme : sur tous les mots, car « Xbox Series » fait partie du nom AllKeyShop et de l'URL
@@ -2333,6 +2350,33 @@ def currency_quantity(edition):
 # Points », « Fortnite V-Bucks », « Overwatch 2 Coins », « … COD Points ») ; devant eux, le nom du jeu
 CURRENCY_NAME_WORDS = {"virtual", "currency", "pack", "points", "point", "coins", "coin", "v", "bucks", "vbucks", "credits",
                        "gems", "tokens", "crystals", "shards", "vc", "cod"}
+
+
+# Le pays d'une recharge (WALLET) : une carte PSN est liée au pays du compte (Romain, 08/10/2026 : « ajoute le contrôle du
+# pays pour les wallets »). Ailleurs, un nom de pays n'est pas un mot de zone (« Vive la France! » est un DLC) ; sur une
+# offre WALLET, le pays que nomme l'URL doit être celui de la recharge (Vidaplayer « /dlc-playstation-4-5-spain/ » en
+# WALLET SP). Noms entiers seulement : les codes de deux lettres sont aussi des codes de langue.
+WALLET_COUNTRIES = {
+    "DE": ("germany", "deutschland"), "IT": ("italy", "italia"), "SP": ("spain", "espana"), "ES": ("spain", "espana"),
+    "FR": ("france",), "UK": ("united-kingdom", "uk", "england", "great-britain"), "GB": ("united-kingdom", "uk", "england", "great-britain"),
+    "US": ("usa", "united-states", "us"), "PL": ("poland", "polska"), "PT": ("portugal",), "NL": ("netherlands", "holland"),
+    "BE": ("belgium",), "AT": ("austria",), "CH": ("switzerland",), "IE": ("ireland",), "SE": ("sweden",), "NO": ("norway",),
+    "DK": ("denmark",), "FI": ("finland",), "CZ": ("czech", "czechia"), "HU": ("hungary",), "RO": ("romania",),
+    "GR": ("greece",), "TR": ("turkey",), "BR": ("brazil",), "MX": ("mexico",), "CA": ("canada",), "AU": ("australia",),
+    "JP": ("japan",), "IN": ("india",), "SA": ("saudi-arabia",), "AE": ("uae", "emirates"),
+}
+
+
+def wallet_country_reason(offer, words):
+    """Raison de SUSPECT quand l'URL d'une offre WALLET nomme un autre pays que celui de la recharge, ou None."""
+    m = re.search(r"\bWALLET\s+([A-Z]{2})\b", ("%s %s" % (offer.get("region_filter") or "", offer.get("region") or "")).upper())
+    if not m or m.group(1) not in WALLET_COUNTRIES:
+        return None
+    has = lambda name: re.search(r"(^|-)%s(-|$)" % re.escape(name), words) is not None
+    named = sorted({n for names in WALLET_COUNTRIES.values() for n in names if has(n)})
+    if not named or any(has(n) for n in WALLET_COUNTRIES[m.group(1)]):
+        return None
+    return "region: AllKeyShop %s, merchant %s" % (offer.get("region") or m.group(0), "/".join(named))
 
 
 def points_page_names_game(names, edition, normed):

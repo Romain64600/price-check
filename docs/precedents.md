@@ -214,7 +214,7 @@ Romain : « On va aller sur les Vbucks, tout ce qui est en points. […] Ce n'es
 | Overwatch 2 Coins ×2, K4G (135830435), Instant Gaming (134716975) | « Overwatch Coins », sans le 2 : le nom officiel de la monnaie | « Alias Overwatch Coins » | `aliases.toml` |
 | Overwatch 2 Coins · 1000 Coins, Kinguin (135035567) | fiche du lien en rupture, Kinguin sert une autre fiche | — | **gardé** : une vraie rupture à signaler |
 
-Note de la revue : le moniteur ne lit pas le pays d'une URL (« germany », « spain » : des noms de DLC aussi, principe des zones) ; pour les 13 offres Vidaplayer, le pays de la catégorie et la région WALLET d'AllKeyShop concordent (DE ↔ germany, SP ↔ spain).
+**Le pays d'une recharge** (Romain, 08/10/2026 : « ajoute le contrôle du pays pour les wallets ») : sur une offre WALLET, le pays que nomme l'URL doit être celui de la recharge (`wallet_country_reason`) ; une carte PSN Espagne rangée en WALLET DE est une erreur. Ailleurs, un nom de pays reste hors des mots de zone (des noms de DLC aussi). Les 68 offres WALLET en mémoire concordent : la règle ne change rien aujourd'hui (`test_a_wallet_card_is_for_one_country`).
 
 ## Ce que l'étude a appris sur AllKeyShop
 
