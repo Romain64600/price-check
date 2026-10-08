@@ -3516,6 +3516,10 @@ class TestCurrencyQuantities20261008(unittest.TestCase):
                 ("450000 VC", "https://wyrel.com/en/buy-cheap-nba-2k25-450000-vc-xbox-series-x-149121")):
             with self.subTest(url=url):
                 self.assertEqual(reasons(edition, url), [])
+        # le nom compte pour trouvé (sinon check_offer ouvre la page : chez Wyrel, illisible, l'offre sortait À VÉRIFIER)
+        o = {"edition": "450000 VC", "region": "XBOX X|S", "region_filter": "XBOX X|S GLOBAL", "platform": "xbox",
+             "merchantName": "Wyrel", "account": False}
+        self.assertIsNotNone(pc.analyze(product, o, "buy-cheap-nba-2k25-450000-vc-xbox-series-x-149121", "URL", region="global")["match"])
         # un autre jeu de la série, ou le jeu sans sa monnaie, sur la page des points : l'alerte reste
         self.assertTrue(any(r.startswith("another product") for r in reasons("15000 VC", "https://x.com/nba-2k26-15-000-vc-xbox-series-x-s-key")))
         self.assertTrue(any(r.startswith(("another product", "product name not found"))

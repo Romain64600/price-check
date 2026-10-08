@@ -1377,6 +1377,7 @@ def analyze(product, offer, text, source, region=None):
         # (audit du 02/10/2026 : sans ce mot, une URL Sonic passait sur la page de The Witcher 3 en « Starter Pack »)
         notes.append("edition %s: name not fully checked (one word of the name present)" % offer["edition"])
     elif match is None and points_page_names_game(names, offer["edition"], normed):
+        match = "partial"  # le nom est trouvé : sans quoi check_offer ouvrirait la page (Wyrel : illisible, À VÉRIFIER)
         notes.append("points page: the merchant names the game and its currency")
     elif match is None:
         label = merchant_label(text, source)
