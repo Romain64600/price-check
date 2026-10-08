@@ -2711,13 +2711,14 @@ def page_guesses(product):
             "https://www.allkeyshop.com/blog/buy-%s-compare-prices/" % slug] if slug else []
 
 
-def recheck_orphans(state, followed, notify, checker=None, now=None):
+def recheck_orphans(state, followed, notify, checker=None, now=None, select=None, limit=ORPHAN_LIMIT):
     """Romain, 06/10/2026 : « les bugs qui ont été traités et réparés par Rémy sont re-reportés ». Une offre signalée dont
     la page n'est plus dans les listes suivies (GTA 4, Warhammer 40k Space Marine 2 : sortis du TOP 50) n'était plus jamais
     recontrôlée : réparée par l'équipe (rangée dans la bonne édition, retirée de la page), elle restait SUSPECT, « à
     corriger » dans l'admin et dans le rappel du matin. Sa page est relue directement et recheck_flagged y fait le même
     travail que sur une page suivie : retirée = réparée, encore là = recontrôlée. Une entrée sans sa page la retrouve par le
-    nom du produit (page_guesses), si le titre de la page le confirme. Renvoie le bilan."""
+    nom du produit (page_guesses), si le titre de la page le confirme. Renvoie le bilan. Avec `followed` vide, toutes les
+    offres signalées (le recalcul des reports, 08/10/2026) ; `select` choisit les entrées (celles d'un mode)."""
     checker = checker or check_offer
     now = time.time() if now is None else now
     stamp = time.strftime("%Y-%m-%d %H:%M", time.localtime(now))
@@ -2726,9 +2727,9 @@ def recheck_orphans(state, followed, notify, checker=None, now=None):
     orphans = {}
     for key, e in state["checked"].items():
         if (e.get("verdict") in REPORTED and not e.get("fixed_at") and (e.get("decision") or {}).get("decision") != "faux"
-                and e.get("page") not in followed):
+                and e.get("page") not in followed and (select is None or select(e))):
             orphans.setdefault(e.get("page") or "", []).append(e)
-    for page_url, entries in list(orphans.items())[:ORPHAN_LIMIT]:
+    for page_url, entries in list(orphans.items())[:limit]:
         check_stop()
         product = entries[0].get("product")
         found = None
@@ -2758,8 +2759,10 @@ def recheck_orphans(state, followed, notify, checker=None, now=None):
         outcome["pages"] += 1
         outcome["offers"] += len(entries)
         first = entries[0]
+        # les offres d'un autre mode sur la même page : recontrôlées avec leur mode (leurs suites dans leur salon)
+        skip = {k for k, e in state["checked"].items() if select is not None and e.get("page") == url and not select(e)}
         recheck_flagged(first.get("list") or "", first.get("rank") or 0, product, url, trans, state, notify, checker, stamp, now,
-                        outcome, reroute=False)
+                        outcome, skip=skip, reroute=False)
     return outcome
 
 
@@ -3047,6 +3050,8 @@ REPORTED = ("SUSPECT", "À VÉRIFIER", "NON VÉRIFIABLE")
 REQUEST_FILE = "run-%s.request"  # déposé par l'admin : un passage demandé pour un mode (run-top-games.request)
 STATUS_FILE = "status.json"  # écrit par le moniteur pour l'admin : l'état de chaque mode
 REQUEST_POLL = 5  # s entre deux lectures des demandes de l'admin pendant l'attente
+RECALC_FILE = "recalc.request"  # déposé par l'admin (bouton « Recalculate the reports ») : {"by", "at"}
+RECALC_LIMIT = 200  # pages au plus par recalcul (les reports ouverts : quelques dizaines)
 
 
 def take_requests(directory, modes):
@@ -3071,6 +3076,24 @@ def take_requests(directory, modes):
             continue
         found.append((mode, by or "admin"))
     return found
+
+
+def take_recalc(directory):
+    """La demande de recalcul des reports déposée par l'admin, lue puis supprimée : qui l'a demandée, ou None."""
+    path = os.path.join(directory or "", RECALC_FILE)
+    if not directory or not os.path.exists(path):
+        return None
+    by = ""
+    try:
+        with open_shared(path) as f:
+            by = str(json.load(f).get("by") or "")
+    except (OSError, ValueError, AttributeError):
+        pass
+    try:
+        os.remove(path)
+    except OSError:
+        return None
+    return by or "admin"
 
 
 def write_shared(path, payload):
@@ -3931,6 +3954,67 @@ def main():
             export_reports(state, REPORTS_DIR, pages, page_modes_of({m: targets[m] for m in modes}))
         save_state(args.state, state)
 
+    # Romain, 08/10/2026 : « un bouton Recalcule ou, toi, penser à recalculer lorsqu'on fait une modification » : les
+    # reports ouverts sont recontrôlés tout de suite avec les règles du moment, au démarrage (une règle changée redémarre le
+    # moniteur) et à la demande de l'admin (recalc.request), sur leur page, sans attendre le passage de leur mode.
+    recalc_pending = ["the monitor's start"]
+
+    def recalc():
+        try:
+            by = take_recalc(REPORTS_DIR)
+        except Exception:
+            log.exception("lecture de la demande de recalcul impossible")
+            by = None
+        if by:
+            recalc_pending[:] = [by]
+        if args.dry_run or not recalc_pending or not all(targets[m] for m in modes):
+            return  # listes pas encore lues : l'export des reports en a besoin
+        by = recalc_pending.pop()
+        requested = None if by == "the monitor's start" else by
+        if requested:
+            log.info("recalcul des reports demandé depuis l'admin par %s", requested)
+        status["recalc"] = {"by": by, "at": stamp_iso(), "running": True}
+        publish_status()
+        totals = {"offers": 0, "fixed": 0, "rules": 0, "verified": 0, "still": 0, "unknown": 0}
+        for m in modes:
+            loop = new_loop(m)
+            to_urgent = None if urgent_notifier is None else (lambda msg, _loop=loop: announce(_loop, "urgent", urgent_notifier, msg))
+
+            def notify(msg, _m=m, _loop=loop, _urgent=to_urgent):
+                route_alert(msg, _m, lambda x: announce(_loop, _m, notifiers[_m], x), _urgent)
+            try:
+                outcome = recheck_orphans(state, set(), notify, limit=RECALC_LIMIT,
+                                          select=lambda e, _m=m: (e.get("mode") if e.get("mode") in modes else modes[0]) == _m)
+            except Stop:
+                raise
+            except Exception:
+                log.exception("recalcul des reports en échec (%s)", m)
+                continue
+            last_recheck[m] = time.monotonic()
+            for k, v in (("offers", outcome["offers"]), ("fixed", len(outcome["fixed"]) + len(outcome["removed"])),
+                         ("rules", len(outcome["rules"])), ("verified", len(outcome["verified"])),
+                         ("still", len(outcome["still"])), ("unknown", len(outcome["unknown"]))):
+                totals[k] += v
+            if REPORTS_DIR:
+                post_follow_ups(state, outcome, read_threads(REPORTS_DIR), send_to_thread)
+            if outcome["offers"]:
+                recap = format_recheck(MODES[m]["label"], requested, outcome)
+                log.info("%s", recap.replace("\n", " | "))
+                if recap_due(requested, outcome):
+                    try:
+                        announce(loop, m, notifiers[m], recap)
+                    except Exception as e:
+                        log.error("Envoi Discord du récapitulatif impossible : %s", e)
+        log.info("recalcul des reports (%s) : %d offre(s) recontrôlée(s), %d réparée(s), %d levée(s) par une règle, "
+                 "%d vérifiée(s), %d toujours en erreur, %d sans conclusion", by, totals["offers"], totals["fixed"],
+                 totals["rules"], totals["verified"], totals["still"], totals["unknown"])
+        status["recalc"] = dict(status["recalc"], running=False, end=stamp_iso(), **totals)
+        publish_status()
+        if REPORTS_DIR:
+            pages = {t[2]: (t[0], t[1], t[3]) for m in modes for t in targets[m]}
+            export_reports(state, REPORTS_DIR, pages, page_modes_of({m: targets[m] for m in modes}))
+        save_state(args.state, state)
+
     competitors_due = [time.monotonic() + 60]
 
     def competitors():
@@ -3962,6 +4046,7 @@ def main():
         honor_requests()
         flush_alerts(every=60)
         daily_reminder()
+        recalc()
         orphans()
         competitors()
         for m in modes:
@@ -3979,6 +4064,7 @@ def main():
             check_stop()
             flush_alerts()
             daily_reminder()
+            recalc()
             orphans()
             competitors()
             honor_requests()
@@ -3992,6 +4078,7 @@ def main():
                 check_stop()
                 publish_status()
                 time.sleep(max(1, min(REQUEST_POLL, wait_until - time.monotonic())))
+                recalc()  # le bouton « Recalculate the reports » : vu en quelques secondes
                 if honor_requests():
                     break
     except Stop:

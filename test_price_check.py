@@ -2966,6 +2966,41 @@ class TestOrphanPages20261006(unittest.TestCase):
         self.assertNotIn("https://www.allkeyshop.com/blog/buy-suivi-cd-key-compare-prices/", fetched)
 
 
+class TestRecalc20261008(unittest.TestCase):
+    """Romain, 08/10/2026 : « un bouton Recalcule ou, toi, penser à recalculer lorsqu'on fait une modification » : les
+    reports ouverts recontrôlés tout de suite avec les règles du moment, au démarrage et à la demande de l'admin."""
+
+    def test_the_admin_request_is_read_once(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as d:
+            self.assertIsNone(pc.take_recalc(d))
+            with open(os.path.join(d, pc.RECALC_FILE), "w") as f:
+                json.dump({"by": "romain", "at": "2026-10-08T12:30:00+02:00"}, f)
+            self.assertEqual(pc.take_recalc(d), "romain")
+            self.assertFalse(os.path.exists(os.path.join(d, pc.RECALC_FILE)))
+            self.assertIsNone(pc.take_recalc(d))
+        self.assertIsNone(pc.take_recalc(""))
+
+    def test_every_open_report_is_rechecked_on_its_page_followed_or_not(self):
+        orphans = TestOrphanPages20261006()
+        page = orphans.GTA4
+        flagged = lambda **kw: dict({"verdict": "SUSPECT", "reasons": ["x"], "at": "2026-10-08 09:00", "url": "https://store.steampowered.com/app/12210/",
+                                     "merchant": "Steam", "edition": "Standard", "region": "GLOBAL", "region_filter": "STEAM GLOBAL",
+                                     "platform": "steam", "product": "GTA 4", "page": page}, **kw)
+        state = {"checked": {"80523": flagged(mode="homepage"), "80524": flagged(mode="top-games"),
+                             "2": flagged(mode="homepage", decision={"decision": "faux", "by": "remy"})}}
+        trans = orphans.trans({"id": 80523, "edition": "1"}, {"id": 80524, "edition": "1"})
+        ok = lambda product, o: {"verdict": "OK", "method": "URL", "url": "https://store.steampowered.com/app/12210/", "notes": [], "reasons": []}
+        with mock.patch.object(pc, "http_get", return_value=(200, None, "<title>GTA 4</title>")), \
+             mock.patch.object(pc, "parse_game_page", return_value=trans), mock.patch.object(pc, "PAGE_DELAY", 0):
+            outcome = pc.recheck_orphans(state, set(), [].append, checker=ok, select=lambda e: e.get("mode") == "homepage")
+        # la page est suivie, mais le recalcul la relit ; seules les offres du mode choisi, jamais celles jugées faux
+        self.assertEqual((outcome["pages"], outcome["offers"]), (1, 1))
+        self.assertEqual((state["checked"]["80523"]["verdict"], state["checked"]["80523"]["fixed_kind"]), ("OK", "rule"))
+        self.assertEqual(state["checked"]["80524"]["verdict"], "SUSPECT", "another mode's offer")
+        self.assertNotIn("fixed_at", state["checked"]["2"])
+
+
 class TestStillWrongAfterAFix20261006(unittest.TestCase):
     """Romain, 06/10/2026 : « nous avons les URL en cache sur AllKeyShop pendant 24 heures. Donc c'est bien de reporter
     quand on a encore le problème, car ça nous oblige à aller effacer ce cache » ; Warhammer 40k Space Marine 2, réparé par
