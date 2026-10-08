@@ -1100,20 +1100,6 @@ def japan_allowed(product, offer):
     return "playstation" in aks_platform_groups(offer) or page_console(product) == "playstation"
 
 
-US_OK_ZONES_CONSOLE = ("EU", "EUUS", "EMEA")
-
-
-def us_key_allowed(product, offer, zone, found):
-    """Une clé des seuls États-Unis est admise affichée EUROPE sur console seulement (Romain, 08/10/2026 : « if you have
-    a US offer on an EURO page for PC it's not okay, but for console, it's okay to be displayed »). Affichée GLOBAL,
-    elle alerte toujours, comme une clé Europe seule (Romain, 08/10/2026 : « une clé en US affichant global doit
-    toujours alerter, comme une clé en EURO affichant global »)."""
-    if found != {"US"}:
-        return False
-    console = bool(aks_platform_groups(offer) & set(CONSOLE_GROUPS)) or page_console(product) is not None
-    return console and zone in US_OK_ZONES_CONSOLE
-
-
 def aks_zone(offer):
     """Zone de la région AllKeyShop, d'après son nom de filtre (« STEAM EU », « XBOX GERMANY CODE »...).
     Un gift n'a pas de zone comparée (formation du 30/09/2026, K4G Screamer 2026). None = inconnue."""
@@ -1399,7 +1385,7 @@ def analyze(product, offer, text, source, region=None):
         reason("zone", "forbidden region: " + ", ".join(forbidden))
     zone = aks_zone(offer)
     found = merchant_zones(region_words)
-    if zone and found and not ZONE_COVERAGE[zone] <= zone_coverage(found) and not us_key_allowed(product, offer, zone, found):
+    if zone and found and not ZONE_COVERAGE[zone] <= zone_coverage(found):
         reason("zone", "region: AllKeyShop %s, merchant %s" % (offer["region"], "/".join(sorted(found))))
     wallet = wallet_country_reason(offer, region_words)
     if wallet and "zone" not in kinds:  # « united-kingdom », « usa » : déjà des mots de zone, une seule raison

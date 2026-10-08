@@ -214,27 +214,18 @@ class TestAnalyzeSuspects(unittest.TestCase):
         self.assertEqual(self.reasons("EA SPORTS FC 27", "https://shop.example/ea-sports-fc-27-steam-key-global", region="EUROPE"), [])
         self.assertEqual(self.reasons("EA SPORTS FC 27", "https://shop.example/ea-sports-fc-27-steam-key-europe", region="GIFT EU"), [])
 
-    def test_us_key_allowed_shown_europe_on_console_only(self):
-        # Romain, 08/10/2026 : « if you have a US offer on an EURO page for PC it's not okay, but for console, it's okay to
-        # be displayed » ; « une clé en US affichant global doit toujours alerter, comme une clé en EURO affichant global »
-        pc_us = "https://shop.example/ea-sports-fc-27-pc-steam-key-united-states"
-        self.assertEqual(self.reasons("EA SPORTS FC 27", pc_us, region="GLOBAL"), ["region: AllKeyShop GLOBAL, merchant US"])
-        self.assertEqual(self.reasons("EA SPORTS FC 27", pc_us, region="EUROPE", region_filter="STEAM EU"),
-                         ["region: AllKeyShop EUROPE, merchant US"])
-        self.assertEqual(self.reasons("EA SPORTS FC 27", pc_us, region="GERMANY", region_filter="STEAM GERMANY"),
-                         ["region: AllKeyShop GERMANY, merchant US"])
+    def test_us_key_shown_europe_alerts_on_console_too(self):
+        # Romain, 08/10/2026 : « Clé US seule affichée US sur console : pas d'alerte ; clé US seule affichée EUROPE sur console
+        # ou PC : on donne toujours l'alerte » (une tolérance console, ajoutée le matin même, a été retirée)
         console_us = "https://shop.example/ea-sports-fc-27-xbox-series-x-s-key-united-states"
-        self.assertEqual(self.reasons("EA SPORTS FC 27 Xbox Series", console_us, region="EUROPE", region_filter="XBOX EU", platform="xbox"), [])
-        self.assertEqual(self.reasons("EA SPORTS FC 27 Xbox Series", console_us, region="GLOBAL", platform="xbox"),
-                         ["region: AllKeyShop GLOBAL, merchant US"])
+        self.assertEqual(self.reasons("EA SPORTS FC 27 Xbox Series", console_us, region="USA", region_filter="XBOX USA", platform="xbox"), [])
+        self.assertEqual(self.reasons("EA SPORTS FC 27 Xbox Series", console_us, region="EUROPE", region_filter="XBOX EU", platform="xbox"),
+                         ["region: AllKeyShop EUROPE, merchant US"])
         self.assertEqual(self.reasons("EA SPORTS FC 27 PS5", "https://shop.example/ea-sports-fc-27-ps5-usa",
-                                      region="EUROPE", region_filter="PSN EU", platform="playstation-store"), [])
-        # un pays d'Europe affiché sur console : toujours comparé
-        self.assertEqual(self.reasons("EA SPORTS FC 27 Xbox Series", console_us, region="GERMANY", region_filter="XBOX GERMANY CODE", platform="xbox"),
-                         ["region: AllKeyShop GERMANY, merchant US"])
-        # une clé Europe seule affichée GLOBAL : inchangé (Stellaris, formation du 30/09/2026)
-        self.assertEqual(self.reasons("EA SPORTS FC 27", "https://shop.example/ea-sports-fc-27-steam-key-europe", region="GLOBAL"),
-                         ["region: AllKeyShop GLOBAL, merchant EU"])
+                                      region="EUROPE", region_filter="PSN EU", platform="playstation-store"),
+                         ["region: AllKeyShop EUROPE, merchant US"])
+        self.assertEqual(self.reasons("EA SPORTS FC 27", "https://shop.example/ea-sports-fc-27-pc-steam-key-united-states",
+                                      region="EUROPE", region_filter="STEAM EU"), ["region: AllKeyShop EUROPE, merchant US"])
 
     def test_gift_region_has_no_geography(self):
         # Faux positif du 30/09/2026 : Screamer 2026 Deluxe chez K4G, « steam-europe-instant-altergift » affiché GIFT
@@ -2074,11 +2065,7 @@ class TestDetectionAudit20261002(unittest.TestCase):
         r = lambda url, **kw: pc.analyze("EA SPORTS FC 27 PS5", offer(platform="playstation", **kw), pc.url_text(url), "URL")["reasons"]
         cjs = "https://www.cjs-cdkeys.com/products/EA-SPORTS-FC-27-Standard-Edition-PSN-Download-Key-%28Playstation%29-UNITED-STATES.html"
         self.assertEqual(r(cjs, region="USA", region_filter="USA"), [])  # clé US affichée USA : rien
-        # clé US affichée EUROPE sur console : admise depuis le 08/10/2026 (Romain) ; sur PC elle alerte toujours
-        self.assertEqual(r(cjs, region="EUROPE", region_filter="PSN EU"), [])
-        self.assertEqual(pc.analyze("EA SPORTS FC 27", offer(platform="steam", region="EUROPE", region_filter="STEAM EU"),
-                                    pc.url_text("https://shop.example/ea-sports-fc-27-pc-steam-key-united-states"), "URL")["reasons"],
-                         ["region: AllKeyShop EUROPE, merchant US"])
+        self.assertEqual(r(cjs, region="EUROPE", region_filter="PSN EU"), ["region: AllKeyShop EUROPE, merchant US"])
         self.assertEqual(r("https://shop.example/ea-sports-fc-27-ps5-united-kingdom", region="GLOBAL", region_filter="PSN GLOBAL"),
                          ["region: AllKeyShop GLOBAL, merchant UK"])
         self.assertEqual(pc.analyze("Among Us VR", offer(), pc.url_text("https://www.loaded.com/among-us-3d-vr-pc-steam"), "URL")["reasons"], [])
@@ -2473,8 +2460,8 @@ class TestDecisions20261005(unittest.TestCase):
 
     def test_narrower_zones_shown_global_still_alert(self):
         """Jamais au prix d'une erreur manquée : l'Europe seule, les États-Unis seuls, ou ROW (Monster Hunter Wilds chez
-        G2A, vrai positif) restent plus étroits que GLOBAL (Romain, 08/10/2026 : « une clé en US affichant global doit
-        toujours alerter, comme une clé en EURO affichant global »)."""
+        G2A, vrai positif) restent plus étroits que GLOBAL (confirmé par Romain le 08/10/2026 : « une clé en US affichant
+        global doit toujours alerter, comme une clé en EURO affichant global »)."""
         for url, found in (("https://gameseal.com/star-wars-galactic-racer-pc-steam-key-eu", "EU"),
                            ("https://www.example-shop.com/star-wars-galactic-racer-steam-key-united-states", "US"),
                            ("https://www.g2a.com/star-wars-galactic-racer-pc-steam-key-row-i10000", "ROW")):
