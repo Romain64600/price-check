@@ -3633,6 +3633,11 @@ class TestDecisionsReview20261008(unittest.TestCase):
         o = {"edition": "+ 600", "region": "EU XBOX X|S", "region_filter": "XBOX X|S EUROPE", "platform": "xbox", "merchantName": "Eneba", "account": False}
         url = "https://www.eneba.com/xbox-fortnite-mainframe-break-pack-600-v-bucks-xbox-live-key-europe"
         self.assertEqual(pc.analyze("Fortnite Mainframe Break Pack Xbox Series", o, pc.url_text(url), "URL")["reasons"], [])
+        # des points ou des coins aussi (Romain, 08/10/2026 : « une édition +600, +100, etc. annonce une monnaie ou des points »)
+        for edition, url in (("+ 100", "https://x.com/ea-sports-fc-27-mainframe-pack-100-fc-points-xbox-series-x-s-key"),
+                             ("+1000", "https://x.com/fortnite-mainframe-break-pack-1000-coins-xbox-series-x-s-key")):
+            product = "EA Sports FC 27 Mainframe Pack Xbox Series" if "fc-27" in url else "Fortnite Mainframe Break Pack Xbox Series"
+            self.assertFalse(any(r.startswith("in-game currency") for r in pc.analyze(product, dict(o, edition=edition), pc.url_text(url), "URL")["reasons"]), edition)
         # la même URL sur une édition Standard reste de la monnaie vendue comme le jeu
         self.assertTrue(any(r.startswith("in-game currency") for r in
                             pc.analyze("Fortnite Mainframe Break Pack Xbox Series", dict(o, edition="Standard"), pc.url_text(url), "URL")["reasons"]))
