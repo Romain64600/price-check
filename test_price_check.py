@@ -2073,7 +2073,11 @@ class TestDetectionAudit20261002(unittest.TestCase):
         r = lambda url, **kw: pc.analyze("EA SPORTS FC 27 PS5", offer(platform="playstation", **kw), pc.url_text(url), "URL")["reasons"]
         cjs = "https://www.cjs-cdkeys.com/products/EA-SPORTS-FC-27-Standard-Edition-PSN-Download-Key-%28Playstation%29-UNITED-STATES.html"
         self.assertEqual(r(cjs, region="USA", region_filter="USA"), [])  # clé US affichée USA : rien
-        self.assertEqual(r(cjs, region="EUROPE", region_filter="PSN EU"), ["region: AllKeyShop EUROPE, merchant US"])
+        # clé US affichée EUROPE sur console : admise depuis le 08/10/2026 (Romain) ; sur PC elle alerte toujours
+        self.assertEqual(r(cjs, region="EUROPE", region_filter="PSN EU"), [])
+        self.assertEqual(pc.analyze("EA SPORTS FC 27", offer(platform="steam", region="EUROPE", region_filter="STEAM EU"),
+                                    pc.url_text("https://shop.example/ea-sports-fc-27-pc-steam-key-united-states"), "URL")["reasons"],
+                         ["region: AllKeyShop EUROPE, merchant US"])
         self.assertEqual(r("https://shop.example/ea-sports-fc-27-ps5-united-kingdom", region="GLOBAL", region_filter="PSN GLOBAL"),
                          ["region: AllKeyShop GLOBAL, merchant UK"])
         self.assertEqual(pc.analyze("Among Us VR", offer(), pc.url_text("https://www.loaded.com/among-us-3d-vr-pc-steam"), "URL")["reasons"], [])
@@ -2467,10 +2471,10 @@ class TestDecisions20261005(unittest.TestCase):
                 self.assertEqual(self.reasons("STAR WARS Galactic Racer", url, region="GLOBAL", region_filter="STEAM GLOBAL"), [])
 
     def test_narrower_zones_shown_global_still_alert(self):
-        """Jamais au prix d'une erreur manquée : l'Europe seule, les États-Unis seuls, ou ROW (Monster Hunter Wilds chez
-        G2A, vrai positif) restent plus étroits que GLOBAL."""
+        """Jamais au prix d'une erreur manquée : l'Europe seule ou ROW (Monster Hunter Wilds chez G2A, vrai positif)
+        restent plus étroits que GLOBAL. Les États-Unis seuls affichés GLOBAL : admis depuis le 08/10/2026 (Romain),
+        voir test_us_key_allowed_global_everywhere_europe_on_console."""
         for url, found in (("https://gameseal.com/star-wars-galactic-racer-pc-steam-key-eu", "EU"),
-                           ("https://www.example-shop.com/star-wars-galactic-racer-steam-key-united-states", "US"),
                            ("https://www.g2a.com/star-wars-galactic-racer-pc-steam-key-row-i10000", "ROW")):
             with self.subTest(found):
                 self.assertEqual(self.reasons("STAR WARS Galactic Racer", url, region="GLOBAL", region_filter="STEAM GLOBAL"),
@@ -2519,8 +2523,12 @@ class TestDecisions20261005(unittest.TestCase):
         self.assertIn("region read on the page, from the key's activation countries: eu-us", res["notes"])
 
     def test_gameboost_key_without_europe_still_alerts(self):
+        # ROW sans l'Europe ni les États-Unis : toujours une erreur. Une clé des seuls États-Unis affichée GLOBAL ne l'est
+        # plus (Romain, 08/10/2026 : « It's allowed on AllKeyShop.com EU and US »)
+        res = self.check({"br", "in", "cn"})
+        self.assertEqual((res["verdict"], res["reasons"]), ("SUSPECT", ["region: AllKeyShop GLOBAL, merchant ROW"]))
         res = self.check({"us", "br", "in"})
-        self.assertEqual((res["verdict"], res["reasons"]), ("SUSPECT", ["region: AllKeyShop GLOBAL, merchant US"]))
+        self.assertEqual((res["verdict"], res["reasons"]), ("OK", []))
 
     # -- Les vrais positifs de Rémy : le moniteur doit continuer d'alerter
     def test_the_true_positives_of_05_10_still_alert(self):
