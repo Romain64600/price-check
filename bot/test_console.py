@@ -173,6 +173,27 @@ class TestQuestionsForRomain(ConsoleCase):
         self.assertEqual(self.saved("questions.json")["questions"][0]["source"], "console")
 
 
+class TestDoubtsOnReports20261008(ConsoleCase):
+    """Romain, 08/10/2026 : « quand tu as un doute sur les reports, tu peux les renvoyer sur l'onglet Romain »."""
+
+    def test_claude_puts_a_report_to_romain_with_its_links(self):
+        c = self.console()
+        self.request(kind="ask", user="claude", offer="136576203", text="Ready Or Not: the Keycense LSPD Bundle filed under Bundle?",
+                     links={"page": "https://www.allkeyshop.com/blog/buy-ready-or-not-cd-key-compare-prices/",
+                            "merchant": "https://www.keycense.com/ready-or-not-lspd-bundle-steam",
+                            "thread": "https://discord.com/channels/1/2", "evil": "javascript:alert(1)", "page2": "http://x"})
+        c.take_requests()
+        self.assertEqual(self.claude.calls, [], "a doubt never runs Claude")
+        q = self.saved("questions.json")["questions"][-1]
+        self.assertEqual((q["from"], q["source"], q["offer"], q["status"]), ("claude", "report", "136576203", "open"))
+        self.assertEqual(sorted(q["links"]), ["merchant", "page", "thread"])
+        self.assertTrue(self.saved("console.json")["messages"][-1]["text"].startswith("Claude put %s to Romain" % q["id"]))
+        # Romain settles it from his tab like any other question
+        self.request(kind="close", user="romain", question=q["id"], note="it is misfiled, true")
+        c.take_requests()
+        self.assertEqual(self.saved("questions.json")["questions"][-1]["status"], "closed")
+
+
 class TestRobustness(ConsoleCase):
     def test_a_request_cut_by_a_restart_is_not_run_again(self):
         with open(os.path.join(self.dir, "console-1-x.work"), "w") as f:

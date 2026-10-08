@@ -145,10 +145,11 @@ class Store:
     def open_questions(self):
         return [q for q in self.questions["questions"] if q.get("status") == "open"]
 
-    def add_question(self, text, by, label, source, message=None):
+    def add_question(self, text, by, label, source, message=None, **extra):
         n = max([int(q["id"][1:]) for q in self.questions["questions"] if re.fullmatch(r"Q\d+", str(q.get("id")))] or [0]) + 1
         q = {"id": "Q%d" % n, "at": now_iso(), "from": by, "from_label": label, "source": source, "text": text.strip()[:2000],
              "message": message, "status": "open"}
+        q.update({k: v for k, v in extra.items() if v})  # a doubt on a report: « offer » and its « links »
         self.questions["questions"].append(q)
         return q
 
@@ -250,6 +251,8 @@ class Console:
         """Une demande de l'admin : message, récolte, question réglée, nouvelle session. Refusée si elle ne vient pas de
         Romain ou de l'équipe, ou si elle demande ce que seul Romain peut faire."""
         user, kind = str(request.get("user") or ""), request.get("kind")
+        if kind == "ask":
+            return self.ask(request)
         label = self.label(user)
         if not label:
             log.warning("demande refusée : %s n'a pas accès à la console", user)
@@ -281,6 +284,18 @@ class Console:
             return
         asked = self.store.message(user, label, "message", shown)
         self.reply(user, label, owner, text, asked)
+
+    def ask(self, request):
+        """Romain, 08/10/2026 : « quand tu as un doute sur les reports, tu peux les renvoyer sur l'onglet Romain » : une
+        question déposée par Claude depuis le terminal (tools/ask_romain.py), avec l'offre et ses liens (page AllKeyShop,
+        offre chez le marchand, fil Discord) ; l'onglet Romain les affiche sur la carte."""
+        text = str(request.get("text") or "").strip()[:MAX_TEXT]
+        if not text:
+            return
+        links = {k: str(v) for k, v in (request.get("links") or {}).items()
+                 if k in ("page", "merchant", "thread") and isinstance(v, str) and v.startswith("https://")}
+        q = self.store.add_question(text, "claude", "Claude", "report", offer=str(request.get("offer") or "") or None, links=links)
+        self.store.message("console", "Console", "system", "Claude put %s to Romain (doubt on a report): %s" % (q["id"], text[:160]))
 
     def reply(self, user, label, owner, text, asked):
         if not self.binary:
