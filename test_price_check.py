@@ -187,6 +187,26 @@ class TestAnalyzeSuspects(unittest.TestCase):
         r = self.reasons("EA SPORTS FC 27", "https://shop.example/ea-sports-fc-27-pc-steam-key-ru-cis")
         self.assertEqual(r, ["forbidden region: ru, cis"])
 
+    def test_japan_allowed_on_playstation_only(self):
+        # Romain, 08/10/2026 : « We will allow Japan for PlayStation, but PlayStation only » (Spider-Man 2 PS5, Kinguin JP
+        # affichée JAPAN, offre 136075794)
+        url = "https://kinguin.net/en/category/217145/marvel-s-spider-man-2-jp-ps5-cd-key"
+        self.assertEqual(self.reasons("Marvel's Spider-Man 2 PS5", url, region="JAPAN", region_filter="JAPAN",
+                                      platform="playstation-store"), [])
+        # la page nomme la console, sans activationPlatform
+        self.assertEqual(self.reasons("Marvel's Spider-Man 2 PS5", url, region="JAPAN", region_filter="JAPAN", platform=""), [])
+        # une clé JP affichée autrement reste une erreur
+        self.assertEqual(self.reasons("Marvel's Spider-Man 2 PS5", url, region="GLOBAL", platform="playstation-store"),
+                         ["forbidden region: jp"])
+        # Japon sur PC (Steam) : toujours interdit, même affiché JAPAN
+        self.assertEqual(self.reasons("Elden Ring", "https://shop.example/elden-ring-pc-steam-key-japan",
+                                      region="JAPAN", region_filter="STEAM JAPAN", platform="steam"),
+                         ["forbidden region: japan"])
+        # un autre pays sur PlayStation : interdit
+        self.assertEqual(self.reasons("Marvel's Spider-Man 2 PS5", "https://shop.example/marvels-spider-man-2-ps5-kr",
+                                      region="KOREA", region_filter="KOREA", platform="playstation-store"),
+                         ["forbidden region: kr"])
+
     def test_region_family_mismatch(self):
         self.assertEqual(self.reasons("EA SPORTS FC 27", "https://shop.example/ea-sports-fc-27-steam-key-europe", region="GLOBAL"),
                          ["region: AllKeyShop GLOBAL, merchant EU"])

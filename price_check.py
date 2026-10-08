@@ -147,6 +147,7 @@ REGION_FAMILIES = {z: MERCHANT_ZONE_WORDS[z] for z in ("GLOBAL", "EU", "ROW")}  
 FORBIDDEN_REGION_WORDS = ("ru", "russia", "russian", "cis", "asia", "sea", "latam", "latin-america",
                           "india", "tr", "turkey", "cn", "china", "ar", "argentina", "br", "brazil",
                           "jp", "japan", "kr", "korea", "mena", "africa", "za")
+JAPAN_WORDS = ("jp", "japan")
 GIFT_WORDS = ("gift", "altergift")
 ACCOUNT_WORDS = ("account", "accounts", "offline-account", "shared-account")
 DLC_WORDS = ("dlc", "season-pass", "expansion", "soundtrack", "upgrade", "add-on", "pass")  # « pass », « add-on » : audit du 02/10/2026
@@ -1091,6 +1092,14 @@ def is_gift_region(offer):
     return "GIFT" in region_text_of(offer)
 
 
+def japan_allowed(product, offer):
+    """Une clé japonaise est admise quand AllKeyShop l'affiche JAPAN sur une offre PlayStation (Romain, 08/10/2026 :
+    « We will allow Japan for PlayStation, but PlayStation only »)."""
+    if not re.search(r"\bJAPAN\b|\bJP\b", region_text_of(offer)):
+        return False
+    return "playstation" in aks_platform_groups(offer) or page_console(product) == "playstation"
+
+
 def aks_zone(offer):
     """Zone de la région AllKeyShop, d'après son nom de filtre (« STEAM EU », « XBOX GERMANY CODE »...).
     Un gift n'a pas de zone comparée (formation du 30/09/2026, K4G Screamer 2026). None = inconnue."""
@@ -1367,6 +1376,10 @@ def analyze(product, offer, text, source, region=None):
     if not offer["account"] and any(has(w) for w in ACCOUNT_WORDS):
         reason("account", "account at the merchant, entered as a key")
     forbidden = [w for w in FORBIDDEN_REGION_WORDS if has(w, region_words)]
+    if forbidden and japan_allowed(product, offer):
+        # Romain, 08/10/2026 : « We will allow Japan for PlayStation, but PlayStation only » (Spider-Man 2 PS5, clé JP
+        # Kinguin affichée JAPAN). Les autres pays restent interdits, et le Japon sur toute autre plateforme
+        forbidden = [w for w in forbidden if w not in JAPAN_WORDS]
     if forbidden:
         reason("zone", "forbidden region: " + ", ".join(forbidden))
     zone = aks_zone(offer)
