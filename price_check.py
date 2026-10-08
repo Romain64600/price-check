@@ -1353,6 +1353,8 @@ def analyze(product, offer, text, source, region=None):
         # un bundle porte un autre nom (« The Witcher Trilogy Pack ») ; mais un mot distinctif du nom y est
         # (audit du 02/10/2026 : sans ce mot, une URL Sonic passait sur la page de The Witcher 3 en « Starter Pack »)
         notes.append("edition %s: name not fully checked (one word of the name present)" % offer["edition"])
+    elif match is None and points_page_names_game(names, offer["edition"], normed):
+        notes.append("points page: the merchant names the game and its currency")
     elif match is None:
         label = merchant_label(text, source)
         result_label = label
@@ -1392,6 +1394,11 @@ def analyze(product, offer, text, source, region=None):
     dlc = [w for w in DLC_WORDS if has(w)]
     if "season-pass" in dlc and "pass" in dlc:
         dlc.remove("pass")  # le même mot
+    # une quantité de monnaie est vendue comme un DLC (Vidaplayer « /product/dlc-playstation-4-5-spain/…-2800-fc-points »,
+    # Kinguin « overwatch-2-1000-coins-dlc-… ») : le mot « dlc » y est attendu, pas un season pass ni une extension
+    # (Romain, 08/10/2026 : « règle simple » ; 14 offres FC 27 Points et Overwatch 2 Coins levées, rien d'autre)
+    if "dlc" in dlc and currency_quantity(offer["edition"]):
+        dlc.remove("dlc")
     # « pre-order-bonus-dlc » est le bonus vendu avec le jeu ; « Standard + DLC Bundle » l'annonce ;
     # sur la page d'un DLC (édition « DLC » présente), le mot est attendu
     if (dlc and not has("bonus") and not announces_extra_content(offer["edition"]) and not offer.get("page_dlc")
@@ -2301,13 +2308,60 @@ def page_slug_words(page_url):
 PRICE_GAP = 0.70  # Romain, 06/10/2026 : un premier prix de page sous 70 % du deuxième prix est une alerte urgente
 
 
+def currency_quantity(edition):
+    """L'édition est une quantité de monnaie de jeu : un nombre et un mot de monnaie (« 800 V-Bucks », « 1050 FC Points »,
+    « 15000 VC », « 2000 Coins + 200 »)."""
+    e = norm(edition or "")
+    return bool(re.search(r"(^|-)\d{3,}(-|$)", e)) and any(re.search(r"(^|-)%s(-|$)" % p, e)
+                                                          for p in CURRENCY_EDITION_PHRASES + ("vc",))
+
+
+# Les mots de monnaie qui finissent le nom d'une page de points (« NBA 2K25 Virtual Currency Pack », « EA Sports FC 27
+# Points », « Fortnite V-Bucks », « Overwatch 2 Coins », « … COD Points ») ; devant eux, le nom du jeu
+CURRENCY_NAME_WORDS = {"virtual", "currency", "pack", "points", "point", "coins", "coin", "v", "bucks", "vbucks", "credits",
+                       "gems", "tokens", "crystals", "shards", "vc", "cod"}
+
+
+def points_page_names_game(names, edition, normed):
+    """Romain, 08/10/2026 (NBA 2K25 VC, 11 offres « another product ») : « si on est bien sur la page AllKeyShop
+    correspondant aux points c'est ok, par contre si les points sont sur la page du jeu c'est une erreur » (la seconde
+    moitié : `currency_reason`). Sur une page de points (l'offre est rangée dans une quantité de monnaie), l'URL qui nomme
+    le jeu et la monnaie de la page est le produit, même avec la quantité au milieu (« nba-2k25-15-000-virtual-currency-
+    pack ») ou le sigle VC (« nba-2k25-vc-xbox »). Le jeu seul (sans la monnaie) ou un autre jeu (NBA 2K26) restent signalés."""
+    if not currency_quantity(edition):
+        return False
+    text = normed
+    for q in re.findall(r"\d{3,}", norm(edition)):  # la quantité de l'édition, « 15000 » ou « 15-000 »
+        for form in {q, "%s-%s" % (q[:-3], q[-3:])}:
+            text = re.sub(r"(^|-)%s(?=-|$)" % re.escape(form), "", text)
+    for name in names:
+        words = norm(name).split("-")
+        suffix = []
+        while words and words[-1] in CURRENCY_NAME_WORDS:
+            suffix.insert(0, words.pop())
+        if not suffix or not words:
+            continue
+        currency = set(suffix) - {"pack", "v"}
+        if {"virtual", "currency"} <= currency:
+            currency.add("vc")
+        if "bucks" in currency:
+            currency.add("vbucks")
+        if (name_match((" ".join(words),), text.strip("-"), extra_ok=set()) is not None
+                and any(re.search(r"(^|-)%s(-|$)" % w, text) for w in currency)):
+            return True
+    return False
+
+
 def price_gap(offer, offers):
     """Le premier prix (clé) de la page comparé au deuxième prix de clé de la page : (rapport, offre suivante) quand il est
-    sous PRICE_GAP, sinon None."""
+    sous PRICE_GAP, sinon None. Une quantité de monnaie se compare à la même quantité (Romain, 08/10/2026 : « il faut
+    qu'on compare les prix avec le même nombre de points ou de V-Bucks » : Fortnite V-Bucks PS5, les 800 V-Bucks d'Eneba
+    à 15,61 € comparés aux 2400 V-Bucks à 37,89 €)."""
     if not offer.get("page_first") or offer.get("account") or not offer.get("price"):
         return None
-    others = sorted((o for o in offers if not o.get("account") and str(o.get("id")) != str(offer.get("id")) and o.get("price")),
-                    key=lambda o: o["price"])
+    same = currency_quantity(offer.get("edition"))
+    others = sorted((o for o in offers if not o.get("account") and str(o.get("id")) != str(offer.get("id")) and o.get("price")
+                     and (not same or o.get("edition") == offer.get("edition"))), key=lambda o: o["price"])
     if not others:
         return None
     ratio = offer["price"] / others[0]["price"]

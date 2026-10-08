@@ -3409,6 +3409,86 @@ class TestRomainTab20261007(unittest.TestCase):
         self.assertIn("64 %", res["reasons"][0])
 
 
+class TestCurrencyQuantities20261008(unittest.TestCase):
+    """Romain, 08/10/2026 : « si on prend l'exemple des Vbucks, tu verras que ce n'est pas le même nombre de Vbucks. Donc,
+    qu'on compare les prix, il faut qu'on compare les prix avec le même nombre de points ou de Vbucks. »"""
+
+    def test_a_quantity_of_currency_is_compared_with_the_same_quantity(self):
+        # Fortnite V-Bucks PS5 (140251759) : les 800 V-Bucks d'Eneba à 15,61 €, seuls de leur quantité, alertés à 41 % des
+        # 2400 V-Bucks (37,89 €) ; au V-Buck, c'est même la carte la plus chère (1,95 c contre 1,58 c)
+        page = [offer(id=1, price=15.61, edition="800 V-Bucks", page_first=True, merchantName="Eneba"),
+                offer(id=2, price=37.89, edition="2400 V-Bucks", merchantName="Eneba"),
+                offer(id=3, price=44.60, edition="2800 V-Bucks", merchantName="CJS CDKeys")]
+        self.assertIsNone(pc.price_gap(page[0], page))
+        # la même quantité bien plus chère ailleurs : l'alerte reste
+        page.append(offer(id=4, price=25.00, edition="800 V-Bucks", merchantName="Kinguin"))
+        ratio, nxt = pc.price_gap(page[0], page)
+        self.assertEqual((round(100 * ratio), nxt["id"]), (62, 4))
+
+    def test_what_is_a_quantity_of_currency(self):
+        for edition in ("800 V-Bucks", "1050 FC Points", "15000 VC", "1000 Coins", "2000 Coins + 200", "5000 COD Points"):
+            with self.subTest(edition=edition):
+                self.assertTrue(pc.currency_quantity(edition))
+        for edition in ("Standard", "Gold", "2026 Season Edition", "1 Year Anniversary Edition", "Standard + Great White Shark Card",
+                        "DLC", "Bundle 3", "25th Anniversary Edition"):
+            with self.subTest(edition=edition):
+                self.assertFalse(pc.currency_quantity(edition))
+
+    def test_dlc_is_expected_on_a_quantity_of_currency(self):
+        # Romain, 08/10/2026 (« règle simple ») : 13 offres FC 27 Points de Vidaplayer, dont 140522002 jugée faux par
+        # Romain (« PSN wallet DE = points playstation Germany »), et Overwatch 2 Coins chez Kinguin (136290300)
+        def reasons(product, edition, url, **kw):
+            o = dict({"edition": edition, "region": "WALLET DE", "region_filter": "PSN WALLET DE", "platform": "playstation-store",
+                      "merchantName": "Vidaplayer", "account": False}, **kw)
+            return pc.analyze(product, o, pc.url_text(url), "URL")["reasons"]
+        self.assertEqual(reasons("EA Sports FC 27 Points PS5", "1050 FC Points",
+                                 "https://www.vidaplayer.com/en/product/dlc-playstation-4-5-germany/ea-sports-fc-27-1050-fc-points"), [])
+        self.assertEqual(reasons("Overwatch 2 Coins Xbox Series", "1000 Coins",
+                                 "https://www.kinguin.net/en/category/293896/overwatch-2-1000-coins-dlc-eu-xbox-one-xbox-series-x-s-cd-key",
+                                 region="EU IN ENGLISH ONLY", region_filter="EU IN ENGLISH ONLY", platform="xbox", merchantName="Kinguin"), [])
+        # un season pass vendu sur une quantité de monnaie reste signalé, et le DLC sur la page d'un jeu aussi
+        self.assertIn("additional content: season-pass",
+                      reasons("EA Sports FC 27 Points PS5", "1050 FC Points", "https://x.com/ea-sports-fc-27-1050-fc-points-season-pass-dlc"))
+        self.assertTrue(any(r.startswith("additional content") for r in reasons(
+            "Hearts of Iron 4", "Standard", "https://x.com/hearts-of-iron-4-arms-against-tyranny-dlc-steam-key",
+            region="GLOBAL", region_filter="STEAM GLOBAL", platform="steam")))
+
+    def test_on_a_points_page_the_game_and_its_currency_name_the_product(self):
+        # Romain, 08/10/2026 : « si on est bien sur la page AllKeyShop correspondant aux points c'est ok, par contre si les
+        # points sont sur la page du jeu c'est une erreur » (NBA 2K25 VC, 11 offres « another product »)
+        product = "NBA 2K25 Virtual Currency Pack Xbox Series"
+        def reasons(edition, url, product=product):
+            o = {"edition": edition, "region": "XBOX X|S", "region_filter": "XBOX X|S GLOBAL", "platform": "xbox",
+                 "merchantName": "x", "account": False}
+            return pc.analyze(product, o, pc.url_text(url), "URL")["reasons"]
+        for edition, url in (
+                ("15000 VC", "https://www.instant-gaming.com/en/16386-buy-nba-2k25-15-000-virtual-currency-pack-15-000-xbox-series-x-s-xbox-one-game-microsoft-store/"),
+                ("15000 VC", "https://kinguin.net/category/270390/nba-2k25-15-000-vc-pack-xbox-one-xbox-series-x-s-cd-key"),
+                ("15000 VC", "https://k4g.com/product/nba-2k25-vc-xbox-one-series-x-s-xbox-global-15000-cd-key-BCD2023D"),
+                ("35000 VC", "https://www.eneba.com/xbox-nba-2k25-35-000-vc-xbox-one-xbox-series-x-s-key-global"),
+                ("450000 VC", "https://wyrel.com/en/buy-cheap-nba-2k25-450000-vc-xbox-series-x-149121")):
+            with self.subTest(url=url):
+                self.assertEqual(reasons(edition, url), [])
+        # un autre jeu de la série, ou le jeu sans sa monnaie, sur la page des points : l'alerte reste
+        self.assertTrue(any(r.startswith("another product") for r in reasons("15000 VC", "https://x.com/nba-2k26-15-000-vc-xbox-series-x-s-key")))
+        self.assertTrue(any(r.startswith(("another product", "product name not found"))
+                            for r in reasons("15000 VC", "https://x.com/nba-2k25-xbox-series-x-s-key-global")))
+        # les points sur la page du jeu : une erreur (principe 12)
+        self.assertTrue(any(r.startswith("in-game currency") for r in reasons(
+            "Standard", "https://x.com/call-of-duty-black-ops-6-5000-cod-points-xbox-key", product="Call of Duty Black Ops 6 Xbox Series")))
+        # Overwatch 2 Coins : la monnaie s'appelle « Overwatch Coins » (alias, Romain, 08/10/2026)
+        ow = "Overwatch 2 Coins Xbox Series"
+        self.assertEqual(reasons("2000 Coins + 200", "https://k4g.com/product/overwatch-coins-xbox-live-xbox-global-instant-cd-key-2000-cd-key-885C4C67", ow), [])
+        self.assertEqual(reasons("10000 Coins", "https://www.instant-gaming.com/en/12995-buy-overwatch-10000-overwatch-coins-xbox-series-x-s-xbox-one-microsoft-store/", ow), [])
+
+    def test_the_other_pages_keep_the_page_s_second_price(self):
+        # Resident Evil 4 PS5 chez GAMESEAL (vrai positif du 07/10) : le DLC à 7,79 €, 49 % de la Gold du PS Store UK
+        page = [offer(id=1, price=7.79, edition="DLC", page_first=True, merchantName="GAMESEAL"),
+                offer(id=2, price=15.91, edition="Gold", merchantName="PS Store UK")]
+        ratio, nxt = pc.price_gap(page[0], page)
+        self.assertEqual((round(100 * ratio), nxt["edition"]), (49, "Gold"))
+
+
 class TestSecurityAudit20261002(unittest.TestCase):
     """Audit sécurité du 02/10/2026 : le moniteur tourne en root."""
 

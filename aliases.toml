@@ -39,3 +39,7 @@
 "The Witcher 3 Wild Hunt" = ["The Witcher 3 Wild Hunt Remastered"]
 # Le titre complet d'Ace Combat 8 sur Steam : « ACE COMBAT 8: WINGS OF THEVE » (app 2288340) ; même décision.
 "Ace Combat 8" = ["Ace Combat 8 Wings of Theve"]
+# La monnaie d'Overwatch 2 s'appelle « Overwatch Coins » : K4G (« overwatch-coins-xbox-live-…-2000 », 135830435) et
+# Instant Gaming (« buy-overwatch-10000-overwatch-coins-xbox-series-x-s », 134716975) l'écrivent sans le 2. Romain,
+# 08/10/2026 : « Alias Overwatch Coins ».
+"Overwatch 2 Coins" = ["Overwatch Coins"]
