@@ -3553,6 +3553,28 @@ class TestCurrencyQuantities20261008(unittest.TestCase):
         self.assertFalse(any("merchant france" in r for r in pc.analyze(
             "Euro Truck Simulator 2", o, pc.url_text("https://x.com/euro-truck-simulator-2-vive-la-france-dlc-steam-key"), "URL")["reasons"]))
 
+    def test_the_quantity_named_by_the_url_is_the_edition_s(self):
+        # Romain, 08/10/2026 : « ajoute le contrôle de quantité » (15000 VC rangés en 450000 VC passaient)
+        q = lambda edition, path: pc.quantity_reason(edition, pc.norm(path))
+        self.assertIsNone(q("450000 VC", "buy-cheap-nba-2k25-450000-vc-xbox-series-x-149121"))
+        self.assertEqual(q("450000 VC", "buy-cheap-nba-2k25-15000-vc-xbox-series-x-149121"), "quantity: AllKeyShop 450000 VC, merchant 15000")
+        self.assertIsNone(q("15000 VC", "16386-buy-nba-2k25-15-000-virtual-currency-pack-15-000-xbox-series-x-s"))
+        self.assertIsNone(q("1050 FC Points", "product-dlc-playstation-4-5-germany-ea-sports-fc-27-1050-fc-points"))
+        self.assertEqual(q("2800 FC Points", "ea-sports-fc-27-1050-fc-points"), "quantity: AllKeyShop 2800 FC Points, merchant 1050")
+        self.assertIsNone(q("1000 Coins", "category-168452-overwatch-2-1000-coins-xbox-one-xbox-series-x-s-cd-key"))
+        self.assertIsNone(q("800 V-Bucks", "psn-fortnite-800-v-bucks-ps4-ps5-psn-key-france"))
+        # une édition avec bonus : la quantité de base, le bonus ou le total
+        for path in ("overwatch-2000-coins-xbox", "overwatch-2200-coins-xbox"):
+            self.assertIsNone(q("2000 Coins + 200", path))
+        # pas de quantité à côté de la monnaie (K4G « …-cd-key-2000-cd-key ») : pas de conclusion ; hors monnaie : rien
+        self.assertIsNone(q("2000 Coins + 200", "overwatch-coins-xbox-live-xbox-global-instant-cd-key-2000-cd-key-885c4c67"))
+        self.assertIsNone(q("Standard", "call-of-duty-black-ops-6-5000-cod-points-xbox"))
+        # dans le contrôle complet de l'offre
+        o = {"edition": "450000 VC", "region": "XBOX X|S", "region_filter": "XBOX X|S GLOBAL", "platform": "xbox",
+             "merchantName": "Wyrel", "account": False}
+        self.assertEqual(pc.analyze("NBA 2K25 Virtual Currency Pack Xbox Series", o, "buy-cheap-nba-2k25-15000-vc-xbox-series-x-149121",
+                                    "URL", region="global")["reasons"], ["quantity: AllKeyShop 450000 VC, merchant 15000"])
+
     def test_the_other_pages_keep_the_page_s_second_price(self):
         # Resident Evil 4 PS5 chez GAMESEAL (vrai positif du 07/10) : le DLC à 7,79 €, 49 % de la Gold du PS Store UK
         page = [offer(id=1, price=7.79, edition="DLC", page_first=True, merchantName="GAMESEAL"),

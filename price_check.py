@@ -1422,6 +1422,9 @@ def analyze(product, offer, text, source, region=None):
     er = edition_reason(offer, merchant_editions, words) or page_edition_reason(offer, words, product)
     if er:
         reason("edition", er)
+    qr = quantity_reason(offer["edition"], normed)
+    if qr:
+        reason("edition", qr)
     dlc = [w for w in DLC_WORDS if has(w)]
     if "season-pass" in dlc and "pass" in dlc:
         dlc.remove("pass")  # le même mot
@@ -2378,6 +2381,28 @@ def wallet_country_reason(offer, words):
     if not named or any(has(n) for n in WALLET_COUNTRIES[m.group(1)]):
         return None
     return "region: AllKeyShop %s, merchant %s" % (offer.get("region") or m.group(0), "/".join(named))
+
+
+# Une quantité écrite dans l'URL : un nombre collé à un mot de monnaie (« 450000-vc », « 15-000-vc », « 1050-fc-points »,
+# « 800-v-bucks », « 5000-cod-points ») ; les séparateurs de milliers sous la forme « 15-000 » seulement, pour ne pas
+# coller le numéro du jeu à la quantité (« overwatch-2-1000-coins », « fc-27-1050-fc-points »)
+QUANTITY_RE = re.compile(r"(?:^|-)(\d{1,3}-\d{3}|\d{3,})-(?:fc-|cod-|apex-|riot-)?(?:vc|virtual-currency|points|coins|v-bucks|"
+                         r"vbucks|bucks|credits|gems|tokens|crystals|shards|minecoins|robux)(?=-|$)")
+
+
+def quantity_reason(edition, normed):
+    """Romain, 08/10/2026 (« ajoute le contrôle de quantité ») : sur une quantité de monnaie, la quantité que l'URL écrit à
+    côté de la monnaie doit être celle de l'édition (15000 VC rangés en 450000 VC : une erreur). Le total d'une édition
+    avec bonus compte aussi (« 2000 Coins + 200 » : 2000, 200 ou 2200). Sans quantité lisible, pas de conclusion."""
+    if not currency_quantity(edition):
+        return None
+    found = {int(m.group(1).replace("-", "")) for m in QUANTITY_RE.finditer(normed)}
+    if not found:
+        return None
+    mine = [int(q.replace("-", "")) for q in re.findall(r"\d{1,3}-\d{3}(?!\d)|\d{3,}", norm(edition))]
+    if found & (set(mine) | {sum(mine)}):
+        return None
+    return "quantity: AllKeyShop %s, merchant %s" % (edition, " / ".join(str(q) for q in sorted(found)))
 
 
 def points_page_names_game(names, edition, normed):

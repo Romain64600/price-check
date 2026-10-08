@@ -216,6 +216,8 @@ Romain : « On va aller sur les Vbucks, tout ce qui est en points. […] Ce n'es
 | Overwatch 2 Coins ×2, K4G (135830435), Instant Gaming (134716975) | « Overwatch Coins », sans le 2 : le nom officiel de la monnaie | « Alias Overwatch Coins » | `aliases.toml` |
 | Overwatch 2 Coins · 1000 Coins, Kinguin (135035567) | fiche du lien en rupture, Kinguin sert une autre fiche | — | **gardé** : une vraie rupture à signaler |
 
+**La quantité** (Romain, 08/10/2026 : « ajoute le contrôle de quantité », après « penses-tu qu'on peut fix ce type de faux positif sans risque de passer à côté de reports ? » sur NBA 2K25 VC chez Wyrel) : la règle de la page des points laissait passer une autre quantité (15000 VC rangés en 450000 VC), que le moniteur n'avait jamais comparée ; la quantité collée à la monnaie dans l'URL doit être celle de l'édition (`quantity_reason`). Sur les 59 offres de points en mémoire, aucune ne diffère (`test_the_quantity_named_by_the_url_is_the_edition_s`).
+
 **Le pays d'une recharge** (Romain, 08/10/2026 : « ajoute le contrôle du pays pour les wallets ») : sur une offre WALLET, le pays que nomme l'URL doit être celui de la recharge (`wallet_country_reason`) ; une carte PSN Espagne rangée en WALLET DE est une erreur. Ailleurs, un nom de pays reste hors des mots de zone (des noms de DLC aussi). Les 68 offres WALLET en mémoire concordent : la règle ne change rien aujourd'hui (`test_a_wallet_card_is_for_one_country`).
 
 ## Ce que l'étude a appris sur AllKeyShop
