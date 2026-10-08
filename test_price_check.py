@@ -214,18 +214,19 @@ class TestAnalyzeSuspects(unittest.TestCase):
         self.assertEqual(self.reasons("EA SPORTS FC 27", "https://shop.example/ea-sports-fc-27-steam-key-global", region="EUROPE"), [])
         self.assertEqual(self.reasons("EA SPORTS FC 27", "https://shop.example/ea-sports-fc-27-steam-key-europe", region="GIFT EU"), [])
 
-    def test_us_key_allowed_global_everywhere_europe_on_console(self):
-        # Romain, 08/10/2026 : « same for the US. It's allowed on AllKeyShop.com EU and US », « if you have a US offer on an
-        # EURO page for PC it's not okay, but for console, it's okay to be displayed »
+    def test_us_key_allowed_shown_europe_on_console_only(self):
+        # Romain, 08/10/2026 : « if you have a US offer on an EURO page for PC it's not okay, but for console, it's okay to
+        # be displayed » ; « une clé en US affichant global doit toujours alerter, comme une clé en EURO affichant global »
         pc_us = "https://shop.example/ea-sports-fc-27-pc-steam-key-united-states"
-        self.assertEqual(self.reasons("EA SPORTS FC 27", pc_us, region="GLOBAL"), [])
+        self.assertEqual(self.reasons("EA SPORTS FC 27", pc_us, region="GLOBAL"), ["region: AllKeyShop GLOBAL, merchant US"])
         self.assertEqual(self.reasons("EA SPORTS FC 27", pc_us, region="EUROPE", region_filter="STEAM EU"),
                          ["region: AllKeyShop EUROPE, merchant US"])
         self.assertEqual(self.reasons("EA SPORTS FC 27", pc_us, region="GERMANY", region_filter="STEAM GERMANY"),
                          ["region: AllKeyShop GERMANY, merchant US"])
         console_us = "https://shop.example/ea-sports-fc-27-xbox-series-x-s-key-united-states"
         self.assertEqual(self.reasons("EA SPORTS FC 27 Xbox Series", console_us, region="EUROPE", region_filter="XBOX EU", platform="xbox"), [])
-        self.assertEqual(self.reasons("EA SPORTS FC 27 Xbox Series", console_us, region="GLOBAL", platform="xbox"), [])
+        self.assertEqual(self.reasons("EA SPORTS FC 27 Xbox Series", console_us, region="GLOBAL", platform="xbox"),
+                         ["region: AllKeyShop GLOBAL, merchant US"])
         self.assertEqual(self.reasons("EA SPORTS FC 27 PS5", "https://shop.example/ea-sports-fc-27-ps5-usa",
                                       region="EUROPE", region_filter="PSN EU", platform="playstation-store"), [])
         # un pays d'Europe affiché sur console : toujours comparé
@@ -2471,10 +2472,11 @@ class TestDecisions20261005(unittest.TestCase):
                 self.assertEqual(self.reasons("STAR WARS Galactic Racer", url, region="GLOBAL", region_filter="STEAM GLOBAL"), [])
 
     def test_narrower_zones_shown_global_still_alert(self):
-        """Jamais au prix d'une erreur manquée : l'Europe seule ou ROW (Monster Hunter Wilds chez G2A, vrai positif)
-        restent plus étroits que GLOBAL. Les États-Unis seuls affichés GLOBAL : admis depuis le 08/10/2026 (Romain),
-        voir test_us_key_allowed_global_everywhere_europe_on_console."""
+        """Jamais au prix d'une erreur manquée : l'Europe seule, les États-Unis seuls, ou ROW (Monster Hunter Wilds chez
+        G2A, vrai positif) restent plus étroits que GLOBAL (Romain, 08/10/2026 : « une clé en US affichant global doit
+        toujours alerter, comme une clé en EURO affichant global »)."""
         for url, found in (("https://gameseal.com/star-wars-galactic-racer-pc-steam-key-eu", "EU"),
+                           ("https://www.example-shop.com/star-wars-galactic-racer-steam-key-united-states", "US"),
                            ("https://www.g2a.com/star-wars-galactic-racer-pc-steam-key-row-i10000", "ROW")):
             with self.subTest(found):
                 self.assertEqual(self.reasons("STAR WARS Galactic Racer", url, region="GLOBAL", region_filter="STEAM GLOBAL"),
@@ -2523,12 +2525,8 @@ class TestDecisions20261005(unittest.TestCase):
         self.assertIn("region read on the page, from the key's activation countries: eu-us", res["notes"])
 
     def test_gameboost_key_without_europe_still_alerts(self):
-        # ROW sans l'Europe ni les États-Unis : toujours une erreur. Une clé des seuls États-Unis affichée GLOBAL ne l'est
-        # plus (Romain, 08/10/2026 : « It's allowed on AllKeyShop.com EU and US »)
-        res = self.check({"br", "in", "cn"})
-        self.assertEqual((res["verdict"], res["reasons"]), ("SUSPECT", ["region: AllKeyShop GLOBAL, merchant ROW"]))
         res = self.check({"us", "br", "in"})
-        self.assertEqual((res["verdict"], res["reasons"]), ("OK", []))
+        self.assertEqual((res["verdict"], res["reasons"]), ("SUSPECT", ["region: AllKeyShop GLOBAL, merchant US"]))
 
     # -- Les vrais positifs de Rémy : le moniteur doit continuer d'alerter
     def test_the_true_positives_of_05_10_still_alert(self):

@@ -1100,18 +1100,18 @@ def japan_allowed(product, offer):
     return "playstation" in aks_platform_groups(offer) or page_console(product) == "playstation"
 
 
-US_OK_ZONES_PC = ("GLOBAL",)
-US_OK_ZONES_CONSOLE = ("GLOBAL", "EU", "EUUS", "EMEA")
+US_OK_ZONES_CONSOLE = ("EU", "EUUS", "EMEA")
 
 
 def us_key_allowed(product, offer, zone, found):
-    """Une clé des seuls États-Unis est admise affichée GLOBAL (AllKeyShop.com vend en Europe et aux États-Unis), et sur
-    console aussi affichée EUROPE ; sur PC, une clé US affichée EUROPE reste une erreur (Romain, 08/10/2026 : « if you
-    have a US offer on an EURO page for PC it's not okay, but for console, it's okay to be displayed »)."""
+    """Une clé des seuls États-Unis est admise affichée EUROPE sur console seulement (Romain, 08/10/2026 : « if you have
+    a US offer on an EURO page for PC it's not okay, but for console, it's okay to be displayed »). Affichée GLOBAL,
+    elle alerte toujours, comme une clé Europe seule (Romain, 08/10/2026 : « une clé en US affichant global doit
+    toujours alerter, comme une clé en EURO affichant global »)."""
     if found != {"US"}:
         return False
     console = bool(aks_platform_groups(offer) & set(CONSOLE_GROUPS)) or page_console(product) is not None
-    return zone in (US_OK_ZONES_CONSOLE if console else US_OK_ZONES_PC)
+    return console and zone in US_OK_ZONES_CONSOLE
 
 
 def aks_zone(offer):
