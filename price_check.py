@@ -978,7 +978,10 @@ def tail_words(product, offer, normed, page_words=()):
     edition_words = name_words([edition])
     if "goty" in edition_words:  # « GOTY » s'écrit « game of the year »
         edition_words |= {"game", "of", "the", "year"}
-    known = KNOWN_TAIL_WORDS | product_words | edition_words | set(page_words)
+    # le pays de la région AllKeyShop n'est pas un mot en plus (Romain, 08/10/2026 : WARDOGS et Battlefield 6 chez K4G,
+    # « germany » en STEAM GIFT GERMANY ; Fortnite chez Eneba, « france » en FRANCE ; Forza Horizon 5 chez Vidaplayer,
+    # « spain » en WALLET SP : 5 doutes jugés faux) ; un autre pays reste un doute (« vive la france » d'ETS2 en STEAM EU, un DLC)
+    known = KNOWN_TAIL_WORDS | product_words | edition_words | set(page_words) | region_country_names(offer)
     known_singular = {singular(w) for w in known}
     unknown = {k for k, t in enumerate(tail) if len(t) > 1 and not any(c.isdigit() for c in t)
                and t not in known and singular(t) not in known_singular
@@ -1308,6 +1311,9 @@ def currency_reason(offer, words, normed):
     edition = norm(offer["edition"])
     if any(re.search(r"(^|-)%s(-|$)" % p, edition) for p in CURRENCY_EDITION_PHRASES):
         return None
+    if re.fullmatch(r"\+\s*\d{2,}", (offer["edition"] or "").strip()):
+        return None  # « + 600 » : une quantité de monnaie offerte (Fortnite Mainframe Break Pack, Romain, 08/10/2026 :
+        # « un exemple a été rentré sur la page AllKeyShop avec DLC +600 V-Bucks, c'est rentré en + 600 »)
     wallet = "WALLET" in ("%s %s" % (offer.get("region_filter") or "", offer.get("region") or "")).upper()
     found = [p for p in CURRENCY_PHRASES if re.search(r"(^|-)%s(-|$)" % re.escape(p), normed) and not (wallet and p in WALLET_PHRASES)]
     numbers = [int(w) for w in words.split("-") if w.isdigit() and len(w) >= 3]
@@ -2355,6 +2361,20 @@ WALLET_COUNTRIES = {
     "GR": ("greece",), "TR": ("turkey",), "BR": ("brazil",), "MX": ("mexico",), "CA": ("canada",), "AU": ("australia",),
     "JP": ("japan",), "IN": ("india",), "SA": ("saudi-arabia",), "AE": ("uae", "emirates"),
 }
+
+
+def region_country_names(offer):
+    """Les noms du pays que désigne la région AllKeyShop (« STEAM GIFT GERMANY » → germany, deutschland ; « FRANCE » ;
+    « PSN WALLET SP » → spain, espana), ou un ensemble vide pour une zone (EU, GLOBAL, ROW)."""
+    upper = (" %s %s " % (offer.get("region_filter") or "", offer.get("region") or "")).upper()
+    names = set()
+    for code, country in WALLET_COUNTRIES.items():
+        if any(re.search(r"\b%s\b" % re.escape(n.upper().replace("-", " ")), upper) for n in country if len(n) > 2):
+            names |= set(country)
+    m = re.search(r"\bWALLET\s+([A-Z]{2})\b", upper)
+    if m and m.group(1) in WALLET_COUNTRIES:
+        names |= set(WALLET_COUNTRIES[m.group(1)])
+    return names
 
 
 def wallet_country_reason(offer, words):

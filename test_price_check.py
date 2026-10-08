@@ -3605,6 +3605,51 @@ class TestCurrencyQuantities20261008(unittest.TestCase):
         self.assertEqual((round(100 * ratio), nxt["edition"]), (49, "Gold"))
 
 
+class TestDecisionsReview20261008(unittest.TestCase):
+    """La revue des 68 décisions prises depuis la récolte du 06/10, avec Romain le 08/10/2026 : deux règles mesurées sur
+    toute la mémoire, quatre alias, le reste en précédents."""
+
+    def doubt(self, product, url, region, region_filter, edition="Standard"):
+        o = {"edition": edition, "region": region, "region_filter": region_filter, "platform": "steam", "merchantName": "x", "account": False}
+        return pc.tail_words(product, o, pc.norm(pc.url_text(url)))
+
+    def test_the_country_of_the_allkeyshop_region_is_not_an_extra_word(self):
+        k4g = "https://k4g.com/product/battlefield-6-steam-germany-instant-altergift-standard-edition-alter-gift-TA07R29X"
+        self.assertEqual(self.doubt("Battlefield 6", k4g, "GIFT GERMANY", "STEAM GIFT GERMANY"), [])
+        self.assertEqual(self.doubt("WARDOGS", "https://k4g.com/product/wardogs-steam-germany-instant-gift-supporter-edition-gift-84IC1X2W",
+                                    "GERMANY", "STEAM GIFT GERMANY", edition="Supporter Edition"), [])
+        self.assertEqual(self.doubt("Fortnite V-Bucks PS5", "https://www.eneba.com/psn-fortnite-800-v-bucks-ps4-ps5-psn-key-france",
+                                    "FRANCE", "FRANCE", edition="800 V-Bucks"), [])
+        self.assertEqual(self.doubt("Forza Horizon 5 PS5", "https://www.vidaplayer.com/en/product/game-playstation-4-5-spain/forza-horizon-5",
+                                    "WALLET SP", "PSN WALLET SP"), [])
+        # un autre pays que la région reste un doute : une clé Allemagne affichée EU, et le DLC « Vive la France! » d'ETS2 (jugé vrai)
+        self.assertEqual(self.doubt("Battlefield 6", k4g, "EUROPE", "STEAM EU"), ["germany"])
+        self.assertEqual(self.doubt("Euro Truck Simulator 2", "https://www.eneba.com/steam-euro-truck-simulator-2-vive-la-france-dlc-steam-key-europe",
+                                    "EUROPE", "STEAM EU", edition="Bonus"), ["france", "la", "vive"])
+        self.assertEqual(pc.region_country_names({"region": "GLOBAL", "region_filter": "STEAM GLOBAL"}), set())
+
+    def test_a_plus_number_edition_announces_a_currency_bonus(self):
+        # Fortnite Mainframe Break Pack Xbox Series · « + 600 » chez Eneba (134517908), Romain : « rentré en + 600 »
+        o = {"edition": "+ 600", "region": "EU XBOX X|S", "region_filter": "XBOX X|S EUROPE", "platform": "xbox", "merchantName": "Eneba", "account": False}
+        url = "https://www.eneba.com/xbox-fortnite-mainframe-break-pack-600-v-bucks-xbox-live-key-europe"
+        self.assertEqual(pc.analyze("Fortnite Mainframe Break Pack Xbox Series", o, pc.url_text(url), "URL")["reasons"], [])
+        # la même URL sur une édition Standard reste de la monnaie vendue comme le jeu
+        self.assertTrue(any(r.startswith("in-game currency") for r in
+                            pc.analyze("Fortnite Mainframe Break Pack Xbox Series", dict(o, edition="Standard"), pc.url_text(url), "URL")["reasons"]))
+
+    def test_the_three_aliases(self):
+        def reasons(product, url, **kw):
+            o = dict({"edition": "Standard", "region": "GLOBAL", "region_filter": "STEAM GLOBAL", "platform": "steam", "merchantName": "x", "account": False}, **kw)
+            return pc.analyze(product, o, pc.url_text(url), "URL")["reasons"]
+        self.assertEqual(reasons("Football Manager 27", "https://www.eneba.com/steam-football-manager-2027-steam-key-pc-europe", region="EUROPE", region_filter="STEAM EU"), [])
+        self.assertEqual(reasons("Dave the Diver x Dredge Nintendo Switch", "https://www.nintendo.de/DLC/DAVE-THE-DIVER-DREDGE-Content-Pack-2496012.html",
+                                 edition="DLC", platform="nintendo-eshop", region_filter="GLOBAL"), [])
+        self.assertEqual(reasons("Five Nights at Freddy's VR Help Wanted", "https://www.g2a.com/en/five-nights-at-freddys-help-wanted-steam-gift-global-i10000192797002",
+                                 region="GIFT", region_filter="STEAM GIFT GLOBAL"), [])
+        # pas d'alias « The Last of Us » pour Part I : il ferait passer Part II Remastered sur la page de Part I
+        self.assertTrue(any(r.startswith("another product") for r in reasons("The Last of Us Part I", "https://www.gamivo.com/product/the-last-of-us-steam")))
+
+
 class TestSecurityAudit20261002(unittest.TestCase):
     """Audit sécurité du 02/10/2026 : le moniteur tourne en root."""
 

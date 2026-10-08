@@ -43,3 +43,14 @@
 # Instant Gaming (« buy-overwatch-10000-overwatch-coins-xbox-series-x-s », 134716975) l'écrivent sans le 2. Romain,
 # 08/10/2026 : « Alias Overwatch Coins ».
 "Overwatch 2 Coins" = ["Overwatch Coins"]
+# Revue des décisions avec Romain, 08/10/2026 : quatre autres noms, un par produit.
+# Eneba écrit « football-manager-2027 » (Rémy : « Football Manager 2027 et Football Manager 27 c'est la même chose ») ; une
+# règle générale « 27 ↔ 2027 » créerait 5 fausses alertes sur F1 25 (« 2026 Season Edition », mesuré) : un alias.
+"Football Manager 27" = ["Football Manager 2027"]
+# Le DLC s'appelle « DAVE THE DIVER DREDGE Content Pack » sur l'eShop (Romain : « it's the same product », 3 offres).
+"Dave the Diver x Dredge Nintendo Switch" = ["Dave the Diver Dredge Content Pack", "Dave the Diver Dredge"]
+# Le nom officiel du jeu n'a pas « VR » (« FIVE NIGHTS AT FREDDY'S: HELP WANTED », casque optionnel ; Romain, K4G et G2A).
+"Five Nights at Freddy's VR Help Wanted" = ["Five Nights at Freddy's Help Wanted"]
+# Pas d'alias « The Last of Us » pour Part I (GAMIVO « the-last-of-us-steam », jugé faux par Rémy le 07/10) : avec lui, une
+# URL « the-last-of-us-part-ii-remastered » passerait sur la page de Part I (test_whole_words_and_never_a_sequel). La
+# décision suffit ; le prochain cas ressortira (Romain, 08/10/2026 : pas de règle bizarre).
