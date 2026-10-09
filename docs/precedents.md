@@ -225,6 +225,20 @@ Q3 (The Last of Us Part II Remastered chez G2A, le doute G2A jugé faux) : pas d
 | F1 25 2026 Season (K4G, gift affiché clé POLAND), ETS2 « Vive la France! » en Bonus (Eneba), Stellaris Starter Pack en rupture (Kinguin), Beast of Reincarnation (GAMESEAL vend AC Shadows), Dying Light The Beast PS5 (CJS), Black Ops 3 Zombies Chronicles, Stellaris Nova/Galaxy/Starter, GT7 25th Anniversary, ETS2 Essentials/Balkans, Minecraft Windows 10 en Standard | vrai | les règles tiennent ; toutes réparées depuis |
 | Alan Wake 2 Xbox (Gamingdragons) : 135148408 vrai (Rémy), 140649131 faux (meljoy) | — | deux offres, pas une contradiction : la première réparée (retirée puis ressaisie), la seconde un faux positif des 70 % |
 
+## Revue des nouveaux reports (avec Romain, 09/10/2026 : « valide tout »)
+
+| Cas | Décision | Effet |
+|---|---|---|
+| 7 Days to Die Xbox Series · Console Edition, « game preview » (Eneba 137867854, Xbox FR 135783758) | faux (Romain : « preview gave a false positive, need to add exception ») | règle : « preview », le label d'accès anticipé Xbox, est un mot connu (`PREVIEW_WORDS`) ; 2 URL en mémoire, les deux jugées faux |
+| Crash Team Racing **Nitro-Refueled** Switch, eShop FR/DE (132782191, 132782192) | le jeu s'appelle « Nitro-Fueled » : la faute est dans le nom AllKeyShop | alias ; le nom AllKeyShop reste à corriger |
+| EA Sports WRC 2023, HRK « wrc-23-origin » (135419728) | faux (Romain : « wrc-23 = wrc-2023 ») | alias « WRC 23 » ; pas de règle sur les années (F1 25) |
+| FINAL FANTASY 14 Online Xbox, Driffle « final-fantasy-xiv-complete-edition » | faux (Romain : « xbox-series = xbox-series-xs ») ; la vraie cause : « Online » absent chez le marchand | alias « Final Fantasy 14 » |
+| Tomodachi Life Living the Dream Switch, Dreamgame « …-the-dream-11 » (140076750) | 3e URL Dreamgame finissant par un identifiant ; la page Dreamgame est derrière Cloudflare, même pour Camoufox | **pas de config** : impossible de le vérifier à 100 % (consigne de Romain) ; doute envoyé dans l'onglet Romain |
+| Hot Wheels Unleashed 2 et Attack on Titan 2 Switch, CJS « Access (Digital Download) » à 49 % et 28 % du prix eShop | — | **gardés** : chez CJS, « Access » cache souvent un compte vendu comme clé ; l'équipe vérifie la page |
+| Home Sheep Home Switch, GAMIVO à 15 % ; FF14 Starter GAMIVO à 55 % (faux : « manually checked ») | règle des 70 % | précédents |
+| How to Fish, bundle Steam 85368 « Dazed's Games » (faux : « this bundle includes the game ») ; Demon's Souls PS5 « remake » (faux, offre US affichée US sur console) | — | appris par les décisions ; un titre de bundle Steam ne nomme pas le jeu |
+| NHL 27 PS5 chez CJS (région USA, marchand UK) ; Devil May Cry 5 Xbox chez Loaded (Special Edition rangée en Standard) | vrai, corrigés | les règles tiennent |
+
 ## Les pages de points (formation du 08/10/2026)
 
 Romain : « On va aller sur les Vbucks, tout ce qui est en points. […] Ce n'est pas le même nombre de Vbucks. Donc, qu'on compare les prix, il faut qu'on compare les prix avec le même nombre de points ou de Vbucks. Revois les reports encore ouverts », puis « ça serait bien de lever les mauvais reports de ton côté ». Les 32 reports ouverts sur une page ou une édition de monnaie, triés :

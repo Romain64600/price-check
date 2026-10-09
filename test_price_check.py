@@ -2006,7 +2006,8 @@ class TestDetectionAudit20261002(unittest.TestCase):
         # ce qui n'est pas une suite : « 1-year », le « -1 » final de GAMIVO, l'année écrite à deux chiffres
         self.assertEqual(self.match("SnowRunner", "https://shop.example/snowrunner-1-year-anniversary-edition-pc-steam"), "exact")
         self.assertEqual(self.match("Stardew Valley", "https://www.gamivo.com/product/stardew-valley-1"), "exact")
-        self.assertEqual(self.match("EA Sports WRC 2023", "https://kinguin.net/category/192006/ea-sports-wrc-23-steam-altergift"), "partial")
+        # « WRC 23 » est un alias depuis le 09/10/2026 (HRK « wrc-23-origin », Romain : « wrc-23 = wrc-2023 ») : accord exact
+        self.assertEqual(self.match("EA Sports WRC 2023", "https://kinguin.net/category/192006/ea-sports-wrc-23-steam-altergift"), "exact")
         self.assertEqual(self.match("Titanfall 2", "https://www.kinguin.net/category/25568/titanfall-2-deluxe-edition-ea-app-cd-key"), "exact")
 
     def test_never_an_old_game_for_the_new_one(self):
@@ -3653,6 +3654,35 @@ class TestDecisionsReview20261008(unittest.TestCase):
                                  region="GIFT", region_filter="STEAM GIFT GLOBAL"), [])
         # pas d'alias « The Last of Us » pour Part I : il ferait passer Part II Remastered sur la page de Part I
         self.assertTrue(any(r.startswith("another product") for r in reasons("The Last of Us Part I", "https://www.gamivo.com/product/the-last-of-us-steam")))
+
+
+class TestDecisionsReview20261009(unittest.TestCase):
+    """La revue des nouveaux reports avec Romain, 09/10/2026 : « valide tout »."""
+
+    def reasons(self, product, url, **kw):
+        o = dict({"edition": "Standard", "region": "GLOBAL", "region_filter": "STEAM GLOBAL", "platform": "steam", "merchantName": "x", "account": False}, **kw)
+        return pc.analyze(product, o, pc.url_text(url), "URL")["reasons"]
+
+    def test_game_preview_is_a_known_word(self):
+        # 7 Days to Die Xbox Series · Console Edition, Eneba (137867854) et Xbox FR (135783758) : « game preview », l'accès anticipé Xbox
+        o = {"edition": "Console Edition", "region": "EU XBOX X|S", "region_filter": "XBOX X|S EUROPE", "platform": "xbox", "merchantName": "Eneba", "account": False}
+        for url in ("https://www.eneba.com/xbox-7-days-to-die-console-edition-game-preview-xbox-live-key-europe",
+                    "https://www.xbox.com/fr-fr/games/store/7-days-to-die-console-edition-game-preview/9p6dwl7r6ntl"):
+            with self.subTest(url=url):
+                self.assertEqual(pc.tail_words("7 Days to Die Xbox Series", o, pc.norm(pc.url_text(url))), [])
+        self.assertEqual(pc.tail_words("Minecraft", o, pc.norm("minecraft-dungeons-2-pc-key")), ["dungeons"], "the doubt still works")
+
+    def test_the_three_aliases(self):
+        self.assertEqual(self.reasons("Crash Team Racing Nitro-Refueled Nintendo Switch",
+                                      "https://www.nintendo.fr/Jeux/Jeux-a-telecharger-sur-Nintendo-Switch/Crash-Team-Racing-Nitro-Fueled-1494955.html",
+                                      platform="nintendo-eshop", region_filter="GLOBAL", merchantName="Nintendo eShop FR"), [])
+        self.assertEqual(self.reasons("EA Sports WRC 2023", "https://www.hrkgame.com/en/product/wrc-23-origin", platform="ea-app", region_filter="EA GLOBAL"), [])
+        self.assertEqual(self.reasons("FINAL FANTASY 14 Online Xbox Series",
+                                      "https://www.driffle.com/final-fantasy-xiv-complete-edition-europe-xbox-series-xs-xbox-live-digital-key-p9978899",
+                                      edition="Complete", region="EU XBOX X|S", region_filter="XBOX X|S EUROPE", platform="xbox"), [])
+        # un autre jeu de la série reste un autre produit
+        self.assertTrue(any(r.startswith("another product") for r in self.reasons("FINAL FANTASY 14 Online Xbox Series",
+                                                                                  "https://x.com/final-fantasy-xvi-xbox-series-key", platform="xbox")))
 
 
 class TestSecurityAudit20261002(unittest.TestCase):

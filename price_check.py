@@ -898,7 +898,10 @@ TAIL_SERVICE_WORDS = {"xs", "xboxseries", "xboxoneseries", "xboxone", "xboxwindo
                       # hours »), versions coupées (« cut »), « european union », abréviations (« pcw », « sx »), « numérique »
                       "mojang", "ubi", "shark", "cash", "coins", "hours", "up", "to", "delivery", "instant", "cut", "union",
                       "pcw", "sx", "numerique"}
-KNOWN_TAIL_WORDS = (LABEL_NOISE | FILLER_WORDS | set(EDITION_WORDS) | GENERIC_EDITION_WORDS | set(GIFT_WORDS)
+# « game preview » : le label d'accès anticipé Xbox (7 Days to Die Xbox Series chez Eneba et sur le Xbox Store, 2 doutes jugés
+# faux par Romain le 09/10/2026 : « preview gave a false positive, need to add exception »)
+PREVIEW_WORDS = {"preview"}
+KNOWN_TAIL_WORDS = (LABEL_NOISE | FILLER_WORDS | set(EDITION_WORDS) | GENERIC_EDITION_WORDS | set(GIFT_WORDS) | PREVIEW_WORDS
                     | set(ACCOUNT_WORDS) | {w for d in DLC_WORDS for w in d.split("-")} | set(FORBIDDEN_REGION_WORDS)
                     | TAIL_SERVICE_WORDS | {w for ws in MERCHANT_ZONE_WORDS.values() for x in ws for w in x.split("-")}
                     | {w for ws in PLATFORM_FAMILIES.values() for x in ws for w in x.split("-")} | set(ARABIC))

@@ -54,3 +54,10 @@
 # Pas d'alias « The Last of Us » pour Part I (GAMIVO « the-last-of-us-steam », jugé faux par Rémy le 07/10) : avec lui, une
 # URL « the-last-of-us-part-ii-remastered » passerait sur la page de Part I (test_whole_words_and_never_a_sequel). La
 # décision suffit ; le prochain cas ressortira (Romain, 08/10/2026 : pas de règle bizarre).
+# Revue du 09/10/2026 avec Romain. Le jeu s'appelle « Crash Team Racing Nitro-Fueled » : la faute est dans le nom AllKeyShop,
+# l'eShop (FR, DE) a raison (132782191, 132782192).
+"Crash Team Racing Nitro-Refueled Nintendo Switch" = ["Crash Team Racing Nitro-Fueled Nintendo Switch", "Crash Team Racing Nitro-Fueled"]
+# HRK écrit « wrc-23 » (Romain : « wrc-23 = wrc-2023 », 135419728) ; comme Football Manager 27, un alias, pas de règle sur les années.
+"EA Sports WRC 2023" = ["WRC 23", "EA Sports WRC 23"]
+# Driffle écrit « final-fantasy-xiv-complete-edition » sans « Online » : FF14 sans « Online » est le même jeu (Romain, faux, Driffle p9978899).
+"FINAL FANTASY 14 Online Xbox Series" = ["Final Fantasy 14 Xbox Series"]
