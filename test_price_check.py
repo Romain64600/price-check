@@ -2954,6 +2954,34 @@ class TestOrphanPages20261006(unittest.TestCase):
         self.assertNotIn("https://www.allkeyshop.com/blog/buy-suivi-cd-key-compare-prices/", fetched)
 
 
+class TestRecheckKeepsThePriceGap20261009(unittest.TestCase):
+    """09/10/2026 : le recalcul au démarrage marquait « levées par une règle » trois urgences premiers prix (Hot Wheels
+    Unleashed 2 et Attack on Titan 2 chez CJS, Home Sheep Home chez GAMIVO) : le recontrôle n'appliquait pas la règle des
+    70 % que le passage applique. Rien n'avait changé : elles doivent rester SUSPECT."""
+
+    def test_a_first_price_far_below_the_second_stays_suspect_at_the_recheck(self):
+        page = "https://www.allkeyshop.com/blog/buy-hot-wheels-unleashed-2-turbocharged-nintendo-switch-compare-prices/"
+        reason = "abnormally low first price: 19.47 €, 49 % of the page's second price (39.99 €, Nintendo eShop FR, Standard)"
+        state = {"checked": {"140480039": {"verdict": "SUSPECT", "reasons": [reason], "product": "Hot Wheels Unleashed 2 Turbocharged Nintendo Switch",
+                                           "edition": "Standard", "merchant": "CJS CDKeys", "page": page, "at": "2026-10-09 09:00",
+                                           "url": "https://www.cjs-cdkeys.com/x", "page_first": True}}}
+        trans = {"editions": {"1": {"name": "Standard"}}, "regions": {"1": {"region_name": "GLOBAL", "filter_name": "GLOBAL"}},
+                 "prices": [{"id": 140480039, "price": 19.47, "priceCard": 19.47, "dispo": 1, "edition": "1", "region": "1", "merchant": 30,
+                             "merchantName": "CJS CDKeys", "activationPlatform": "nintendo-eshop", "account": False},
+                            {"id": 2, "price": 39.99, "priceCard": 39.99, "dispo": 1, "edition": "1", "region": "1", "merchant": 1,
+                             "merchantName": "Nintendo eShop FR", "activationPlatform": "nintendo-eshop", "account": False}]}
+        ok = lambda product, o: {"verdict": "OK", "method": "URL", "url": "https://www.cjs-cdkeys.com/x", "notes": [], "reasons": []}
+        outcome = {"checked": 0, "fixed": [], "removed": [], "rules": [], "verified": [], "still": [], "new": [], "unknown": [], "pages": 0, "offers": 0}
+        sent = []
+        pc.recheck_flagged("TOP 50", 1, "Hot Wheels Unleashed 2 Turbocharged Nintendo Switch", page, trans, state, sent.append, ok,
+                           "2026-10-09 12:19", time.time(), outcome, reroute=False)
+        e = state["checked"]["140480039"]
+        self.assertEqual(e["verdict"], "SUSPECT", e)
+        self.assertTrue(e["reasons"][0].startswith("abnormally low first price: 19.47 €, 49 %"), e["reasons"])
+        self.assertNotIn("fixed_at", e)
+        self.assertEqual((len(outcome["rules"]), len(outcome["still"])), (0, 1))
+
+
 class TestRecalc20261008(unittest.TestCase):
     """Romain, 08/10/2026 : « un bouton Recalcule ou, toi, penser à recalculer lorsqu'on fait une modification » : les
     reports ouverts recontrôlés tout de suite avec les règles du moment, au démarrage et à la demande de l'admin."""

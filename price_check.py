@@ -2693,6 +2693,9 @@ def recheck_flagged(label, rank, product, page_url, trans, state, notify, checke
         offer["page_dlc"] = offer_on_dlc_page(page_dlc, offer)
         try:
             res = apply_tail_words(checker(product, offer), state, page_url, key, stamp, product, offer)
+            # la règle des 70 % s'applique aussi au recontrôle (09/10/2026 : le recalcul au démarrage « levait par une règle »
+            # trois urgences premiers prix, Hot Wheels Unleashed 2, Attack on Titan 2, Home Sheep Home, faute de l'appliquer)
+            res = apply_price_gap(res, offer, list(on_page.values()))
         except Exception as e:
             if not isinstance(e, CheckError):
                 log.exception("%s / %s : %s (%s) : erreur imprévue", product, offer["edition"], offer["merchantName"], key)
