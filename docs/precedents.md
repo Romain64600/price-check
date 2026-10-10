@@ -227,6 +227,8 @@ Q3 (The Last of Us Part II Remastered chez G2A, le doute G2A jugé faux) : pas d
 
 ## Revue des nouveaux reports (avec Romain, 09/10/2026 : « valide tout »)
 
+Réponses de Romain aux questions de l'onglet Romain (Q18 à Q23, 09/10 au soir) : Madden NFL 27, les décisions « faux » de Rémy tiennent (le bundle College Football 27 inclut Madden NFL 27, lu sur la page Allyouplay), pas d'alias ; pas de règle Driffle ROW ; les bundles dont la page marchand ne se lit pas restent reportés quand le jeu n'y est pas visible, et dans le doute ; alias WRC 23 confirmé ; pas de règle pour les vrais positifs validés, vérification manuelle ; Tomodachi tranché « faux » par Rémy, Dreamgame bloque même Camoufox.
+
 | Cas | Décision | Effet |
 |---|---|---|
 | 7 Days to Die Xbox Series · Console Edition, « game preview » (Eneba 137867854, Xbox FR 135783758) | faux (Romain : « preview gave a false positive, need to add exception ») | règle : « preview », le label d'accès anticipé Xbox, est un mot connu (`PREVIEW_WORDS`) ; 2 URL en mémoire, les deux jugées faux |
