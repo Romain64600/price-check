@@ -3657,6 +3657,10 @@ class TestDecisionsReview20261008(unittest.TestCase):
         self.assertEqual(self.doubt("Euro Truck Simulator 2", "https://www.eneba.com/steam-euro-truck-simulator-2-vive-la-france-dlc-steam-key-europe",
                                     "EUROPE", "STEAM EU", edition="Bonus"), ["france", "la", "vive"])
         self.assertEqual(pc.region_country_names({"region": "GLOBAL", "region_filter": "STEAM GLOBAL"}), set())
+        # le code à deux lettres du pays de la région (Romain, 10/10/2026 : Fortnite V-Bucks PS5 chez Kinguin, « be », BELGIUM CODE)
+        kinguin = "https://www.kinguin.net/category/564014/fortnite-2400-v-bucks-be-ps4-ps5-cd-key"
+        self.assertEqual(self.doubt("Fortnite V-Bucks PS5", kinguin, "BELGIUM CODE", "BELGIUM CODE", edition="2400 V-Bucks"), [])
+        self.assertEqual(self.doubt("Fortnite V-Bucks PS5", kinguin, "EUROPE", "PSN EU", edition="2400 V-Bucks"), ["be"], "another region: the doubt stays")
 
     def test_a_plus_number_edition_announces_a_currency_bonus(self):
         # Fortnite Mainframe Break Pack Xbox Series · « + 600 » chez Eneba (134517908), Romain : « rentré en + 600 »

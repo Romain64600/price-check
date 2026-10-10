@@ -225,6 +225,14 @@ Q3 (The Last of Us Part II Remastered chez G2A, le doute G2A jugé faux) : pas d
 | F1 25 2026 Season (K4G, gift affiché clé POLAND), ETS2 « Vive la France! » en Bonus (Eneba), Stellaris Starter Pack en rupture (Kinguin), Beast of Reincarnation (GAMESEAL vend AC Shadows), Dying Light The Beast PS5 (CJS), Black Ops 3 Zombies Chronicles, Stellaris Nova/Galaxy/Starter, GT7 25th Anniversary, ETS2 Essentials/Balkans, Minecraft Windows 10 en Standard | vrai | les règles tiennent ; toutes réparées depuis |
 | Alan Wake 2 Xbox (Gamingdragons) : 135148408 vrai (Rémy), 140649131 faux (meljoy) | — | deux offres, pas une contradiction : la première réparée (retirée puis ressaisie), la seconde un faux positif des 70 % |
 
+## Reports du 10/10/2026 (avec Romain)
+
+| Cas | Décision | Effet |
+|---|---|---|
+| Fortnite V-Bucks PS5 · 2400 V-Bucks, Kinguin « fortnite-2400-v-bucks-be-ps4-ps5 » (140683032), affiché BELGIUM CODE, doute « be » | faux (Rémy) ; Romain : « valide le code pays » | le code ISO du pays de la région est un mot connu, comme son nom (`region_country_names`) ; « be » reste un doute sur une région EU ; un seul cas en mémoire |
+| Hearts of Iron 4 · Cadet Edition, Kinguin (132566950) : la fiche 26789 « cadet-edition-steam » renommée « cadet-edition-row-steam », affichée GLOBAL | **vrai** (Romain : « c'est vrai ») | la raison « en rupture » écrit les deux URL (Romain : « je ne vois pas quelle URL redirige vers laquelle ») ; jugée comme Stellaris : une autre offre servie, le prix reste dans le feed |
+| LEGO Harry Potter Collection Switch 2, G2A à 15,57 € (31 % de l'eShop) | faux (Rémy) | règle des 70 %, vérification manuelle |
+
 ## Revue des nouveaux reports (avec Romain, 09/10/2026 : « valide tout »)
 
 Réponses de Romain aux questions de l'onglet Romain (Q18 à Q23, 09/10 au soir) : Madden NFL 27, les décisions « faux » de Rémy tiennent (le bundle College Football 27 inclut Madden NFL 27, lu sur la page Allyouplay), pas d'alias ; pas de règle Driffle ROW ; les bundles dont la page marchand ne se lit pas restent reportés quand le jeu n'y est pas visible, et dans le doute ; alias WRC 23 confirmé ; pas de règle pour les vrais positifs validés, vérification manuelle ; Tomodachi tranché « faux » par Rémy, Dreamgame bloque même Camoufox.

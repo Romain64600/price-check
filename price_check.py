@@ -2380,6 +2380,11 @@ def region_country_names(offer):
     m = re.search(r"\bWALLET\s+([A-Z]{2})\b", upper)
     if m and m.group(1) in WALLET_COUNTRIES:
         names |= set(WALLET_COUNTRIES[m.group(1)])
+    # le code ISO du pays aussi (Romain, 10/10/2026 : Fortnite V-Bucks PS5 chez Kinguin, « fortnite-2400-v-bucks-be-ps4-ps5 »
+    # affiché BELGIUM CODE, doute « be » jugé faux par Rémy) : « be » n'est connu que quand AllKeyShop affiche la Belgique
+    for code, country in WALLET_COUNTRIES.items():
+        if names & set(country):
+            names.add(code.lower())
     return names
 
 
