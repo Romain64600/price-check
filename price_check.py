@@ -565,8 +565,11 @@ STOCK_REASON_START = "offer out of stock at the merchant"
 STOCK_REASON_STARTS = (STOCK_REASON_START, "offre en rupture chez le marchand")  # an entry written before 07/10/2026
 
 
-def out_of_stock_reason(served):
-    """Groupe Kinguin : la fiche du lien est en rupture, le marchand sert une autre offre, le prix reste dans le feed."""
+def out_of_stock_reason(served, url=None):
+    """Groupe Kinguin : la fiche du lien est en rupture, le marchand sert une autre offre, le prix reste dans le feed. Les
+    deux URL sont écrites (Romain, 10/10/2026 : « je ne vois pas quelle URL redirige vers laquelle »)."""
+    if url:
+        return STOCK_REASON_START + ": the link %s redirects to another page %s, but the price stays in the feed" % (url.split("?")[0], served)
     return STOCK_REASON_START + ": the link redirects to another page (%s), but the price stays in the feed" % served
 
 
@@ -1767,7 +1770,7 @@ def flag_out_of_stock(result, product, offer, served, url=None, cfg=None):
             kept = [(r, k) for r, k in zip(result["reasons"], result["kinds"]) if k != "zone"]
             result["reasons"], result["kinds"] = [r for r, _ in kept], [k for _, k in kept]
             result["notes"].append("region read on the page served, which matches the display")
-    result["reasons"].append(out_of_stock_reason(served))
+    result["reasons"].append(out_of_stock_reason(served, url))
     result["kinds"].append("stock")
 
 

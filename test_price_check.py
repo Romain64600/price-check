@@ -971,8 +971,8 @@ class TestConfirmOnMerchantPage(unittest.TestCase):
         with mock.patch.object(pc, "http_get", side_effect=[(200, None, self.page(right)), (301, "/category/25568/titanfall-2-pc-ea-app-key", "")]):
             res = pc.check_offer("Titanfall 2", ok)
         self.assertEqual(res["verdict"], "SUSPECT")
-        self.assertEqual(res["reasons"], ["offer out of stock at the merchant: the link redirects to another page "
-                                          "(https://www.kinguin.net/category/25568/titanfall-2-pc-ea-app-key), but the price stays in the feed"])
+        self.assertEqual(res["reasons"], ["offer out of stock at the merchant: the link %s redirects to another page "
+                                          "https://www.kinguin.net/category/25568/titanfall-2-pc-ea-app-key, but the price stays in the feed" % right.split("?")[0]])
         # une fiche seulement RENOMMÉE (même nom, région, plateforme, édition : 24 des 25 redirections en mémoire le 02/10)
         # n'est pas une rupture : une note, pas d'alerte
         dayz = "https://www.kinguin.net/category/55338/dayz-eu-steam-altergift/"
@@ -1006,7 +1006,7 @@ class TestConfirmOnMerchantPage(unittest.TestCase):
             res = pc.check_offer("Titanfall 2", o)
         # la cible ne blanchit pas le nom, et la redirection elle-même est signalée : fiche en rupture, prix dans le feed
         self.assertEqual(res["verdict"], "SUSPECT")
-        self.assertTrue(res["reasons"][0].startswith("offer out of stock at the merchant: the link redirects to another page"), res)
+        self.assertTrue(res["reasons"][0].startswith("offer out of stock at the merchant: the link https://www.kinguin.net/category/25568/x redirects to another page"), res)
 
     def test_kinguin_probe_keeps_what_it_saw_and_never_passes_silently(self):
         # 02/10/2026 : la fiche servie à la place du lien est gardée pour le recontrôle (evidence) ; une sonde en erreur
@@ -1105,9 +1105,10 @@ class TestConfirmOnMerchantPage(unittest.TestCase):
         # Romain, 02/10/2026 : « on aura quand même une alerte » — en rupture, le prix reste dans le feed ; la région
         # (lue sur la fiche servie, globale comme l'affichage) n'est plus reprochée
         self.assertEqual(res["verdict"], "SUSPECT")
-        self.assertEqual(res["reasons"], ["offer out of stock at the merchant: the link redirects to another page "
-                                          "(https://www.kinguin.net/category/172478/stellaris-starter-pack-bundle-2023-pc-steam-cd-key), "
-                                          "but the price stays in the feed"])
+        self.assertEqual(len(res["reasons"]), 1)
+        self.assertTrue(res["reasons"][0].startswith("offer out of stock at the merchant: the link https://") and res["reasons"][0].endswith(
+            "redirects to another page https://www.kinguin.net/category/172478/stellaris-starter-pack-bundle-2023-pc-steam-cd-key, "
+            "but the price stays in the feed"), res["reasons"])
         self.assertTrue(any("page served" in n for n in res["notes"]))
         # repli : pas de redirection vue (200), mais la page servie a une autre URL canonique : même alerte
         with mock.patch.object(pc, "http_get", side_effect=[(200, None, self.page(link)), (200, None, ""), (200, None, dom), (200, None, dom)]), \
@@ -3711,6 +3712,22 @@ class TestDecisionsReview20261009(unittest.TestCase):
         # un autre jeu de la série reste un autre produit
         self.assertTrue(any(r.startswith("another product") for r in self.reasons("FINAL FANTASY 14 Online Xbox Series",
                                                                                   "https://x.com/final-fantasy-xvi-xbox-series-key", platform="xbox")))
+
+
+class TestRenamedListing20261010(unittest.TestCase):
+    """Romain, 10/10/2026, Hearts of Iron 4 · Cadet Edition chez Kinguin (132566950) : « je ne vois pas quelle URL redirige vers
+    laquelle » : la raison écrit les deux URL, le lien et la fiche servie. La fiche 26789 « cadet-edition-steam-cd-key »,
+    renommée « cadet-edition-row-steam-cd-key » (ROW alors qu'AllKeyShop affiche GLOBAL), reste jugée comme Stellaris le
+    01/10/2026 : une autre offre servie à la place du lien, le prix reste dans le feed."""
+
+    def test_the_reason_names_both_urls(self):
+        url = "https://www.kinguin.net/category/26789/hearts-of-iron-iv-cadet-edition-steam-cd-key/"
+        served = "https://www.kinguin.net/category/26789/hearts-of-iron-iv-cadet-edition-row-steam-cd-key?r=3445"
+        o = offer(merchantName="Kinguin", edition="Cadet Edition", region="GLOBAL", region_filter="STEAM GLOBAL")
+        res = pc.analyze("Hearts of Iron 4", o, pc.url_text(url), "URL")
+        pc.flag_out_of_stock(res, "Hearts of Iron 4", o, served, url, pc.merchant_config(url, "Kinguin"))
+        self.assertEqual(res["reasons"], ["offer out of stock at the merchant: the link %s redirects to another page %s, but the price stays in the feed" % (url, served)])
+        self.assertIn("stock", res["kinds"])
 
 
 class TestSecurityAudit20261002(unittest.TestCase):
